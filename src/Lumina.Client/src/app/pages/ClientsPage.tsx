@@ -34,6 +34,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { useLocation, useNavigate } from 'react-router';
 import { PageHeader } from '../components/PageHeader';
 import { AddClientModal, ClientFormData } from '../components/AddClientModal';
+import { apiClient } from '../api/client';
 
 interface Client {
   id: string;
@@ -52,134 +53,6 @@ interface Client {
   notes?: string;
 }
 
-// Extended mock data for clients table
-const mockClients: Client[] = [
-  {
-    id: '1',
-    name: 'Alex Thompson',
-    initials: 'AT',
-    avatarColor: '#9B8B9E',
-    program: 'Executive Leadership',
-    progress: 75,
-    sessionsCompleted: 9,
-    totalSessions: 12,
-    nextSession: 'Feb 12, 2:00 PM',
-    status: 'active',
-    email: 'alex.thompson@example.com',
-    phone: '(555) 123-4567',
-    startDate: 'Nov 15, 2025',
-    notes: 'Focused on team leadership and strategic thinking. Making excellent progress.',
-  },
-  {
-    id: '2',
-    name: 'Taylor Chen',
-    initials: 'TC',
-    avatarColor: '#A8B5A0',
-    program: 'Career Development',
-    progress: 50,
-    sessionsCompleted: 6,
-    totalSessions: 12,
-    nextSession: 'Feb 14, 4:00 PM',
-    status: 'active',
-    email: 'taylor.chen@example.com',
-    phone: '(555) 234-5678',
-    startDate: 'Dec 1, 2025',
-    notes: 'Exploring career transitions. Very engaged and proactive.',
-  },
-  {
-    id: '3',
-    name: 'Jamie Patel',
-    initials: 'JP',
-    avatarColor: '#9DAAB5',
-    program: 'Work-Life Balance',
-    progress: 33,
-    sessionsCompleted: 4,
-    totalSessions: 12,
-    nextSession: 'Feb 15, 11:00 AM',
-    status: 'active',
-    email: 'jamie.patel@example.com',
-    phone: '(555) 345-6789',
-    startDate: 'Jan 5, 2026',
-    notes: 'Working on setting boundaries and managing stress.',
-  },
-  {
-    id: '4',
-    name: 'Casey Martinez',
-    initials: 'CM',
-    avatarColor: '#D4B88A',
-    program: 'Confidence & Communication',
-    progress: 67,
-    sessionsCompleted: 8,
-    totalSessions: 12,
-    nextSession: 'Feb 16, 3:00 PM',
-    status: 'active',
-    email: 'casey.martinez@example.com',
-    phone: '(555) 456-7890',
-    startDate: 'Nov 22, 2025',
-    notes: 'Building presentation skills and self-assurance.',
-  },
-  {
-    id: '5',
-    name: 'Morgan Blake',
-    initials: 'MB',
-    avatarColor: '#9B8B9E',
-    program: 'Executive Leadership',
-    progress: 42,
-    sessionsCompleted: 5,
-    totalSessions: 12,
-    nextSession: 'Feb 17, 1:00 PM',
-    status: 'active',
-    email: 'morgan.blake@example.com',
-    phone: '(555) 567-8901',
-    startDate: 'Dec 10, 2025',
-  },
-  {
-    id: '6',
-    name: 'Riley Foster',
-    initials: 'RF',
-    avatarColor: '#A8B5A0',
-    program: 'Career Transition',
-    progress: 58,
-    sessionsCompleted: 7,
-    totalSessions: 12,
-    nextSession: 'Feb 18, 10:00 AM',
-    status: 'active',
-    email: 'riley.foster@example.com',
-    phone: '(555) 678-9012',
-    startDate: 'Nov 28, 2025',
-  },
-  {
-    id: '7',
-    name: 'Avery Fields',
-    initials: 'AF',
-    avatarColor: '#9DAAB5',
-    program: 'Values Alignment',
-    progress: 83,
-    sessionsCompleted: 10,
-    totalSessions: 12,
-    nextSession: 'Feb 19, 2:30 PM',
-    status: 'active',
-    email: 'avery.fields@example.com',
-    phone: '(555) 789-0123',
-    startDate: 'Oct 20, 2025',
-  },
-  {
-    id: '8',
-    name: 'Jordan Lee',
-    initials: 'JL',
-    avatarColor: '#D4B88A',
-    program: 'Leadership Growth',
-    progress: 25,
-    sessionsCompleted: 3,
-    totalSessions: 12,
-    nextSession: 'Feb 20, 4:30 PM',
-    status: 'active',
-    email: 'jordan.lee@example.com',
-    phone: '(555) 890-1234',
-    startDate: 'Jan 12, 2026',
-  },
-];
-
 export function ClientsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -189,13 +62,18 @@ export function ClientsPage() {
   const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set());
   const [programFilters, setProgramFilters] = useState<Set<string>>(new Set());
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
+  const [clients, setClients] = useState<Client[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    apiClient.getClients().then(setClients).catch(() => setClients([]));
+  }, []);
 
   // Check if we navigated from dashboard with a client ID to filter
   useEffect(() => {
     if (location.state?.clientId && location.state?.fromDashboard) {
-      const client = mockClients.find((c) => c.id === location.state.clientId);
+      const client = clients.find((c) => c.id === location.state.clientId);
       if (client) {
         setSearchQuery(client.name);
       }
@@ -264,10 +142,10 @@ export function ClientsPage() {
   };
 
   // Get unique programs for filter
-  const uniquePrograms = Array.from(new Set(mockClients.map((c) => c.program))).sort();
+  const uniquePrograms = Array.from(new Set(clients.map((c) => c.program))).sort();
 
   // Apply all filters
-  const filteredClients = mockClients.filter((client) => {
+  const filteredClients = clients.filter((client) => {
     // Search filter
     const matchesSearch =
       client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -718,27 +596,27 @@ export function ClientsPage() {
                     sx={{
                       width: 64,
                       height: 64,
-                      bgcolor: mockClients.find((c) => c.id === selectedClientId)?.avatarColor,
+                      bgcolor: clients.find((c) => c.id === selectedClientId)?.avatarColor,
                       color: '#FFFFFF',
                       fontWeight: 600,
                       fontSize: '20px',
                     }}
                   >
-                    {mockClients.find((c) => c.id === selectedClientId)?.initials}
+                    {clients.find((c) => c.id === selectedClientId)?.initials}
                   </Avatar>
                   <Box>
                     <Typography variant="h6" sx={{ fontWeight: 600, color: '#4A4542', mb: 0.5 }}>
-                      {mockClients.find((c) => c.id === selectedClientId)?.name}
+                      {clients.find((c) => c.id === selectedClientId)?.name}
                     </Typography>
                     <Chip
                       label={
-                        mockClients.find((c) => c.id === selectedClientId)?.status.charAt(0).toUpperCase() +
-                        mockClients.find((c) => c.id === selectedClientId)?.status.slice(1)
+                        clients.find((c) => c.id === selectedClientId)?.status.charAt(0).toUpperCase() +
+                        clients.find((c) => c.id === selectedClientId)?.status.slice(1)
                       }
                       size="small"
                       sx={{
-                        bgcolor: getStatusColor(mockClients.find((c) => c.id === selectedClientId)?.status as Client['status']).bg,
-                        color: getStatusColor(mockClients.find((c) => c.id === selectedClientId)?.status as Client['status']).text,
+                        bgcolor: getStatusColor(clients.find((c) => c.id === selectedClientId)?.status as Client['status']).bg,
+                        color: getStatusColor(clients.find((c) => c.id === selectedClientId)?.status as Client['status']).text,
                         fontWeight: 600,
                         fontSize: '12px',
                         height: 24,
@@ -825,19 +703,19 @@ export function ClientsPage() {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <EmailIcon sx={{ color: '#9B8B9E', fontSize: 20 }} />
                         <Typography variant="body2" sx={{ color: '#4A4542' }}>
-                          {mockClients.find((c) => c.id === selectedClientId)?.email}
+                          {clients.find((c) => c.id === selectedClientId)?.email}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <PhoneIcon sx={{ color: '#9B8B9E', fontSize: 20 }} />
                         <Typography variant="body2" sx={{ color: '#4A4542' }}>
-                          {mockClients.find((c) => c.id === selectedClientId)?.phone}
+                          {clients.find((c) => c.id === selectedClientId)?.phone}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <EventIcon sx={{ color: '#9B8B9E', fontSize: 20 }} />
                         <Typography variant="body2" sx={{ color: '#4A4542' }}>
-                          Started: {mockClients.find((c) => c.id === selectedClientId)?.startDate}
+                          Started: {clients.find((c) => c.id === selectedClientId)?.startDate}
                         </Typography>
                       </Box>
                     </Box>
@@ -856,7 +734,7 @@ export function ClientsPage() {
                         variant="body1"
                         sx={{ color: '#4A4542', fontWeight: 600, mb: 2 }}
                       >
-                        {mockClients.find((c) => c.id === selectedClientId)?.program}
+                        {clients.find((c) => c.id === selectedClientId)?.program}
                       </Typography>
                       <Box
                         sx={{
@@ -873,19 +751,19 @@ export function ClientsPage() {
                           variant="caption"
                           sx={{ color: '#4A4542', fontSize: '13px', fontWeight: 600 }}
                         >
-                          {mockClients.find((c) => c.id === selectedClientId)?.sessionsCompleted}/{mockClients.find((c) => c.id === selectedClientId)?.totalSessions}{' '}
+                          {clients.find((c) => c.id === selectedClientId)?.sessionsCompleted}/{clients.find((c) => c.id === selectedClientId)?.totalSessions}{' '}
                           sessions
                         </Typography>
                       </Box>
                       <LinearProgress
                         variant="determinate"
-                        value={mockClients.find((c) => c.id === selectedClientId)?.progress}
+                        value={clients.find((c) => c.id === selectedClientId)?.progress}
                         sx={{
                           height: 8,
                           borderRadius: 4,
                           bgcolor: 'rgba(155, 139, 158, 0.12)',
                           '& .MuiLinearProgress-bar': {
-                            bgcolor: mockClients.find((c) => c.id === selectedClientId)?.avatarColor,
+                            bgcolor: clients.find((c) => c.id === selectedClientId)?.avatarColor,
                             borderRadius: 4,
                           },
                         }}
@@ -894,7 +772,7 @@ export function ClientsPage() {
                   </Box>
 
                   {/* Next Session */}
-                  {mockClients.find((c) => c.id === selectedClientId)?.nextSession && (
+                  {clients.find((c) => c.id === selectedClientId)?.nextSession && (
                     <Box sx={{ mb: 4 }}>
                       <Typography
                         variant="subtitle2"
@@ -911,14 +789,14 @@ export function ClientsPage() {
                         }}
                       >
                         <Typography variant="body1" sx={{ color: '#4A4542', fontWeight: 600 }}>
-                          {mockClients.find((c) => c.id === selectedClientId)?.nextSession}
+                          {clients.find((c) => c.id === selectedClientId)?.nextSession}
                         </Typography>
                       </Box>
                     </Box>
                   )}
 
                   {/* Notes */}
-                  {mockClients.find((c) => c.id === selectedClientId)?.notes && (
+                  {clients.find((c) => c.id === selectedClientId)?.notes && (
                     <Box>
                       <Typography
                         variant="subtitle2"
@@ -928,7 +806,7 @@ export function ClientsPage() {
                       </Typography>
                       <Box sx={{ bgcolor: '#F5F3F1', borderRadius: '12px', p: 3 }}>
                         <Typography variant="body2" sx={{ color: '#4A4542', lineHeight: 1.6 }}>
-                          {mockClients.find((c) => c.id === selectedClientId)?.notes}
+                          {clients.find((c) => c.id === selectedClientId)?.notes}
                         </Typography>
                       </Box>
                     </Box>
