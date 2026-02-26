@@ -1,0 +1,12 @@
+# Node
+node_modules/
+dist/
+.env
+
+# .NET
+.vs/
+**/bin/
+**/obj/
+
+# Vite
+src/Lumina.Client/dist/

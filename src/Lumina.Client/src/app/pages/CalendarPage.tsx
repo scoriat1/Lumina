@@ -40,7 +40,8 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { useNavigate, useLocation } from 'react-router';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
 import { NewSessionModal } from '../components/NewSessionModal';
-import { calendarEvents } from '../data/calendarEvents';
+import { apiClient } from '../api/client';
+import type { SessionDto } from '../api/types';
 import { PageHeader } from '../components/PageHeader';
 
 type ViewMode = 'month' | 'week' | 'day';
@@ -53,6 +54,11 @@ export function CalendarPage() {
   const [newSessionInitialDate, setNewSessionInitialDate] = useState<string | undefined>();
   const [newSessionInitialTime, setNewSessionInitialTime] = useState<string | undefined>();
   const navigate = useNavigate();
+  const [calendarEvents, setCalendarEvents] = useState<SessionDto[]>([]);
+
+  useEffect(() => {
+    apiClient.getSessions().then(setCalendarEvents).catch(() => setCalendarEvents([]));
+  }, []);
 
   // Set to current month if navigating from dashboard
   useEffect(() => {
@@ -87,7 +93,7 @@ export function CalendarPage() {
   };
 
   const getEventsForDay = (day: Date) => {
-    return calendarEvents.filter((event) => isSameDay(event.date, day));
+    return calendarEvents.filter((event) => isSameDay(new Date(event.date), day));
   };
 
   const handleSessionClick = (sessionId: string) => {
@@ -267,7 +273,7 @@ export function CalendarPage() {
                               textOverflow: 'ellipsis',
                             }}
                           >
-                            {format(event.date, 'h:mm a')} {event.client}
+                            {format(new Date(event.date), 'h:mm a')} {event.client}
                           </Typography>
                         </Box>
                       ))}
@@ -401,7 +407,7 @@ export function CalendarPage() {
                           mb: 0.5,
                         }}
                       >
-                        {format(event.date, 'h:mm a')}
+                        {format(new Date(event.date), 'h:mm a')}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -474,7 +480,7 @@ export function CalendarPage() {
         {/* Time slots */}
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
           {hours.map((hour) => {
-            const hourEvents = dayEvents.filter((event) => getHours(event.date) === hour);
+            const hourEvents = dayEvents.filter((event) => getHours(new Date(event.date)) === hour);
 
             return (
               <Box
@@ -553,7 +559,7 @@ export function CalendarPage() {
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
                               <Chip
-                                label={`${format(event.date, 'h:mm a')} • ${event.duration} min`}
+                                label={`${format(new Date(event.date), 'h:mm a')} • ${event.duration} min`}
                                 size="small"
                                 sx={{
                                   bgcolor: '#FFFFFF',

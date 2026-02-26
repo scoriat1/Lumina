@@ -42,12 +42,17 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, end
 import { PageHeader } from '../components/PageHeader';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
 import { NewSessionModal } from '../components/NewSessionModal';
-import { sessionsData as initialSessionsData, Session, StatusFilter } from '../data/sessionsData';
+import type { SessionDto } from '../api/types';
+import { apiClient } from '../api/client';
+
+type StatusFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
+type Session = Omit<SessionDto, 'date'> & { date: Date };
+const toSession = (session: SessionDto): Session => ({ ...session, date: new Date(session.date) });
 import { useLocation } from 'react-router';
 
 export function SessionsPage() {
   const location = useLocation();
-  const [sessionsData, setSessionsData] = useState(initialSessionsData);
+  const [sessionsData, setSessionsData] = useState<Session[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('upcoming');
   const [clientFilter, setClientFilter] = useState<string>('all');
@@ -60,6 +65,12 @@ export function SessionsPage() {
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    apiClient.getSessions()
+      .then((data) => setSessionsData(data.map(toSession)))
+      .catch(() => setSessionsData([]));
+  }, []);
 
   // Check if we navigated from calendar or dashboard with a specific session ID
   const highlightSessionId = location.state?.sessionId;
@@ -121,12 +132,19 @@ export function SessionsPage() {
     setIsSessionDetailsDrawerOpen(true);
   };
 
-  const handleUpdateSession = (sessionId: string, updates: Partial<typeof sessionsData[0]>) => {
+  const handleUpdateSession = (sessionId: string, updates: Partial<Session>) => {
     setSessionsData(prevSessions =>
       prevSessions.map(session =>
         session.id === sessionId ? { ...session, ...updates } : session
       )
     );
+
+    apiClient.updateSession(sessionId, {
+      ...updates,
+      date: updates.date ? updates.date.toISOString() : undefined,
+    }).catch(() => {
+      // TODO: add user-facing error handling for failed session updates.
+    });
   };
 
   const handleClearFilters = () => {
