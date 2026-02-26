@@ -4,7 +4,6 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventNoteIcon from '@mui/icons-material/EventNote';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import FolderIcon from '@mui/icons-material/Folder';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -15,7 +14,6 @@ const navigationItems = [
   { text: 'Clients', icon: <PeopleIcon />, path: '/clients' },
   { text: 'Calendar', icon: <CalendarMonthIcon />, path: '/calendar' },
   { text: 'Sessions', icon: <EventNoteIcon />, path: '/sessions' },
-  { text: 'Billing', icon: <ReceiptLongIcon />, path: '/billing' },
   { text: 'Resources', icon: <FolderIcon />, path: '/resources' },
 ];
 

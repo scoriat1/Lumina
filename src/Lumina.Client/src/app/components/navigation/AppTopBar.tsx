@@ -1,14 +1,71 @@
-import { AppBar, Toolbar, IconButton, Box, Avatar, Badge } from '@mui/material';
+import { useMemo, useState, type MouseEvent } from 'react';
+import {
+  AppBar,
+  Toolbar,
+  IconButton,
+  Box,
+  Avatar,
+  Badge,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+} from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MenuIcon from '@mui/icons-material/Menu';
+import LogoutIcon from '@mui/icons-material/Logout';
+import { useNavigate } from 'react-router';
 import { colors, themeLayout, borderRadius, transitions } from '../../theme';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface AppTopBarProps {
   onMenuClick?: () => void;
 }
 
+function getInitials(name?: string, email?: string) {
+  if (name && name.trim().length > 0) {
+    const initials = name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('');
+
+    if (initials.length > 0) {
+      return initials;
+    }
+  }
+
+  if (email && email.length > 0) {
+    return email.slice(0, 2).toUpperCase();
+  }
+
+  return 'U';
+}
+
 export function AppTopBar({ onMenuClick }: AppTopBarProps) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+
+  const initials = useMemo(() => getInitials(user?.name, user?.email), [user?.name, user?.email]);
+  const menuOpen = Boolean(menuAnchorEl);
+
+  const handleMenuOpen = (event: MouseEvent<HTMLElement>) => {
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
+  const handleSignOut = () => {
+    logout();
+    handleMenuClose();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <AppBar
       position="static"
@@ -28,7 +85,6 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           alignItems: 'center',
         }}
       >
-        {/* Left side - Menu button on mobile */}
         <Box sx={{ flex: 1 }}>
           <IconButton
             onClick={onMenuClick}
@@ -41,9 +97,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           </IconButton>
         </Box>
 
-        {/* Right side - Notifications + Avatar */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
-          {/* Notification Bell */}
           <IconButton
             aria-label="notifications"
             sx={{
@@ -71,8 +125,11 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             </Badge>
           </IconButton>
 
-          {/* User Avatar + Dropdown */}
           <Box
+            onClick={handleMenuOpen}
+            aria-controls={menuOpen ? 'user-menu' : undefined}
+            aria-expanded={menuOpen ? 'true' : undefined}
+            aria-haspopup="menu"
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -96,7 +153,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
                 fontWeight: 600,
               }}
             >
-              JD
+              {initials}
             </Avatar>
             <KeyboardArrowDownIcon
               sx={{
@@ -106,6 +163,22 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
               }}
             />
           </Box>
+
+          <Menu
+            id="user-menu"
+            anchorEl={menuAnchorEl}
+            open={menuOpen}
+            onClose={handleMenuClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={handleSignOut}>
+              <ListItemIcon>
+                <LogoutIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Sign out</ListItemText>
+            </MenuItem>
+          </Menu>
         </Box>
       </Toolbar>
     </AppBar>

@@ -8,27 +8,13 @@ import { NotesTemplateSettings } from '../components/NotesTemplateSettings';
 
 type SettingsTab = 
   | 'practice'
-  | 'providers'
   | 'packages'
-  | 'billing'
   | 'availability'
   | 'notifications'
   | 'notes'
   | 'roles';
 
 // Mock data for demonstration
-const mockProviders = [
-  { 
-    id: '1', 
-    name: 'Sarah Johnson', 
-    email: 'sarah@practice.com', 
-    role: 'Owner', 
-    status: 'Active', 
-    hasOverride: false,
-    avatar: null
-  },
-];
-
 const mockPackages = [
   { id: '1', name: '4-Session Package', sessionCount: 4, price: 800, billingType: 'One-time', status: 'Active', enabled: true },
   { id: '2', name: 'Monthly Retainer', sessionCount: 8, price: 1500, billingType: 'Recurring', status: 'Active', enabled: true },
@@ -63,7 +49,7 @@ export function SettingsPage() {
   // Handle URL hash navigation (e.g., /settings#notes)
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    if (hash && ['practice', 'providers', 'packages', 'billing', 'availability', 'notifications', 'notes', 'roles'].includes(hash)) {
+    if (hash && ['practice', 'packages', 'availability', 'notifications', 'notes', 'roles'].includes(hash)) {
       setActiveTab(hash as SettingsTab);
     }
   }, [location.hash]);
@@ -89,16 +75,6 @@ export function SettingsPage() {
   const [overdueAlerts, setOverdueAlerts] = useState(false);
   const [weeklySummary, setWeeklySummary] = useState(true);
   const [providerReminderCopy, setProviderReminderCopy] = useState(false);
-
-  // Billing settings state
-  const [stripeConnected, setStripeConnected] = useState(false);
-  const [defaultDueDays, setDefaultDueDays] = useState('30');
-  const [autoSendInvoices, setAutoSendInvoices] = useState(true);
-  const [taxRate, setTaxRate] = useState('');
-  const [clientPaysProcessingFees, setClientPaysProcessingFees] = useState(false);
-  const [allowPayPerSession, setAllowPayPerSession] = useState(true);
-  const [allowPackageBilling, setAllowPackageBilling] = useState(true);
-  const [allowRecurringSubscriptions, setAllowRecurringSubscriptions] = useState(false);
 
   // Availability settings
   const [applyToAllProviders, setApplyToAllProviders] = useState(true);
@@ -141,19 +117,9 @@ export function SettingsPage() {
             onClick={() => setActiveTab('practice')}
           />
           <SettingsNavItem
-            label="Providers"
-            isActive={activeTab === 'providers'}
-            onClick={() => setActiveTab('providers')}
-          />
-          <SettingsNavItem
             label="Packages"
             isActive={activeTab === 'packages'}
             onClick={() => setActiveTab('packages')}
-          />
-          <SettingsNavItem
-            label="Billing"
-            isActive={activeTab === 'billing'}
-            onClick={() => setActiveTab('billing')}
           />
           <SettingsNavItem
             label="Availability"
@@ -210,38 +176,10 @@ export function SettingsPage() {
             />
           )}
 
-          {activeTab === 'providers' && (
-            <ProvidersSettings providers={mockProviders} />
-          )}
-
           {activeTab === 'packages' && (
             <PackagesSettings packages={mockPackages} />
           )}
 
-          {activeTab === 'billing' && (
-            <BillingSettings
-              stripeConnected={stripeConnected}
-              setStripeConnected={setStripeConnected}
-              defaultDueDays={defaultDueDays}
-              setDefaultDueDays={setDefaultDueDays}
-              autoSendInvoices={autoSendInvoices}
-              setAutoSendInvoices={setAutoSendInvoices}
-              taxRate={taxRate}
-              setTaxRate={setTaxRate}
-              clientPaysProcessingFees={clientPaysProcessingFees}
-              setClientPaysProcessingFees={setClientPaysProcessingFees}
-              allowPayPerSession={allowPayPerSession}
-              setAllowPayPerSession={setAllowPayPerSession}
-              allowPackageBilling={allowPackageBilling}
-              setAllowPackageBilling={setAllowPackageBilling}
-              allowRecurringSubscriptions={allowRecurringSubscriptions}
-              setAllowRecurringSubscriptions={setAllowRecurringSubscriptions}
-              isDirty={isDirty}
-              setIsDirty={setIsDirty}
-              onSave={handleSave}
-              onCancel={handleCancel}
-            />
-          )}
 
           {activeTab === 'availability' && (
             <AvailabilitySettings
@@ -612,137 +550,6 @@ function PracticeSettings({
           </Button>
         </Box>
       )}
-    </Box>
-  );
-}
-
-// Providers Settings Section
-function ProvidersSettings({ providers }: any) {
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <ContentCard>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <SectionHeader title="Providers" />
-          <Button
-            variant="outlined"
-            startIcon={<Add sx={{ fontSize: '18px' }} />}
-            sx={{
-              borderColor: colors.neutral.gray200,
-              color: colors.text.primary,
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: '14px',
-              px: 2.5,
-              py: 1,
-              '&:hover': {
-                borderColor: colors.neutral.gray300,
-                bgcolor: 'transparent',
-              },
-            }}
-          >
-            Invite Provider
-          </Button>
-        </Box>
-
-        {/* Providers List */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {providers.map((provider: any) => (
-            <Box
-              key={provider.id}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 3,
-                p: 2.5,
-                border: `1px solid ${colors.neutral.gray200}`,
-                borderRadius: '12px',
-                transition: 'all 180ms',
-                '&:hover': {
-                  bgcolor: colors.neutral.gray50,
-                  borderColor: colors.neutral.gray300,
-                },
-              }}
-            >
-              <Avatar
-                src={provider.avatar}
-                sx={{
-                  width: 48,
-                  height: 48,
-                  bgcolor: colors.primary.main,
-                  color: '#FFFFFF',
-                  fontSize: '18px',
-                  fontWeight: 600,
-                }}
-              >
-                {provider.name.split(' ').map((n: string) => n[0]).join('')}
-              </Avatar>
-              
-              <Box sx={{ flex: 1 }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '15px', color: colors.text.primary, mb: 0.5 }}>
-                  {provider.name}
-                </Typography>
-                <Typography sx={{ fontSize: '13px', color: colors.text.secondary }}>
-                  {provider.email}
-                </Typography>
-              </Box>
-
-              <Chip
-                label={provider.role}
-                size="small"
-                sx={{
-                  bgcolor: 'rgba(110, 91, 206, 0.08)',
-                  color: colors.primary.main,
-                  fontWeight: 500,
-                  fontSize: '12px',
-                  height: '26px',
-                  borderRadius: '6px',
-                }}
-              />
-
-              <Chip
-                label={provider.status}
-                size="small"
-                sx={{
-                  bgcolor: 'rgba(46, 125, 50, 0.08)',
-                  color: '#2E7D32',
-                  fontWeight: 500,
-                  fontSize: '12px',
-                  height: '26px',
-                  borderRadius: '6px',
-                }}
-              />
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: '80px' }}>
-                <Typography sx={{ fontSize: '13px', color: colors.text.secondary }}>
-                  Override:
-                </Typography>
-                <Typography sx={{ fontSize: '13px', fontWeight: 500, color: colors.text.primary }}>
-                  {provider.hasOverride ? 'Yes' : 'No'}
-                </Typography>
-              </Box>
-
-              <IconButton size="small" sx={{ color: colors.text.secondary }}>
-                <MoreVert sx={{ fontSize: '20px' }} />
-              </IconButton>
-            </Box>
-          ))}
-        </Box>
-
-        {/* Info Box */}
-        <Box
-          sx={{
-            mt: 3,
-            p: 2.5,
-            bgcolor: colors.neutral.gray50,
-            border: `1px solid ${colors.neutral.gray200}`,
-            borderRadius: '12px',
-          }}
-        >
-          <Typography sx={{ fontSize: '13px', color: colors.text.secondary, lineHeight: 1.6 }}>
-            If provider overrides are enabled, their availability and rates may differ from practice defaults.
-          </Typography>
-        </Box>
-      </ContentCard>
     </Box>
   );
 }

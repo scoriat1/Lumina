@@ -6,9 +6,7 @@ import {
   MenuItem,
   Box,
   Typography,
-  Avatar,
   IconButton,
-  Fade,
   Collapse,
   Autocomplete,
 } from '@mui/material';
@@ -27,47 +25,10 @@ import { colors } from '../styles/colors';
 interface NewSessionModalProps {
   open: boolean;
   onClose: () => void;
-  preselectedClientId?: string; // Optional: pre-populate the client dropdown
+  preselectedClientId?: string; // Optional: pre-populate the client name
   initialDate?: string; // Optional: pre-populate date in yyyy-MM-dd format
   initialTime?: string; // Optional: pre-populate time in HH:mm format
 }
-
-// Mock clients data
-const clients = [
-  {
-    id: '1',
-    name: 'Avery Fields',
-    initials: 'AF',
-    avatarColor: colors.brand.purple,
-    packages: [
-      { id: 'pkg1', name: 'Confidence Package', remaining: 3, total: 8 },
-      { id: 'pkg2', name: 'Career Growth Package', remaining: 5, total: 10 },
-    ],
-    hasBillingPlan: false,
-  },
-  {
-    id: '2',
-    name: 'Jordan Lee',
-    initials: 'JL',
-    avatarColor: colors.semantic.success.main,
-    packages: [{ id: 'pkg3', name: 'Leadership Package', remaining: 7, total: 12 }],
-    hasBillingPlan: true,
-    billingPlanName: 'Monthly Wellness Plan',
-  },
-  { id: '3', name: 'Riley Harper', initials: 'RH', avatarColor: colors.brand.purple, packages: [], hasBillingPlan: false },
-  { id: '4', name: 'Dakota Smith', initials: 'DS', avatarColor: colors.neutral[600], packages: [], hasBillingPlan: false },
-  {
-    id: '5',
-    name: 'Sam Rivera',
-    initials: 'SR',
-    avatarColor: colors.neutral[600],
-    packages: [],
-    hasBillingPlan: false,
-  },
-  { id: '6', name: 'Morgan Blake', initials: 'MB', avatarColor: colors.brand.purple, packages: [], hasBillingPlan: false },
-  { id: '7', name: 'Alex Thompson', initials: 'AT', avatarColor: colors.brand.purple, packages: [], hasBillingPlan: false },
-  { id: '8', name: 'Taylor Chen', initials: 'TC', avatarColor: colors.semantic.success.main, packages: [], hasBillingPlan: false },
-];
 
 const sessionTypes = [
   'Initial Consultation',
@@ -90,14 +51,12 @@ const durations = [
 
 export function NewSessionModal({ open, onClose, preselectedClientId, initialDate, initialTime }: NewSessionModalProps) {
   const [formData, setFormData] = useState({
-    clientId: preselectedClientId || '',
+    clientName: preselectedClientId || '',
     sessionType: '',
     date: initialDate || format(new Date(), 'yyyy-MM-dd'),
     time: initialTime || '',
     duration: 60,
     method: 'zoom' as 'zoom' | 'phone' | 'office',
-    billingSource: 'pay-per-session' as 'pay-per-session' | 'package' | 'billing-plan',
-    packageId: '',
   });
 
   const [recurringData, setRecurringData] = useState({
@@ -106,32 +65,10 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
     occurrences: 6,
   });
 
-  const selectedClient = clients.find((c) => c.id === formData.clientId);
-
-  // Initialize billing source when modal opens with a preselected client
+  // Initialize client name when modal opens with a preselected client
   useEffect(() => {
     if (preselectedClientId && open) {
-      const client = clients.find((c) => c.id === preselectedClientId);
-      if (client) {
-        setFormData((prev) => {
-          let billingSource: 'pay-per-session' | 'package' | 'billing-plan' = 'pay-per-session';
-          let packageId = '';
-          
-          if (client.hasBillingPlan) {
-            billingSource = 'billing-plan';
-          } else if (client.packages && client.packages.length > 0) {
-            billingSource = 'package';
-            packageId = client.packages[0].id;
-          }
-          
-          return {
-            ...prev,
-            clientId: preselectedClientId,
-            billingSource,
-            packageId,
-          };
-        });
-      }
+      setFormData((prev) => ({ ...prev, clientName: preselectedClientId }));
     }
   }, [preselectedClientId, open]);
 
@@ -159,14 +96,12 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
     onClose();
     // Reset
     setFormData({
-      clientId: '',
+      clientName: '',
       sessionType: '',
       date: format(new Date(), 'yyyy-MM-dd'),
       time: '',
       duration: 60,
       method: 'zoom',
-      billingSource: 'pay-per-session',
-      packageId: '',
     });
     setRecurringData({ enabled: false, repeat: 'weekly', occurrences: 6 });
   };
@@ -174,17 +109,6 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
   const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
-    // Auto-select billing source based on client
-    if (field === 'clientId') {
-      const client = clients.find((c) => c.id === value);
-      if (client?.hasBillingPlan) {
-        setFormData((prev) => ({ ...prev, billingSource: 'billing-plan', packageId: '' }));
-      } else if (client?.packages && client.packages.length > 0) {
-        setFormData((prev) => ({ ...prev, billingSource: 'package', packageId: client.packages[0].id }));
-      } else {
-        setFormData((prev) => ({ ...prev, billingSource: 'pay-per-session', packageId: '' }));
-      }
-    }
   };
 
   const handleRecurringChange = (field: string, value: any) => {
@@ -197,17 +121,6 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
 
   const handleTimeSelect = (time: string) => {
     setFormData((prev) => ({ ...prev, time }));
-  };
-
-  const getBillingLabel = () => {
-    if (formData.billingSource === 'billing-plan' && selectedClient?.hasBillingPlan) {
-      return selectedClient.billingPlanName;
-    }
-    if (formData.billingSource === 'package' && formData.packageId) {
-      const pkg = selectedClient?.packages?.find((p) => p.id === formData.packageId);
-      return pkg ? `${pkg.name} (${pkg.remaining} left)` : 'Package';
-    }
-    return 'Pay per session — $150';
   };
 
   return (
@@ -294,12 +207,11 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
                 Client
               </Typography>
               <TextField
-                select
                 fullWidth
                 size="small"
-                value={formData.clientId}
-                onChange={(e) => handleChange('clientId', e.target.value)}
-                placeholder="Select client"
+                value={formData.clientName}
+                onChange={(e) => handleChange('clientName', e.target.value)}
+                placeholder="Enter client name"
                 required
                 sx={{
                   bgcolor: colors.background.pure,
@@ -319,35 +231,8 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
                       borderWidth: '2px',
                     },
                   },
-                  '& .MuiSelect-select': {
-                    py: 1,
-                    fontWeight: 500,
-                    color: colors.text.primary,
-                  },
                 }}
-              >
-                {clients.map((client) => (
-                  <MenuItem key={client.id} value={client.id}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', overflow: 'hidden' }}>
-                      <Avatar
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          bgcolor: client.avatarColor,
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {client.initials}
-                      </Avatar>
-                      <Typography variant="body2" sx={{ fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {client.name}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
+              />
             </Box>
 
             {/* Session Title */}
@@ -516,121 +401,6 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
                 </Typography>
               </Box>
             )}
-
-            {/* Progressive Disclosure: Billing (only after time selected) */}
-            <Collapse in={isTimeSelected}>
-              <Box>
-                <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                  Billing
-                </Typography>
-                <TextField
-                  select
-                  fullWidth
-                  size="small"
-                  value={formData.billingSource}
-                  onChange={(e) => handleChange('billingSource', e.target.value)}
-                  required
-                  disabled={!formData.clientId}
-                  sx={{
-                    bgcolor: colors.background.pure,
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '10px',
-                      minHeight: '42px',
-                      '& fieldset': {
-                        borderColor: colors.border.medium,
-                        borderWidth: '1.5px',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: colors.primary.lavenderLight,
-                        borderWidth: '1.5px',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: colors.primary.lavender,
-                        borderWidth: '2px',
-                      },
-                    },
-                    '& .MuiSelect-select': {
-                      py: 1,
-                      fontWeight: 500,
-                      color: colors.text.primary,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    },
-                  }}
-                >
-                  <MenuItem value="pay-per-session">Pay per session</MenuItem>
-                  <MenuItem value="package" disabled={!selectedClient?.packages || selectedClient.packages.length === 0}>
-                    Package
-                  </MenuItem>
-                  <MenuItem value="billing-plan" disabled={!selectedClient?.hasBillingPlan}>
-                    Included in plan
-                  </MenuItem>
-                </TextField>
-
-                {/* Package Selection */}
-                {formData.billingSource === 'package' &&
-                  selectedClient?.packages &&
-                  selectedClient.packages.length > 0 && (
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      value={formData.packageId}
-                      onChange={(e) => handleChange('packageId', e.target.value)}
-                      placeholder="Select package"
-                      sx={{
-                        mt: 1.5,
-                        bgcolor: colors.background.pure,
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '10px',
-                          minHeight: '42px',
-                          '& fieldset': {
-                            borderColor: colors.border.medium,
-                            borderWidth: '1.5px',
-                          },
-                          '&:hover fieldset': {
-                            borderColor: colors.primary.lavenderLight,
-                            borderWidth: '1.5px',
-                          },
-                          '&.Mui-focused fieldset': {
-                            borderColor: colors.primary.lavender,
-                            borderWidth: '2px',
-                          },
-                        },
-                        '& .MuiSelect-select': {
-                          py: 1,
-                        },
-                      }}
-                    >
-                      {selectedClient.packages.map((pkg) => (
-                        <MenuItem key={pkg.id} value={pkg.id}>
-                          <Typography variant="body2" sx={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {pkg.name} — {pkg.remaining} of {pkg.total} left
-                          </Typography>
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-
-                {/* Billing Plan Info */}
-                {formData.billingSource === 'billing-plan' && selectedClient?.hasBillingPlan && (
-                  <Box
-                    sx={{
-                      mt: 1.5,
-                      p: 1.5,
-                      bgcolor: colors.status.successBg,
-                      borderRadius: '8px',
-                      border: `1px solid ${colors.status.successBorder}`,
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ color: colors.status.success, fontSize: '12px', fontWeight: 600 }}>
-                      ✓ Covered by plan
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            </Collapse>
 
             {/* Progressive Disclosure: Recurring (only after time selected) */}
             <Collapse in={isTimeSelected}>
@@ -840,7 +610,7 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
           <Button
             type="submit"
             variant="contained"
-            disabled={!formData.clientId || !formData.time}
+            disabled={!formData.clientName || !formData.time}
             sx={{
               bgcolor: '#9B8B9E',
               color: '#FFFFFF',

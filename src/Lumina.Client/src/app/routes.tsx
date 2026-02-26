@@ -5,7 +5,6 @@ import { ClientsPage } from './pages/ClientsPage';
 import { ClientDetailPage } from './pages/ClientDetailPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { SessionsPage } from './pages/SessionsPage';
-import { BillingPage } from './pages/BillingPage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -44,10 +43,6 @@ export const router = createBrowserRouter([
           {
             path: 'calendar',
             Component: CalendarPage,
-          },
-          {
-            path: 'billing',
-            Component: BillingPage,
           },
           {
             path: 'sessions',
