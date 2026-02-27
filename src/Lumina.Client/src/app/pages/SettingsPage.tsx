@@ -5,6 +5,8 @@ import { Add, Edit, MoreVert, CloudUpload } from '@mui/icons-material';
 import { PageHeader } from '../components/PageHeader';
 import { colors } from '../styles/colors';
 import { NotesTemplateSettings } from '../components/NotesTemplateSettings';
+import { apiClient } from '../api/client';
+import type { ProviderDto } from '../api/types';
 
 type SettingsTab = 
   | 'practice'
@@ -15,19 +17,6 @@ type SettingsTab =
   | 'notifications'
   | 'notes'
   | 'roles';
-
-// Mock data for demonstration
-const mockProviders = [
-  { 
-    id: '1', 
-    name: 'Sarah Johnson', 
-    email: 'sarah@practice.com', 
-    role: 'Owner', 
-    status: 'Active', 
-    hasOverride: false,
-    avatar: null
-  },
-];
 
 const mockPackages = [
   { id: '1', name: '4-Session Package', sessionCount: 4, price: 800, billingType: 'One-time', status: 'Active', enabled: true },
@@ -59,6 +48,7 @@ export function SettingsPage() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('practice');
   const [isDirty, setIsDirty] = useState(false);
+  const [providers, setProviders] = useState<ProviderDto[]>([]);
 
   // Handle URL hash navigation (e.g., /settings#notes)
   useEffect(() => {
@@ -67,6 +57,11 @@ export function SettingsPage() {
       setActiveTab(hash as SettingsTab);
     }
   }, [location.hash]);
+
+
+  useEffect(() => {
+    apiClient.getProviders().then(setProviders).catch(() => setProviders([]));
+  }, []);
 
   // Practice settings state
   const [practiceName, setPracticeName] = useState('My Practice');
@@ -211,7 +206,7 @@ export function SettingsPage() {
           )}
 
           {activeTab === 'providers' && (
-            <ProvidersSettings providers={mockProviders} />
+            <ProvidersSettings providers={providers} />
           )}
 
           {activeTab === 'packages' && (

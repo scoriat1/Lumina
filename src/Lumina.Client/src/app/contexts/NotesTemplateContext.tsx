@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { apiClient } from '../api/client';
 
 export interface Template {
   id: string;
@@ -11,79 +12,41 @@ interface NotesTemplateContextType {
   templateMode: 'default' | 'template';
   selectedTemplateId: string;
   customTemplates: Template[];
+  presetTemplates: Template[];
   setTemplateMode: (mode: 'default' | 'template') => void;
   setSelectedTemplateId: (id: string) => void;
   setCustomTemplates: (templates: Template[]) => void;
+  refreshTemplates: () => Promise<void>;
   getActiveTemplate: () => Template | null;
 }
 
 const NotesTemplateContext = createContext<NotesTemplateContextType | undefined>(undefined);
 
-// Predefined template presets
-export const templatePresets: Template[] = [
-  {
-    id: 'coach',
-    name: 'Professional Coach',
-    fields: ['Arrival State', 'Intention', 'Process', 'Closing State / Takeaway', 'Commitment'],
-  },
-  {
-    id: 'therapist',
-    name: 'Speech/Physical Therapist',
-    fields: ['Exercises Completed', 'Progress Assessment', 'Challenges Observed', 'Homework Assigned', 'Parent/Caregiver Notes'],
-  },
-  {
-    id: 'nutritionist',
-    name: 'Nutritionist/Dietitian',
-    fields: ['Meals Reviewed', 'Weight & Measurements', 'Supplements Discussed', 'Dietary Changes', 'Next Steps'],
-  },
-  {
-    id: 'music',
-    name: 'Music Teacher',
-    fields: ['Pieces Practiced', 'Technique Focus', 'Theory Covered', 'Practice Assignment', 'Performance Notes'],
-  },
-  {
-    id: 'swim',
-    name: 'Swim Instructor',
-    fields: ['Strokes Practiced', 'Breathing Exercises', 'Skills Mastered', 'Areas for Improvement', 'Goals for Next Session'],
-  },
-  {
-    id: 'tutor',
-    name: 'Academic Tutor',
-    fields: ['Topics Covered', 'Comprehension Level', 'Homework Review', 'Study Strategies', 'Upcoming Tests/Projects'],
-  },
-];
-
 export function NotesTemplateProvider({ children }: { children: ReactNode }) {
   const [templateMode, setTemplateMode] = useState<'default' | 'template'>('default');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [customTemplates, setCustomTemplates] = useState<Template[]>([]);
+  const [presetTemplates, setPresetTemplates] = useState<Template[]>([]);
+
+  const refreshTemplates = async () => {
+    const [presets, custom] = await Promise.all([apiClient.getTemplatePresets(), apiClient.getCustomTemplates()]);
+    setPresetTemplates(presets);
+    setCustomTemplates(custom);
+  };
+
+  useEffect(() => {
+    refreshTemplates().catch(() => undefined);
+  }, []);
 
   const getActiveTemplate = (): Template | null => {
-    if (templateMode === 'default' || !selectedTemplateId) {
-      return null;
-    }
-
-    // Check preset templates first
-    const preset = templatePresets.find(t => t.id === selectedTemplateId);
+    if (templateMode === 'default' || !selectedTemplateId) return null;
+    const preset = presetTemplates.find(t => t.id === selectedTemplateId);
     if (preset) return preset;
-
-    // Check custom templates
-    const custom = customTemplates.find(t => t.id === selectedTemplateId);
-    return custom || null;
+    return customTemplates.find(t => t.id === selectedTemplateId) ?? null;
   };
 
   return (
-    <NotesTemplateContext.Provider
-      value={{
-        templateMode,
-        selectedTemplateId,
-        customTemplates,
-        setTemplateMode,
-        setSelectedTemplateId,
-        setCustomTemplates,
-        getActiveTemplate,
-      }}
-    >
+    <NotesTemplateContext.Provider value={{ templateMode, selectedTemplateId, customTemplates, presetTemplates, setTemplateMode, setSelectedTemplateId, setCustomTemplates, refreshTemplates, getActiveTemplate }}>
       {children}
     </NotesTemplateContext.Provider>
   );
@@ -91,8 +54,6 @@ export function NotesTemplateProvider({ children }: { children: ReactNode }) {
 
 export function useNotesTemplate() {
   const context = useContext(NotesTemplateContext);
-  if (!context) {
-    throw new Error('useNotesTemplate must be used within NotesTemplateProvider');
-  }
+  if (!context) throw new Error('useNotesTemplate must be used within NotesTemplateProvider');
   return context;
 }

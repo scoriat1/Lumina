@@ -2,12 +2,15 @@ import { AppBar, Toolbar, IconButton, Box, Avatar, Badge } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AppTopBarProps {
   onMenuClick: () => void;
 }
 
 export function AppTopBar({ onMenuClick }: AppTopBarProps) {
+  const { user } = useAuth();
+
   return (
     <AppBar
       position="static"
@@ -101,7 +104,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
                 border: '2px solid transparent',
               }}
             >
-              JD
+              {user?.initials ?? '??'}
             </Avatar>
             <KeyboardArrowDownIcon 
               sx={{ 

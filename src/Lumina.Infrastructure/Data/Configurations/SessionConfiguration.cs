@@ -11,10 +11,8 @@ public class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.SessionType).HasMaxLength(150).IsRequired();
         builder.Property(x => x.Focus).HasMaxLength(500).IsRequired();
-        builder.Property(x => x.Payment).HasMaxLength(50).IsRequired();
-        builder.HasOne(x => x.Client)
-            .WithMany(x => x.Sessions)
-            .HasForeignKey(x => x.ClientId)
-            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(x => x.Client).WithMany(x => x.Sessions).HasForeignKey(x => x.ClientId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(x => new { x.PracticeId, x.Date });
     }
 }

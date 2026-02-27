@@ -3,7 +3,8 @@ import { Box, Typography, Button, TextField, Chip, IconButton, Tooltip } from '@
 import { Add, ContentCopy, Edit } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { colors } from '../styles/colors';
-import { useNotesTemplate, templatePresets, Template } from '../contexts/NotesTemplateContext';
+import { useNotesTemplate, Template } from '../contexts/NotesTemplateContext';
+import { apiClient } from '../api/client';
 
 export function NotesTemplateSettings() {
   const {
@@ -13,6 +14,8 @@ export function NotesTemplateSettings() {
     setSelectedTemplateId,
     customTemplates,
     setCustomTemplates,
+    presetTemplates,
+    refreshTemplates,
   } = useNotesTemplate();
 
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
@@ -61,11 +64,9 @@ export function NotesTemplateSettings() {
     }
   };
 
-  const handleDuplicateTemplate = (template: Template) => {
-    setNewTemplateName(`${template.name} (Copy)`);
-    setNewTemplateFields([...template.fields, '']);
-    setEditingTemplateId(null);
-    setIsCreatingTemplate(true);
+  const handleDuplicateTemplate = async (template: Template) => {
+    await apiClient.duplicateTemplateFromPreset(template.id);
+    await refreshTemplates();
   };
 
   const handleEditCustomTemplate = (template: Template) => {
@@ -196,7 +197,7 @@ export function NotesTemplateSettings() {
               </Typography>
             </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-              {templatePresets.map((preset) => (
+              {presetTemplates.map((preset) => (
                 <Box
                   key={preset.id}
                   sx={{

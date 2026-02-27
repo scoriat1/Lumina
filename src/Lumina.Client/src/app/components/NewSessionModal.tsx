@@ -23,6 +23,7 @@ import { format, parse, addWeeks } from 'date-fns';
 import { TimelineAvailability } from './TimelineAvailability';
 import { calendarEvents } from '../data/calendarEvents';
 import { colors } from '../styles/colors';
+import { apiClient } from '../api/client';
 
 interface NewSessionModalProps {
   open: boolean;
@@ -32,44 +33,18 @@ interface NewSessionModalProps {
   initialTime?: string; // Optional: pre-populate time in HH:mm format
 }
 
-// Mock clients data
-const clients = [
-  {
-    id: '1',
-    name: 'Avery Fields',
-    initials: 'AF',
-    avatarColor: colors.brand.purple,
-    packages: [
-      { id: 'pkg1', name: 'Confidence Package', remaining: 3, total: 8 },
-      { id: 'pkg2', name: 'Career Growth Package', remaining: 5, total: 10 },
-    ],
-    hasBillingPlan: false,
-  },
-  {
-    id: '2',
-    name: 'Jordan Lee',
-    initials: 'JL',
-    avatarColor: colors.semantic.success.main,
-    packages: [{ id: 'pkg3', name: 'Leadership Package', remaining: 7, total: 12 }],
-    hasBillingPlan: true,
-    billingPlanName: 'Monthly Wellness Plan',
-  },
-  { id: '3', name: 'Riley Harper', initials: 'RH', avatarColor: colors.brand.purple, packages: [], hasBillingPlan: false },
-  { id: '4', name: 'Dakota Smith', initials: 'DS', avatarColor: colors.neutral[600], packages: [], hasBillingPlan: false },
-  {
-    id: '5',
-    name: 'Sam Rivera',
-    initials: 'SR',
-    avatarColor: colors.neutral[600],
-    packages: [],
-    hasBillingPlan: false,
-  },
-  { id: '6', name: 'Morgan Blake', initials: 'MB', avatarColor: colors.brand.purple, packages: [], hasBillingPlan: false },
-  { id: '7', name: 'Alex Thompson', initials: 'AT', avatarColor: colors.brand.purple, packages: [], hasBillingPlan: false },
-  { id: '8', name: 'Taylor Chen', initials: 'TC', avatarColor: colors.semantic.success.main, packages: [], hasBillingPlan: false },
-];
+type ModalClient = {
+  id: string;
+  name: string;
+  initials: string;
+  avatarColor: string;
+  packages: { id: string; name: string; remaining: number; total: number }[];
+  hasBillingPlan: boolean;
+  billingPlanName?: string;
+};
 
-const sessionTypes = [
+const sessionTypes =
+ [
   'Initial Consultation',
   'Weekly Check-in',
   'Progress Check-in',
@@ -100,12 +75,22 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
     packageId: '',
   });
 
+  const [clients, setClients] = useState<ModalClient[]>([]);
+
   const [recurringData, setRecurringData] = useState({
     enabled: false,
     repeat: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
     occurrences: 6,
   });
 
+
+  useEffect(() => {
+    apiClient.getClients()
+      .then((items) => {
+        setClients(items.map((c) => ({ id: c.id, name: c.name, initials: c.initials, avatarColor: c.avatarColor, packages: [], hasBillingPlan: false })));
+      })
+      .catch(() => setClients([]));
+  }, []);
   const selectedClient = clients.find((c) => c.id === formData.clientId);
 
   // Initialize billing source when modal opens with a preselected client
