@@ -11,6 +11,7 @@ public class LuminaDbContext(DbContextOptions<LuminaDbContext> options) : DbCont
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(LuminaDbContext).Assembly);
     }
 }
