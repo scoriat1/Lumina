@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router';
 import { theme } from './theme';
 import { router } from './routes';
 import { NotesTemplateProvider } from './contexts/NotesTemplateContext';
+import { AuthProvider } from './contexts/AuthContext';
 
 // Clean theme provider wrapper
 function CleanThemeProvider({ children }: { children: React.ReactNode }) {
@@ -13,11 +14,13 @@ function AppContent() {
   return (
     <CleanThemeProvider>
       <CssBaseline />
-      <NotesTemplateProvider>
-        <Box sx={{ height: '100%', width: '100%' }}>
-          <RouterProvider router={router} />
-        </Box>
-      </NotesTemplateProvider>
+      <AuthProvider>
+        <NotesTemplateProvider>
+          <Box sx={{ height: '100%', width: '100%' }}>
+            <RouterProvider router={router} />
+          </Box>
+        </NotesTemplateProvider>
+      </AuthProvider>
     </CleanThemeProvider>
   );
 }

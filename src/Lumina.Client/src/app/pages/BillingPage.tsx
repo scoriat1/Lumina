@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -21,105 +21,27 @@ import PendingIcon from '@mui/icons-material/Pending';
 import ErrorIcon from '@mui/icons-material/Error';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { PageHeader } from '../components/PageHeader';
+import { apiClient } from '../api/client';
+import type { InvoiceDto } from '../api/types';
 
-interface Invoice {
-  id: string;
-  invoiceNumber: string;
-  clientName: string;
-  clientInitials: string;
-  clientColor: string;
-  amount: number;
-  date: string;
-  dueDate: string;
-  status: 'paid' | 'pending' | 'overdue';
-  sessionCount: number;
-  description: string;
-}
-
-const mockInvoices: Invoice[] = [
-  {
-    id: '1',
-    invoiceNumber: 'INV-2026-001',
-    clientName: 'Alex Thompson',
-    clientInitials: 'AT',
-    clientColor: '#9B8B9E',
-    amount: 600,
-    date: 'Feb 1, 2026',
-    dueDate: 'Feb 15, 2026',
-    status: 'paid',
-    sessionCount: 4,
-    description: 'Executive Leadership - February sessions',
-  },
-  {
-    id: '2',
-    invoiceNumber: 'INV-2026-002',
-    clientName: 'Taylor Chen',
-    clientInitials: 'TC',
-    clientColor: '#A8B5A0',
-    amount: 450,
-    date: 'Feb 1, 2026',
-    dueDate: 'Feb 15, 2026',
-    status: 'pending',
-    sessionCount: 3,
-    description: 'Career Development - February sessions',
-  },
-  {
-    id: '3',
-    invoiceNumber: 'INV-2026-003',
-    clientName: 'Jamie Patel',
-    clientInitials: 'JP',
-    clientColor: '#9DAAB5',
-    amount: 300,
-    date: 'Jan 15, 2026',
-    dueDate: 'Jan 30, 2026',
-    status: 'overdue',
-    sessionCount: 2,
-    description: 'Work-Life Balance - January sessions',
-  },
-  {
-    id: '4',
-    invoiceNumber: 'INV-2026-004',
-    clientName: 'Casey Martinez',
-    clientInitials: 'CM',
-    clientColor: '#D4B88A',
-    amount: 600,
-    date: 'Feb 1, 2026',
-    dueDate: 'Feb 15, 2026',
-    status: 'paid',
-    sessionCount: 4,
-    description: 'Confidence & Communication - February sessions',
-  },
-  {
-    id: '5',
-    invoiceNumber: 'INV-2026-005',
-    clientName: 'Morgan Blake',
-    clientInitials: 'MB',
-    clientColor: '#9B8B9E',
-    amount: 450,
-    date: 'Feb 5, 2026',
-    dueDate: 'Feb 20, 2026',
-    status: 'pending',
-    sessionCount: 3,
-    description: 'Executive Leadership Coaching - February sessions',
-  },
-  {
-    id: '6',
-    invoiceNumber: 'INV-2026-006',
-    clientName: 'Riley Foster',
-    clientInitials: 'RF',
-    clientColor: '#A8B5A0',
-    amount: 525,
-    date: 'Jan 20, 2026',
-    dueDate: 'Feb 5, 2026',
-    status: 'paid',
-    sessionCount: 3.5,
-    description: 'Career Transition - January sessions',
-  },
-];
+interface Invoice extends InvoiceDto {}
 
 export function BillingPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [summary, setSummary] = useState({ totalRevenue: 0, pendingAmount: 0, overdueAmount: 0 });
+
+  useEffect(() => {
+    Promise.all([apiClient.getBillingSummary(), apiClient.getBillingInvoices()])
+      .then(([billingSummary, billingInvoices]) => {
+        setSummary(billingSummary);
+        setInvoices(billingInvoices);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const selectedInvoice = useMemo(() => invoices.find((inv) => inv.id === selectedInvoiceId) ?? null, [invoices, selectedInvoiceId]);
 
   const handleInvoiceClick = (invoice: Invoice) => {
     setSelectedInvoiceId(invoice.id);
@@ -160,15 +82,7 @@ export function BillingPage() {
     }
   };
 
-  const totalRevenue = mockInvoices
-    .filter((inv) => inv.status === 'paid')
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const pendingAmount = mockInvoices
-    .filter((inv) => inv.status === 'pending')
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const overdueAmount = mockInvoices
-    .filter((inv) => inv.status === 'overdue')
-    .reduce((sum, inv) => sum + inv.amount, 0);
+
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -205,10 +119,10 @@ export function BillingPage() {
               </Typography>
             </Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: '#4A4542' }}>
-              ${totalRevenue.toLocaleString()}
+              ${summary.totalRevenue.toLocaleString()}
             </Typography>
             <Typography variant="caption" sx={{ color: '#9B9691', mt: 1, display: 'block' }}>
-              {mockInvoices.filter((inv) => inv.status === 'paid').length} paid invoices
+              {invoices.filter((inv) => inv.status === 'paid').length} paid invoices
             </Typography>
           </CardContent>
         </Card>
@@ -241,10 +155,10 @@ export function BillingPage() {
               </Typography>
             </Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: '#4A4542' }}>
-              ${pendingAmount.toLocaleString()}
+              ${summary.pendingAmount.toLocaleString()}
             </Typography>
             <Typography variant="caption" sx={{ color: '#9B9691', mt: 1, display: 'block' }}>
-              {mockInvoices.filter((inv) => inv.status === 'pending').length} pending invoices
+              {invoices.filter((inv) => inv.status === 'pending').length} pending invoices
             </Typography>
           </CardContent>
         </Card>
@@ -277,10 +191,10 @@ export function BillingPage() {
               </Typography>
             </Box>
             <Typography variant="h4" sx={{ fontWeight: 700, color: '#C96349' }}>
-              ${overdueAmount.toLocaleString()}
+              ${summary.overdueAmount.toLocaleString()}
             </Typography>
             <Typography variant="caption" sx={{ color: '#9B9691', mt: 1, display: 'block' }}>
-              {mockInvoices.filter((inv) => inv.status === 'overdue').length} overdue invoices
+              {invoices.filter((inv) => inv.status === 'overdue').length} overdue invoices
             </Typography>
           </CardContent>
         </Card>
@@ -319,7 +233,7 @@ export function BillingPage() {
 
       {/* Invoice Rows */}
       <Stack spacing={2}>
-        {mockInvoices.map((invoice) => {
+        {invoices.map((invoice) => {
           const statusStyles = getStatusStyles(invoice.status);
           const isHighlighted = selectedInvoiceId === invoice.id;
 
@@ -484,17 +398,17 @@ export function BillingPage() {
             >
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, color: '#4A4542', mb: 1 }}>
-                  {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.invoiceNumber}
+                  {selectedInvoice?.invoiceNumber}
                 </Typography>
                 <Chip
-                  icon={getStatusStyles(mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.status as Invoice['status']).icon}
+                  icon={getStatusStyles(selectedInvoice?.status as Invoice['status']).icon}
                   label={
-                    mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.status.charAt(0).toUpperCase() + mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.status.slice(1)
+                    selectedInvoice?.status.charAt(0).toUpperCase() + selectedInvoice?.status.slice(1)
                   }
                   size="small"
                   sx={{
-                    bgcolor: getStatusStyles(mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.status as Invoice['status']).bg,
-                    color: getStatusStyles(mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.status as Invoice['status']).text,
+                    bgcolor: getStatusStyles(selectedInvoice?.status as Invoice['status']).bg,
+                    color: getStatusStyles(selectedInvoice?.status as Invoice['status']).text,
                     fontWeight: 600,
                     fontSize: '12px',
                     height: 24,
@@ -531,15 +445,15 @@ export function BillingPage() {
                     sx={{
                       width: 48,
                       height: 48,
-                      bgcolor: mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.clientColor,
+                      bgcolor: selectedInvoice?.clientColor,
                       fontWeight: 600,
                       fontSize: '16px',
                     }}
                   >
-                    {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.clientInitials}
+                    {selectedInvoice?.clientInitials}
                   </Avatar>
                   <Typography variant="body1" sx={{ fontWeight: 600, color: '#4A4542' }}>
-                    {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.clientName}
+                    {selectedInvoice?.clientName}
                   </Typography>
                 </Box>
               </Box>
@@ -555,7 +469,7 @@ export function BillingPage() {
                       Invoice Date
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#4A4542', fontWeight: 600 }}>
-                      {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.date}
+                      {selectedInvoice?.date}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
@@ -563,7 +477,7 @@ export function BillingPage() {
                       Due Date
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#4A4542', fontWeight: 600 }}>
-                      {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.dueDate}
+                      {selectedInvoice?.dueDate}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -571,7 +485,7 @@ export function BillingPage() {
                       Sessions
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#4A4542', fontWeight: 600 }}>
-                      {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.sessionCount}
+                      {selectedInvoice?.sessionCount}
                     </Typography>
                   </Box>
                 </Box>
@@ -584,7 +498,7 @@ export function BillingPage() {
                 </Typography>
                 <Box sx={{ bgcolor: '#F5F3F1', borderRadius: '12px', p: 3 }}>
                   <Typography variant="body2" sx={{ color: '#4A4542', lineHeight: 1.6 }}>
-                    {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.description}
+                    {selectedInvoice?.description}
                   </Typography>
                 </Box>
               </Box>
@@ -604,7 +518,7 @@ export function BillingPage() {
                   }}
                 >
                   <Typography variant="h3" sx={{ fontWeight: 700, color: '#4A4542' }}>
-                    ${mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.amount}
+                    ${selectedInvoice?.amount}
                   </Typography>
                 </Box>
               </Box>
@@ -639,7 +553,7 @@ export function BillingPage() {
               >
                 Download
               </Button>
-              {mockInvoices.find((inv) => inv.id === selectedInvoiceId)?.status !== 'paid' && (
+              {selectedInvoice?.status !== 'paid' && (
                 <Button
                   fullWidth
                   variant="contained"

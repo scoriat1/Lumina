@@ -10,52 +10,28 @@ import { ResourcesPage } from './pages/ResourcesPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProductRulesPage } from './pages/ProductRulesPage';
+import { LoginPage } from './pages/LoginPage';
+import { AuthGate } from './components/AuthGate';
 
 export const router = createBrowserRouter([
   {
+    path: '/login',
+    Component: LoginPage,
+  },
+  {
     path: '/',
-    Component: RootLayout,
+    element: <AuthGate><RootLayout /></AuthGate>,
     children: [
-      {
-        index: true,
-        Component: DashboardPage,
-      },
-      {
-        path: 'product-rules',
-        Component: ProductRulesPage,
-      },
-      {
-        path: 'clients',
-        Component: ClientsPage,
-      },
-      {
-        path: 'clients/:id',
-        Component: ClientDetailPage,
-      },
-      {
-        path: 'calendar',
-        Component: CalendarPage,
-      },
-      {
-        path: 'billing',
-        Component: BillingPage,
-      },
-      {
-        path: 'sessions',
-        Component: SessionsPage,
-      },
-      {
-        path: 'resources',
-        Component: ResourcesPage,
-      },
-      {
-        path: 'notifications',
-        Component: NotificationsPage,
-      },
-      {
-        path: 'settings',
-        Component: SettingsPage,
-      },
+      { index: true, Component: DashboardPage },
+      { path: 'product-rules', Component: ProductRulesPage },
+      { path: 'clients', Component: ClientsPage },
+      { path: 'clients/:id', Component: ClientDetailPage },
+      { path: 'calendar', Component: CalendarPage },
+      { path: 'billing', Component: BillingPage },
+      { path: 'sessions', Component: SessionsPage },
+      { path: 'resources', Component: ResourcesPage },
+      { path: 'notifications', Component: NotificationsPage },
+      { path: 'settings', Component: SettingsPage },
     ],
   },
 ]);
