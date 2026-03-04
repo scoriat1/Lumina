@@ -66,10 +66,13 @@ export function SessionsPage() {
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
 
+  const loadSessions = async () => {
+    const data = await apiClient.getSessions();
+    setSessionsData(data.map(toSession));
+  };
+
   useEffect(() => {
-    apiClient.getSessions()
-      .then((data) => setSessionsData(data.map(toSession)))
-      .catch(() => setSessionsData([]));
+    loadSessions().catch(() => setSessionsData([]));
   }, []);
 
   // Check if we navigated from calendar or dashboard with a specific session ID
@@ -1087,6 +1090,9 @@ export function SessionsPage() {
       <NewSessionModal
         open={isNewSessionModalOpen}
         onClose={() => setIsNewSessionModalOpen(false)}
+        onCreated={async () => {
+          await loadSessions();
+        }}
       />
     </Box>
   );

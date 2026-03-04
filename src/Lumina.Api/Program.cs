@@ -261,12 +261,50 @@ api.MapPut("/clients/{id:guid}", async (Guid id, ClientUpsertRequest request, Lu
     return Results.Ok();
 });
 
-api.MapGet("/sessions", async (LuminaDbContext db, HttpContext context) =>
+api.MapGet("/clients/{id:guid}/sessions", async (Guid id, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
 
-    var sessions = await db.Sessions.Where(s => s.PracticeId == scope.Value.practiceId).Include(s => s.Client).OrderBy(s => s.Date).Select(s => new
+    var sessions = await db.Sessions
+        .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
+        .Include(s => s.Client)
+        .OrderByDescending(s => s.Date)
+        .Select(s => new
+        {
+            id = s.Id,
+            clientId = s.ClientId,
+            client = s.Client.Name,
+            avatarColor = s.Client.AvatarColor,
+            sessionType = s.SessionType,
+            date = s.Date,
+            duration = s.Duration,
+            location = s.Location.ToString().ToLowerInvariant(),
+            status = s.Status.ToString().ToLowerInvariant(),
+            payment = "paid",
+            paymentStatus = "paid",
+            billingSource = "pay-per-session",
+            packageRemaining = (int?)null,
+            focus = s.Focus,
+            notes = s.Notes
+        })
+        .ToListAsync();
+
+    return Results.Ok(sessions);
+});
+
+api.MapGet("/sessions", async (Guid? clientId, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var query = db.Sessions
+        .Where(s => s.PracticeId == scope.Value.practiceId)
+        .Where(s => !clientId.HasValue || s.ClientId == clientId.Value)
+        .Include(s => s.Client)
+        .OrderBy(s => s.Date);
+
+    var sessions = await query.Select(s => new
     {
         id = s.Id,
         clientId = s.ClientId,

@@ -56,8 +56,13 @@ export function CalendarPage() {
   const navigate = useNavigate();
   const [calendarEvents, setCalendarEvents] = useState<SessionDto[]>([]);
 
+  const loadSessions = async () => {
+    const data = await apiClient.getSessions();
+    setCalendarEvents(data);
+  };
+
   useEffect(() => {
-    apiClient.getSessions().then(setCalendarEvents).catch(() => setCalendarEvents([]));
+    loadSessions().catch(() => setCalendarEvents([]));
   }, []);
 
   // Set to current month if navigating from dashboard
@@ -723,6 +728,9 @@ export function CalendarPage() {
         onClose={() => setIsNewSessionModalOpen(false)}
         initialDate={newSessionInitialDate}
         initialTime={newSessionInitialTime}
+        onCreated={async () => {
+          await loadSessions();
+        }}
       />
     </Box>
   );

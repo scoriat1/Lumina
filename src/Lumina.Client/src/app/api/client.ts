@@ -101,11 +101,16 @@ export const apiClient = {
     const client = await request<ClientApiDto>(`/api/clients/${id}`);
     return mapClientDto(client);
   },
-  getSessions: async () => {
-    const sessions = await request<SessionApiDto[]>('/api/sessions');
+  getSessions: async (clientId?: string) => {
+    const query = clientId ? `?clientId=${encodeURIComponent(clientId)}` : '';
+    const sessions = await request<SessionApiDto[]>(`/api/sessions${query}`);
     return sessions.map(mapSessionDto);
   },
-  createSession: (payload: { clientId: string; date: string; duration: number; sessionType: string; focus: string; }) => request('/api/sessions', {
+  getClientSessions: async (id: string) => {
+    const sessions = await request<SessionApiDto[]>(`/api/clients/${id}/sessions`);
+    return sessions.map(mapSessionDto);
+  },
+  createSession: (payload: { clientId: string; date: string; duration: number; sessionType: string; focus: string; }) => request<{ id: string }>('/api/sessions', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
