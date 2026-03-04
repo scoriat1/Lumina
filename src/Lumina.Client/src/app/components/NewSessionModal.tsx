@@ -21,13 +21,13 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { format, parse, addWeeks } from 'date-fns';
 import { TimelineAvailability } from './TimelineAvailability';
-import { calendarEvents } from '../data/calendarEvents';
 import { colors } from '../styles/colors';
 import { apiClient } from '../api/client';
 
 interface NewSessionModalProps {
   open: boolean;
   onClose: () => void;
+  onCreated?: (sessionId: string) => void | Promise<void>;
   preselectedClientId?: string; // Optional: pre-populate the client dropdown
   initialDate?: string; // Optional: pre-populate date in yyyy-MM-dd format
   initialTime?: string; // Optional: pre-populate time in HH:mm format
@@ -63,7 +63,7 @@ const durations = [
   { value: 90, label: '90 min' },
 ];
 
-export function NewSessionModal({ open, onClose, preselectedClientId, initialDate, initialTime }: NewSessionModalProps) {
+export function NewSessionModal({ open, onClose, onCreated, preselectedClientId, initialDate, initialTime }: NewSessionModalProps) {
   const [formData, setFormData] = useState({
     clientId: preselectedClientId || '',
     sessionType: '',
@@ -76,6 +76,7 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
   });
 
   const [clients, setClients] = useState<ModalClient[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
 
   const [recurringData, setRecurringData] = useState({
     enabled: false,
@@ -91,6 +92,13 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
       })
       .catch(() => setClients([]));
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    apiClient.getSessions()
+      .then(setEvents)
+      .catch(() => setEvents([]));
+  }, [open]);
   const selectedClient = clients.find((c) => c.id === formData.clientId);
 
   // Initialize billing source when modal opens with a preselected client
@@ -138,11 +146,24 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
 
   const isTimeSelected = Boolean(formData.time);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Creating session:', { formData, recurringData });
+    if (!formData.clientId || !formData.time) return;
+
+    const localDateTime = new Date(`${formData.date}T${formData.time}:00`);
+    const response = await apiClient.createSession({
+      clientId: formData.clientId,
+      date: localDateTime.toISOString(),
+      duration: formData.duration,
+      sessionType: formData.sessionType || 'Session',
+      focus: '',
+    });
+
+    if (onCreated) {
+      await onCreated(response.id);
+    }
+
     onClose();
-    // Reset
     setFormData({
       clientId: '',
       sessionType: '',
@@ -786,7 +807,7 @@ export function NewSessionModal({ open, onClose, preselectedClientId, initialDat
             <Box sx={{ flex: 1, px: 4, pb: 3, overflow: 'hidden' }}>
               <TimelineAvailability
                 selectedDate={selectedDateTime}
-                events={calendarEvents}
+                events={events}
                 selectedTime={formData.time}
                 onDateChange={handleDateChange}
                 onTimeSelect={handleTimeSelect}
