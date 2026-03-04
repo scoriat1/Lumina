@@ -66,8 +66,13 @@ export function ClientsPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const loadClients = async () => {
+    const data = await apiClient.getClients();
+    setClients(data);
+  };
+
   useEffect(() => {
-    apiClient.getClients().then(setClients).catch(() => setClients([]));
+    loadClients().catch(() => setClients([]));
   }, []);
 
   // Check if we navigated from dashboard with a client ID to filter
@@ -895,10 +900,21 @@ export function ClientsPage() {
       <AddClientModal
         open={isAddClientModalOpen}
         onClose={() => setIsAddClientModalOpen(false)}
-        onSave={(clientData) => {
-          console.log('New client data:', clientData);
-          // In a real app, this would save to a backend
-          setIsAddClientModalOpen(false);
+        onSave={async (clientData) => {
+          const name = `${clientData.firstName} ${clientData.lastName}`.trim();
+
+          await apiClient.createClient({
+            name,
+            email: clientData.email,
+            phone: clientData.phone,
+            program: '',
+            avatarColor: '#9B8B9E',
+            startDate: clientData.startDate,
+            status: clientData.status,
+            notes: clientData.notes.trim() ? clientData.notes : null,
+          });
+
+          await loadClients();
         }}
       />
     </Box>
