@@ -34,7 +34,7 @@ export interface ClientFormData {
   lastName: string;
   email: string;
   phone: string;
-  status: 'active' | 'paused' | 'closed';
+  status: 'active' | 'paused' | 'completed';
   startDate: string;
   notes: string;
 }
@@ -155,6 +155,10 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
         color: '#9B8B9E',
         fontWeight: 600,
       },
+    },
+    '& .MuiInputBase-input::placeholder': {
+      color: '#B8B2AC',
+      opacity: 1,
     },
   };
 
@@ -327,10 +331,10 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
                   <Typography sx={{ fontSize: '15px', color: '#4A4542' }}>Paused</Typography>
                 </Box>
               </MenuItem>
-              <MenuItem value="closed">
+              <MenuItem value="completed">
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#6D5F70' }} />
-                  <Typography sx={{ fontSize: '15px', color: '#4A4542' }}>Closed</Typography>
+                  <Typography sx={{ fontSize: '15px', color: '#4A4542' }}>Completed</Typography>
                 </Box>
               </MenuItem>
             </TextField>
@@ -419,7 +423,7 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
             fontSize: '15px',
             borderWidth: '1.5px',
             minWidth: '120px',
-            minHeight: '48px',
+            height: '48px',
             boxSizing: 'border-box',
             '&:hover': {
               borderColor: '#9B8B9E',
@@ -447,7 +451,7 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
             px: 3,
             fontSize: '15px',
             minWidth: '120px',
-            minHeight: '48px',
+            height: '48px',
             boxSizing: 'border-box',
             boxShadow: '0 4px 16px rgba(155, 139, 158, 0.3)',
             '&:hover': {

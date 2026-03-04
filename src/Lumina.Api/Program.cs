@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,6 +62,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("client", policy =>
         policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+});
+
+builder.Services.Configure<JsonOptions>(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 });
 
 var app = builder.Build();
@@ -174,7 +182,6 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
     {
         id = c.Id,
         name = c.Name,
-        initials = string.Join(string.Empty, c.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(n => n[0])).ToUpperInvariant(),
         avatarColor = c.AvatarColor,
         program = c.Program,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
@@ -199,7 +206,6 @@ api.MapGet("/clients/{id:guid}", async (Guid id, LuminaDbContext db, HttpContext
     {
         id = c.Id,
         name = c.Name,
-        initials = string.Join(string.Empty, c.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(n => n[0])).ToUpperInvariant(),
         avatarColor = c.AvatarColor,
         program = c.Program,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
@@ -265,7 +271,6 @@ api.MapGet("/sessions", async (LuminaDbContext db, HttpContext context) =>
         id = s.Id,
         clientId = s.ClientId,
         client = s.Client.Name,
-        initials = string.Join(string.Empty, s.Client.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(n => n[0])).ToUpperInvariant(),
         avatarColor = s.Client.AvatarColor,
         sessionType = s.SessionType,
         date = s.Date,
@@ -341,7 +346,6 @@ api.MapGet("/billing/invoices", async (LuminaDbContext db, HttpContext context) 
         id = i.Id,
         invoiceNumber = i.InvoiceNumber,
         clientName = i.Client.Name,
-        clientInitials = string.Join(string.Empty, i.Client.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(n => n[0])).ToUpperInvariant(),
         clientColor = i.Client.AvatarColor,
         amount = i.Amount,
         date = i.CreatedAt,
@@ -366,7 +370,6 @@ api.MapGet("/settings/providers", async (LuminaDbContext db, HttpContext context
         email = p.User.Email,
         role = p.Role.ToString(),
         status = p.IsActive ? "Active" : "Inactive",
-        initials = string.Join(string.Empty, p.DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(n => n[0])).ToUpperInvariant(),
         avatarColor = "#9B8B9E"
     }).ToListAsync();
 
@@ -446,7 +449,6 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
         id = s.Id,
         clientId = s.ClientId,
         client = s.Client.Name,
-        initials = string.Join(string.Empty, s.Client.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(n => n[0])).ToUpperInvariant(),
         avatarColor = s.Client.AvatarColor,
         sessionType = s.SessionType,
         date = s.Date,
@@ -460,7 +462,6 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
     {
         id = c.Id,
         name = c.Name,
-        initials = string.Join(string.Empty, c.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(n => n[0])).ToUpperInvariant(),
         avatarColor = c.AvatarColor,
         program = c.Program,
         progress = 0,
