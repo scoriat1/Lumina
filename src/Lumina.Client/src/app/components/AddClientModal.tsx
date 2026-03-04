@@ -26,7 +26,7 @@ import { format } from 'date-fns';
 interface AddClientModalProps {
   open: boolean;
   onClose: () => void;
-  onSave?: (clientData: ClientFormData) => void;
+  onSave?: (clientData: ClientFormData) => Promise<void> | void;
 }
 
 export interface ClientFormData {
@@ -51,6 +51,8 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -65,6 +67,8 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
         notes: '',
       });
       setErrors({});
+      setSubmitError(null);
+      setIsSubmitting(false);
     }
   }, [open]);
 
@@ -94,15 +98,31 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
     }
+    if (!formData.status) {
+      newErrors.status = 'Status is required';
+    }
+    if (!formData.startDate) {
+      newErrors.startDate = 'Start date is required';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
-    if (validateForm()) {
-      onSave?.(formData);
+  const handleSave = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setSubmitError(null);
+      setIsSubmitting(true);
+      await onSave?.(formData);
       onClose();
+    } catch (error) {
+      setSubmitError('Unable to add client. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -214,12 +234,19 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
       </Box>
 
       {/* Form Content */}
-      <Box sx={{ p: 5, maxHeight: '60vh', overflowY: 'auto' }}>
+      <Box
+        component="form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSave();
+        }}
+        sx={{ p: 5, maxHeight: '60vh', overflowY: 'auto' }}
+      >
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
           {/* Left Column - Contact Information */}
           <Stack spacing={2.5}>
             <TextField
-              label="First Name"
+              placeholder="First Name"
               value={formData.firstName}
               onChange={(e) => handleChange('firstName', e.target.value)}
               error={!!errors.firstName}
@@ -229,7 +256,7 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
             />
             
             <TextField
-              label="Last Name"
+              placeholder="Last Name"
               value={formData.lastName}
               onChange={(e) => handleChange('lastName', e.target.value)}
               error={!!errors.lastName}
@@ -364,6 +391,7 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
           bottom: 0,
           display: 'flex',
           justifyContent: 'flex-end',
+          alignItems: 'stretch',
           gap: 2,
           px: 5,
           py: 2.5,
@@ -371,9 +399,15 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
           borderTop: '1px solid #E8E5E1',
         }}
       >
+        {submitError && (
+          <Typography sx={{ color: '#B54708', alignSelf: 'center', mr: 'auto', fontSize: '14px' }}>
+            {submitError}
+          </Typography>
+        )}
         <Button
           onClick={onClose}
           variant="outlined"
+          disabled={isSubmitting}
           sx={{
             borderColor: '#D0CCC7',
             color: '#6B6762',
@@ -385,6 +419,8 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
             fontSize: '15px',
             borderWidth: '1.5px',
             minWidth: '120px',
+            minHeight: '48px',
+            boxSizing: 'border-box',
             '&:hover': {
               borderColor: '#9B8B9E',
               borderWidth: '1.5px',
@@ -395,8 +431,12 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
           Cancel
         </Button>
         <Button
-          onClick={handleSave}
+          onClick={() => {
+            void handleSave();
+          }}
+          type="button"
           variant="contained"
+          disabled={isSubmitting}
           sx={{
             bgcolor: '#9B8B9E',
             color: '#FFFFFF',
@@ -407,6 +447,8 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
             px: 3,
             fontSize: '15px',
             minWidth: '120px',
+            minHeight: '48px',
+            boxSizing: 'border-box',
             boxShadow: '0 4px 16px rgba(155, 139, 158, 0.3)',
             '&:hover': {
               bgcolor: '#8A7A8D',
@@ -416,7 +458,7 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
             transition: 'all 0.2s ease',
           }}
         >
-          Add Client
+          {isSubmitting ? 'Adding...' : 'Add Client'}
         </Button>
       </Box>
     </Dialog>

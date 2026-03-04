@@ -36,6 +36,19 @@ export const apiClient = {
   getMe: () => request<AuthMeDto>('/api/auth/me'),
   getDashboard: () => request<DashboardDto>('/api/dashboard'),
   getClients: () => request<ClientDto[]>('/api/clients'),
+  createClient: (payload: {
+    name: string;
+    email: string;
+    phone: string;
+    program: string;
+    avatarColor: string;
+    startDate: string;
+    status: string;
+    notes: string | null;
+  }) => request<ClientDto>('/api/clients', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   getClient: (id: string) => request<ClientDto>(`/api/clients/${id}`),
   getSessions: () => request<SessionDto[]>('/api/sessions'),
   createSession: (payload: { clientId: string; date: string; duration: number; sessionType: string; focus: string; }) => request('/api/sessions', {
