@@ -39,19 +39,19 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
-builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;
-        options.DefaultSignInScheme = IdentityConstants.ApplicationScheme;
-        options.DefaultChallengeScheme = IdentityConstants.ApplicationScheme;
-    })
-    .AddCookie(IdentityConstants.ApplicationScheme)
-    .AddGoogle("Google", options =>
-    {
-        options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
-        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
-        options.SignInScheme = IdentityConstants.ExternalScheme;
-    });
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+
+if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    builder.Services.AddAuthentication()
+        .AddGoogle("Google", options =>
+        {
+            options.ClientId = googleClientId;
+            options.ClientSecret = googleClientSecret;
+            options.SignInScheme = IdentityConstants.ExternalScheme;
+        });
+}
 
 builder.Services.AddAuthorization();
 
@@ -72,10 +72,23 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapPost("/api/auth/login", async (LoginRequest request, SignInManager<AppUser> signInManager, UserManager<AppUser> userManager) =>
 {
     var user = await userManager.FindByEmailAsync(request.Email);
-    if (user is null) return Results.Unauthorized();
+    if (user is null)
+        return Results.Json(new { reason = "user_not_found" }, statusCode: StatusCodes.Status401Unauthorized);
 
-    var result = await signInManager.PasswordSignInAsync(user, request.Password, true, false);
-    return result.Succeeded ? Results.Ok() : Results.Unauthorized();
+    var check = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: false);
+    if (!check.Succeeded)
+    {
+        return Results.Json(new
+        {
+            reason = "password_failed",
+            check.IsLockedOut,
+            check.IsNotAllowed,
+            check.RequiresTwoFactor
+        }, statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    await signInManager.SignInAsync(user, isPersistent: true);
+    return Results.Ok(new { ok = true });
 });
 
 app.MapPost("/api/auth/logout", async (SignInManager<AppUser> signInManager) =>
