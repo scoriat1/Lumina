@@ -37,7 +37,7 @@ export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
   };
 
   const handleSessionClick = (session: Session) => {
-    navigate(`/sessions?range=upcoming&focusSessionId=${session.id}`);
+    navigate(`/sessions?focusSessionId=${session.id}`);
   };
 
   const handleViewAll = () => {

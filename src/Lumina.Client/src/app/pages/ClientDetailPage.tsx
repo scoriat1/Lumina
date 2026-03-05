@@ -138,8 +138,13 @@ export function ClientDetailPage() {
       return;
     }
 
+    if (!sessions.some((session) => session.id === sessionIdParam)) {
+      setSelectedSessionId(null);
+      return;
+    }
+
     setSelectedSessionId(sessionIdParam);
-  }, [searchParams]);
+  }, [searchParams, sessions]);
 
   const handleOpenSessionDetails = (sessionId: string) => {
     setSelectedSessionId(sessionId);
@@ -156,7 +161,7 @@ export function ClientDetailPage() {
       const next = new URLSearchParams(prev);
       next.delete('sessionId');
       return next;
-    });
+    }, { replace: true });
   };
 
   if (!id) return <Typography>Client not found.</Typography>;

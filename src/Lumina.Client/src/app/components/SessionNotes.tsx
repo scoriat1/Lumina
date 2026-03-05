@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
 import { Box, TextField, Button, IconButton, Stack, Typography, Chip, Select, MenuItem, FormControl } from '@mui/material';
 import { Add, Edit, Delete as DeleteIcon } from '@mui/icons-material';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -27,7 +26,6 @@ export function SessionNotes({
   notes, 
   onNotesChange,
 }: SessionNotesProps) {
-  const navigate = useNavigate();
   const { templateMode, getActiveTemplate } = useNotesTemplate();
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -44,25 +42,26 @@ export function SessionNotes({
   
   // Determine if template is available and should be default
   const hasTemplate = templateMode === 'template' && activeTemplate;
-  const defaultMode = hasTemplate ? 'template' : 'free';
 
-  // Initialize selectedMode based on default on mount
-  const [initializedMode, setInitializedMode] = useState(false);
-  
-  if (!initializedMode) {
-    setSelectedMode(defaultMode);
-    setInitializedMode(true);
-  }
+  useEffect(() => {
+    if (isAddingNote || editingNoteId) {
+      return;
+    }
+
+    setSelectedMode(hasTemplate ? 'template' : 'free');
+  }, [editingNoteId, hasTemplate, isAddingNote]);
 
   const handleModeChange = (value: string) => {
-    if (value === 'template' && !hasTemplate) {
-      // Redirect to settings notes section if template is not configured
-      navigate('/settings#notes');
-      return; // Don't change the mode
-    } else if (value === 'free') {
+    if (value === 'free') {
       setSelectedMode('free');
-    } else if (value === 'template') {
+      setTemplateFieldValues({});
+    } else if (value === 'template' && hasTemplate && activeTemplate) {
       setSelectedMode('template');
+      const initialValues: Record<string, string> = {};
+      activeTemplate.fields.forEach(field => {
+        initialValues[field] = '';
+      });
+      setTemplateFieldValues(initialValues);
     }
   };
 
@@ -71,19 +70,20 @@ export function SessionNotes({
     setEditingNoteId(null);
     setNewNoteContent('');
     
-    // When adding additional notes (not the first note), always default to free mode
-    // Only use template mode as default for the very first note if configured
-    if (notes.length > 0) {
-      setSelectedMode('free');
-    }
-    
-    // Initialize template fields if in template mode
-    if (selectedMode === 'template' && activeTemplate) {
+    const nextMode: 'free' | 'template' = notes.length > 0
+      ? 'free'
+      : (hasTemplate ? 'template' : 'free');
+
+    setSelectedMode(nextMode);
+
+    if (nextMode === 'template' && activeTemplate) {
       const initialValues: Record<string, string> = {};
       activeTemplate.fields.forEach(field => {
         initialValues[field] = '';
       });
       setTemplateFieldValues(initialValues);
+    } else {
+      setTemplateFieldValues({});
     }
   };
 
@@ -558,7 +558,7 @@ export function SessionNotes({
               </MenuItem>
               
               {/* Option 2: Template name OR "Choose Template from Settings" */}
-              <MenuItem value="template" sx={{ fontSize: '12px' }}>
+              <MenuItem value="template" sx={{ fontSize: '12px' }} disabled={!hasTemplate}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ArticleOutlinedIcon sx={{ fontSize: 16, color: hasTemplate ? colors.primary.main : colors.text.secondary }} />
                   <Typography 
@@ -574,6 +574,11 @@ export function SessionNotes({
                 </Box>
               </MenuItem>
             </Select>
+            {!hasTemplate && (
+              <Typography sx={{ mt: 0.75, fontSize: '11px', color: colors.text.secondary }}>
+                To use templates, pick one in Settings → Notes.
+              </Typography>
+            )}
           </FormControl>
         </Box>
       </Box>

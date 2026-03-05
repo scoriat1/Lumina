@@ -51,7 +51,7 @@ type Session = Omit<SessionDto, 'date'> & { date: Date };
 const toSession = (session: SessionDto): Session => ({ ...session, date: new Date(session.date) });
 
 export function SessionsPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sessionsData, setSessionsData] = useState<Session[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('upcoming');
@@ -70,14 +70,7 @@ export function SessionsPage() {
   const qParam = searchParams.get('q') ?? '';
   const rangeParam = searchParams.get('range');
   const focusSessionIdParam = searchParams.get('focusSessionId');
-  const focusSessionId = useMemo(() => {
-    if (!focusSessionIdParam) {
-      return null;
-    }
-
-    const parsed = Number(focusSessionIdParam);
-    return Number.isNaN(parsed) ? null : parsed;
-  }, [focusSessionIdParam]);
+  const focusSessionId = useMemo(() => focusSessionIdParam ?? null, [focusSessionIdParam]);
 
   const setSessionRowRef = (sessionId: string) => (element: HTMLDivElement | HTMLTableRowElement | null) => {
     if (element) {
@@ -155,6 +148,15 @@ export function SessionsPage() {
     setIsSessionDetailsDrawerOpen(true);
   };
 
+  const handleCloseSessionDetails = () => {
+    setIsSessionDetailsDrawerOpen(false);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('focusSessionId');
+      return next;
+    }, { replace: true });
+  };
+
   const handleUpdateSession = (sessionId: string, updates: Partial<Session>) => {
     setSessionsData(prevSessions =>
       prevSessions.map(session =>
@@ -225,12 +227,13 @@ export function SessionsPage() {
       return;
     }
 
-    const focusedSession = sessionsData.find((session) => Number(session.id) === focusSessionId);
+    const focusedSession = sessionsData.find((session) => session.id === focusSessionId);
     if (!focusedSession) {
       return;
     }
 
     setSelectedSessionId(focusedSession.id);
+    setIsSessionDetailsDrawerOpen(true);
 
     if (rangeParam === 'upcoming' && focusedSession.status === 'upcoming') {
       setShowAllUpcoming(true);
@@ -242,7 +245,7 @@ export function SessionsPage() {
       return;
     }
 
-    const focusedSession = filteredSessions.find((session) => Number(session.id) === focusSessionId);
+    const focusedSession = filteredSessions.find((session) => session.id === focusSessionId);
     if (!focusedSession) {
       return;
     }
@@ -1134,7 +1137,7 @@ export function SessionsPage() {
       {/* Session Details Drawer */}
       <SessionDetailsDrawer
         open={isSessionDetailsDrawerOpen}
-        onClose={() => setIsSessionDetailsDrawerOpen(false)}
+        onClose={handleCloseSessionDetails}
         sessionId={selectedSessionId}
         sessions={sessionsData}
         onUpdateSession={handleUpdateSession}
