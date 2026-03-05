@@ -108,7 +108,7 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
   };
 
   return (
-    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 460 } } }}>
+    <Drawer data-testid="session-details-drawer" anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 460 } } }}>
       <Box sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Stack direction="row" spacing={1.25} alignItems="center">
@@ -118,7 +118,7 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
               <Typography variant="body2" color="text.secondary">{sessionDetail.sessionType}</Typography>
             </Box>
           </Stack>
-          <IconButton onClick={onClose}><CloseIcon /></IconButton>
+          <IconButton data-testid="session-details-drawer-close" onClick={onClose}><CloseIcon /></IconButton>
         </Stack>
 
         <Divider sx={{ my: 2 }} />
