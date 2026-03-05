@@ -9,6 +9,7 @@ public class SessionNoteConfiguration : IEntityTypeConfiguration<SessionNote>
     public void Configure(EntityTypeBuilder<SessionNote> builder)
     {
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
         builder.Property(x => x.Content).IsRequired();
     }
 }

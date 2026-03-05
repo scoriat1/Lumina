@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Lumina.Infrastructure.Data;
 
 public class LuminaDbContext(DbContextOptions<LuminaDbContext> options)
-    : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options)
+    : IdentityDbContext<AppUser, IdentityRole, string>(options)
 {
     public DbSet<Practice> Practices => Set<Practice>();
     public DbSet<Provider> Providers => Set<Provider>();

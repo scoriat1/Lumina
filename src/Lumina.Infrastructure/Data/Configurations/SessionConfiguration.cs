@@ -9,6 +9,7 @@ public class SessionConfiguration : IEntityTypeConfiguration<Session>
     public void Configure(EntityTypeBuilder<Session> builder)
     {
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
         builder.Property(x => x.SessionType).HasMaxLength(150).IsRequired();
         builder.Property(x => x.Focus).HasMaxLength(500).IsRequired();
         builder.HasOne(x => x.Client).WithMany(x => x.Sessions).HasForeignKey(x => x.ClientId).OnDelete(DeleteBehavior.Restrict);

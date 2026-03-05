@@ -908,7 +908,6 @@ export function ClientsPage() {
             email: clientData.email,
             phone: clientData.phone,
             program: '',
-            avatarColor: '#9B8B9E',
             startDate: clientData.startDate,
             status: clientData.status,
             notes: clientData.notes.trim() ? clientData.notes : null,

@@ -11,6 +11,14 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
 
+
+const avatarPalette = ["#9B8B9E", "#A8B5A0", "#9DAAB5", "#D4B88A", "#8AAF7D", "#8B6B9E", "#D9A66E", "#7B9AB5"];
+
+const computeAvatarColor = (id: string | number): string => {
+  const numericId = typeof id === 'number' ? id : Number.parseInt(id, 10);
+  if (Number.isNaN(numericId)) return avatarPalette[0];
+  return avatarPalette[Math.abs(numericId) % avatarPalette.length];
+};
 const computeInitials = (name: string): string =>
   name
     .trim()
@@ -49,16 +57,19 @@ type DashboardApiDto = Omit<DashboardDto, 'upcomingSessions' | 'activeClientPrev
 
 const mapClientDto = (client: ClientApiDto): ClientDto => ({
   ...client,
+  avatarColor: client.avatarColor ?? computeAvatarColor(client.id),
   initials: client.initials ?? computeInitials(client.name),
 });
 
 const mapSessionDto = (session: SessionApiDto): SessionDto => ({
   ...session,
+  avatarColor: session.avatarColor ?? computeAvatarColor(session.clientId),
   initials: session.initials ?? computeInitials(session.client),
 });
 
 const mapInvoiceDto = (invoice: InvoiceApiDto): InvoiceDto => ({
   ...invoice,
+  clientColor: invoice.clientColor ?? computeAvatarColor(invoice.clientId ?? 0),
   clientInitials: invoice.clientInitials ?? computeInitials(invoice.clientName),
 });
 
@@ -89,7 +100,6 @@ export const apiClient = {
     email: string;
     phone: string;
     program: string;
-    avatarColor: string;
     startDate: string;
     status: 'active' | 'paused' | 'completed';
     notes: string | null;
@@ -110,9 +120,9 @@ export const apiClient = {
     const sessions = await request<SessionApiDto[]>(`/api/clients/${id}/sessions`);
     return sessions.map(mapSessionDto);
   },
-  createSession: (payload: { clientId: string; date: string; duration: number; sessionType: string; focus: string; }) => request<{ id: string }>('/api/sessions', {
+  createSession: (payload: { clientId: string | number; date: string; duration: number; sessionType: string; focus: string; }) => request<{ id: string }>('/api/sessions', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, clientId: Number(payload.clientId) }),
   }),
   updateSession: (id: string, payload: Partial<SessionDto>) => request(`/api/sessions/${id}`, {
     method: 'PUT',
@@ -129,9 +139,9 @@ export const apiClient = {
   },
   getTemplatePresets: () => request<TemplateDto[]>('/api/templates/presets'),
   getCustomTemplates: () => request<TemplateDto[]>('/api/templates/custom'),
-  duplicateTemplateFromPreset: (presetId: string) => request('/api/templates/custom/from-preset', {
+  duplicateTemplateFromPreset: (presetId: string | number) => request('/api/templates/custom/from-preset', {
     method: 'POST',
-    body: JSON.stringify({ presetId }),
+    body: JSON.stringify({ presetId: Number(presetId) }),
   }),
   googleLoginUrl: `${API_BASE_URL}/api/auth/google/login`,
 };

@@ -9,11 +9,11 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
     public void Configure(EntityTypeBuilder<Client> builder)
     {
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
         builder.Property(x => x.Name).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Email).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Phone).HasMaxLength(60).IsRequired();
         builder.Property(x => x.Program).HasMaxLength(200).IsRequired();
-        builder.Property(x => x.AvatarColor).HasMaxLength(20).IsRequired();
         builder.Property(x => x.ExternalSource).HasMaxLength(100);
         builder.Property(x => x.ExternalId).HasMaxLength(100);
         builder.HasIndex(x => new { x.PracticeId, x.Name });

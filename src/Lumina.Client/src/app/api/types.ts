@@ -63,6 +63,7 @@ export interface InvoiceDto {
   id: string;
   invoiceNumber: string;
   clientName: string;
+  clientId?: string;
   clientInitials: string;
   clientColor: string;
   amount: number;
