@@ -14,8 +14,8 @@ export function NotesTemplateSettings() {
   const {
     templateMode,
     setTemplateMode,
-    selectedTemplateId,
-    setSelectedTemplateId,
+    selectedTemplate,
+    setSelectedTemplate,
     customTemplates,
     setCustomTemplates,
     presetTemplates,
@@ -118,8 +118,8 @@ export function NotesTemplateSettings() {
 
   const handleDeleteCustomTemplate = (templateId: string) => {
     setCustomTemplates(customTemplates.filter(t => t.id !== templateId));
-    if (selectedTemplateId === templateId) {
-      setSelectedTemplateId('');
+    if (selectedTemplate?.kind === 'custom' && selectedTemplate.id === templateId) {
+      setSelectedTemplate(null);
     }
   };
 
@@ -240,14 +240,14 @@ export function NotesTemplateSettings() {
                   sx={{
                     position: 'relative',
                     p: 2.5,
-                    border: `2px solid ${selectedTemplateId === preset.id ? colors.primary.main : colors.neutral.gray200}`,
+                    border: `2px solid ${selectedTemplate?.kind === 'preset' && selectedTemplate.id === preset.id ? colors.primary.main : colors.neutral.gray200}`,
                     borderRadius: '10px',
                     cursor: 'pointer',
                     transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-                    bgcolor: selectedTemplateId === preset.id ? 'rgba(110, 91, 206, 0.02)' : colors.surface.card,
+                    bgcolor: selectedTemplate?.kind === 'preset' && selectedTemplate.id === preset.id ? 'rgba(110, 91, 206, 0.02)' : colors.surface.card,
                     '&:hover': {
-                      borderColor: selectedTemplateId === preset.id ? colors.primary.main : colors.neutral.gray300,
-                      bgcolor: selectedTemplateId === preset.id ? 'rgba(110, 91, 206, 0.03)' : colors.neutral.gray50,
+                      borderColor: selectedTemplate?.kind === 'preset' && selectedTemplate.id === preset.id ? colors.primary.main : colors.neutral.gray300,
+                      bgcolor: selectedTemplate?.kind === 'preset' && selectedTemplate.id === preset.id ? 'rgba(110, 91, 206, 0.03)' : colors.neutral.gray50,
                       transform: 'translateY(-1px)',
                       '& .action-button': {
                         opacity: 1,
@@ -255,7 +255,7 @@ export function NotesTemplateSettings() {
                     },
                   }}
                 >
-                  <Box onClick={() => setSelectedTemplateId(preset.id)}>
+                  <Box onClick={(e) => { e.stopPropagation(); setSelectedTemplate({ kind: 'preset', id: preset.id }); }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                       <Typography sx={{ fontWeight: 600, fontSize: '14px', color: colors.text.primary }}>
                         {preset.name}
@@ -288,10 +288,10 @@ export function NotesTemplateSettings() {
                           label={field}
                           size="small"
                           sx={{
-                            bgcolor: selectedTemplateId === preset.id 
+                            bgcolor: selectedTemplate?.kind === 'preset' && selectedTemplate.id === preset.id 
                               ? 'rgba(110, 91, 206, 0.08)' 
                               : colors.neutral.gray100,
-                            color: selectedTemplateId === preset.id 
+                            color: selectedTemplate?.kind === 'preset' && selectedTemplate.id === preset.id 
                               ? colors.primary.main 
                               : colors.text.secondary,
                             fontSize: '11px',
@@ -477,14 +477,14 @@ export function NotesTemplateSettings() {
                     sx={{
                       position: 'relative',
                       p: 2.5,
-                      border: `2px solid ${selectedTemplateId === template.id ? colors.primary.main : colors.neutral.gray200}`,
+                      border: `2px solid ${selectedTemplate?.kind === 'custom' && selectedTemplate.id === template.id ? colors.primary.main : colors.neutral.gray200}`,
                       borderRadius: '10px',
                       cursor: 'pointer',
                       transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-                      bgcolor: selectedTemplateId === template.id ? 'rgba(110, 91, 206, 0.02)' : colors.surface.card,
+                      bgcolor: selectedTemplate?.kind === 'custom' && selectedTemplate.id === template.id ? 'rgba(110, 91, 206, 0.02)' : colors.surface.card,
                       '&:hover': {
-                        borderColor: selectedTemplateId === template.id ? colors.primary.main : colors.neutral.gray300,
-                        bgcolor: selectedTemplateId === template.id ? 'rgba(110, 91, 206, 0.03)' : colors.neutral.gray50,
+                        borderColor: selectedTemplate?.kind === 'custom' && selectedTemplate.id === template.id ? colors.primary.main : colors.neutral.gray300,
+                        bgcolor: selectedTemplate?.kind === 'custom' && selectedTemplate.id === template.id ? 'rgba(110, 91, 206, 0.03)' : colors.neutral.gray50,
                         transform: 'translateY(-1px)',
                         '& .action-buttons': {
                           opacity: 1,
@@ -492,7 +492,7 @@ export function NotesTemplateSettings() {
                       },
                     }}
                   >
-                    <Box onClick={() => setSelectedTemplateId(template.id)}>
+                    <Box onClick={(e) => { e.stopPropagation(); setSelectedTemplate({ kind: 'custom', id: template.id }); }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography sx={{ fontWeight: 600, fontSize: '14px', color: colors.text.primary }}>
@@ -561,10 +561,10 @@ export function NotesTemplateSettings() {
                             label={field}
                             size="small"
                             sx={{
-                              bgcolor: selectedTemplateId === template.id 
+                              bgcolor: selectedTemplate?.kind === 'custom' && selectedTemplate.id === template.id 
                                 ? 'rgba(110, 91, 206, 0.08)' 
                                 : colors.neutral.gray100,
-                              color: selectedTemplateId === template.id 
+                              color: selectedTemplate?.kind === 'custom' && selectedTemplate.id === template.id 
                                 ? colors.primary.main 
                                 : colors.text.secondary,
                               fontSize: '11px',
