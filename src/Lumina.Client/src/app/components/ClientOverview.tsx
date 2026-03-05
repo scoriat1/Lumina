@@ -38,12 +38,7 @@ export function ClientOverview({ clients }: ClientOverviewProps) {
   const navigate = useNavigate();
 
   const handleClientClick = (client: Client) => {
-    navigate('/clients', {
-      state: {
-        clientId: client.id,
-        fromDashboard: true,
-      }
-    });
+    navigate(`/clients/${client.id}`);
   };
 
   return (
@@ -76,7 +71,7 @@ export function ClientOverview({ clients }: ClientOverviewProps) {
               color: colors.primary.main,
             },
           }}
-          onClick={() => navigate('/clients')}
+          onClick={() => navigate('/clients?status=active')}
           >
             View All
           </Typography>

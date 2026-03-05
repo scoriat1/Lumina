@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Box,
   TextField,
@@ -48,10 +48,10 @@ import { apiClient } from '../api/client';
 type StatusFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
 type Session = Omit<SessionDto, 'date'> & { date: Date };
 const toSession = (session: SessionDto): Session => ({ ...session, date: new Date(session.date) });
-import { useLocation } from 'react-router';
+import { useSearchParams } from 'react-router';
 
 export function SessionsPage() {
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [sessionsData, setSessionsData] = useState<Session[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('upcoming');
@@ -65,6 +65,11 @@ export function SessionsPage() {
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
+  const highlightedSessionRef = useRef<HTMLDivElement | HTMLTableRowElement | null>(null);
+
+  const qParam = searchParams.get('q') ?? '';
+  const rangeParam = searchParams.get('range');
+  const focusSessionId = searchParams.get('focusSessionId');
 
   const loadSessions = async () => {
     const data = await apiClient.getSessions();
@@ -75,30 +80,28 @@ export function SessionsPage() {
     loadSessions().catch(() => setSessionsData([]));
   }, []);
 
-  // Check if we navigated from calendar or dashboard with a specific session ID
-  const highlightSessionId = location.state?.sessionId;
-
-  // Apply filters from navigation state if coming from calendar or dashboard
   useEffect(() => {
-    if (location.state?.sessionId && (location.state?.fromCalendar || location.state?.fromDashboard)) {
-      // Find the session by ID
-      const session = sessionsData.find((s) => s.id === location.state.sessionId);
-      if (session) {
-        // Apply filters to show this specific session
-        setCustomDateFilter(format(session.date, 'yyyy-MM-dd'));
-        setDateRangeFilter('custom');
-        setClientFilter(session.client);
-        if (location.state?.fromDashboard) {
-          setStatusFilter('upcoming');
-        }
-      }
+    setSearchQuery(qParam);
+  }, [qParam]);
+
+  useEffect(() => {
+    if (!rangeParam || rangeParam === 'all') {
+      setDateRangeFilter('all');
+      setStatusFilter('all');
+      return;
     }
-    
-    // Apply date range filter from dashboard
-    if (location.state?.dateRange && location.state?.fromDashboard) {
-      setDateRangeFilter(location.state.dateRange);
+
+    if (rangeParam === 'upcoming') {
+      setDateRangeFilter('all');
+      setStatusFilter('upcoming');
+      return;
     }
-  }, [location.state]);
+
+    if (rangeParam === 'thisMonth') {
+      setDateRangeFilter('this-month');
+      setStatusFilter('all');
+    }
+  }, [rangeParam]);
 
   // Get unique clients for filter dropdown
   const uniqueClients = Array.from(
@@ -199,6 +202,23 @@ export function SessionsPage() {
   // Limit upcoming sessions to 6 unless showAllUpcoming is true
   const displayedUpcomingSessions = showAllUpcoming ? upcomingSessions : upcomingSessions.slice(0, 6);
   const hasMoreUpcoming = upcomingSessions.length > 6;
+
+  useEffect(() => {
+    if (!focusSessionId) {
+      return;
+    }
+
+    const focusedUpcomingSession = upcomingSessions.some((session) => session.id === focusSessionId);
+    if (focusedUpcomingSession) {
+      setShowAllUpcoming(true);
+    }
+  }, [focusSessionId, upcomingSessions]);
+
+  useEffect(() => {
+    if (focusSessionId && highlightedSessionRef.current) {
+      highlightedSessionRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [focusSessionId, displayedUpcomingSessions, pastSessions]);
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -703,13 +723,14 @@ export function SessionsPage() {
           </Typography>
           <Stack spacing={2}>
             {displayedUpcomingSessions.map((session) => {
-              const isHighlighted = session.id === highlightSessionId;
+              const isHighlighted = session.id === focusSessionId;
               const statusStyles = getStatusStyles(session.status);
               const paymentStyles = getPaymentStyles(session.payment);
 
               return (
                 <Box
                   key={session.id}
+                  ref={isHighlighted ? highlightedSessionRef : null}
                   onClick={() => handleSessionClick(session)}
                   sx={{
                     display: 'flex',
@@ -978,11 +999,12 @@ export function SessionsPage() {
                 <TableBody>
                   {pastSessions.map((session) => {
                     const statusStyles = getStatusStyles(session.status);
-                    const isHighlighted = session.id === highlightSessionId;
+                    const isHighlighted = session.id === focusSessionId;
 
                     return (
                       <TableRow
                         key={session.id}
+                        ref={isHighlighted ? highlightedSessionRef : null}
                         onClick={() => handleSessionClick(session)}
                         sx={{
                           cursor: 'pointer',
