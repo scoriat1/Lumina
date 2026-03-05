@@ -1,43 +1,70 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Card,
   CardContent,
-  Typography,
   Chip,
   Divider,
-  Avatar,
+  Drawer,
+  IconButton,
+  LinearProgress,
+  List,
+  ListItemButton,
+  ListItemText,
+  Stack,
+  Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
-import EmailIcon from '@mui/icons-material/Email';
-import PhoneIcon from '@mui/icons-material/Phone';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import WorkIcon from '@mui/icons-material/Work';
+import CloseIcon from '@mui/icons-material/Close';
+import EmailIcon from '@mui/icons-material/Email';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import NotesIcon from '@mui/icons-material/Notes';
+import PhoneIcon from '@mui/icons-material/Phone';
 import { format } from 'date-fns';
-import { colors } from '../styles/colors';
 import { NewSessionModal } from '../components/NewSessionModal';
-import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
 import { apiClient } from '../api/client';
 import type { ClientDto, SessionDto } from '../api/types';
+
+type GroupedEngagement = {
+  id: string;
+  title: string;
+  sessions: SessionDto[];
+  totalSessions: number;
+  sessionsUsed: number;
+  price?: string;
+  dateRange?: string;
+};
+
+const statusLabelMap: Record<string, string> = {
+  upcoming: 'Scheduled',
+  completed: 'Completed',
+  cancelled: 'Canceled',
+};
+
+const locationLabelMap: Record<string, string> = {
+  zoom: 'Zoom',
+  phone: 'Phone',
+  office: 'Office',
+};
 
 export function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [client, setClient] = useState<ClientDto | null>(null);
   const [sessions, setSessions] = useState<SessionDto[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<SessionDto | null>(null);
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
 
   const loadData = async () => {
     if (!id) return;
-    const [clientData, sessionData] = await Promise.all([
-      apiClient.getClient(id),
-      apiClient.getClientSessions(id),
-    ]);
+    const [clientData, sessionData] = await Promise.all([apiClient.getClient(id), apiClient.getClientSessions(id)]);
     setClient(clientData);
     setSessions(sessionData);
   };
@@ -54,86 +81,232 @@ export function ClientDetailPage() {
     return format(new Date(client.nextSession), 'MMM d, yyyy • h:mm a');
   }, [client?.nextSession]);
 
-  if (!id) {
-    return <Typography>Client not found.</Typography>;
-  }
+  const groupedEngagements = useMemo<GroupedEngagement[]>(() => {
+    const groups = new Map<string, GroupedEngagement>();
 
-  if (!client) {
-    return <Typography>Loading client...</Typography>;
-  }
+    for (const session of sessions) {
+      const packageId = (session as SessionDto & { packageId?: string | number; clientPackageId?: string | number }).packageId
+        ?? (session as SessionDto & { packageId?: string | number; clientPackageId?: string | number }).clientPackageId;
+      const key = packageId ? String(packageId) : 'single-sessions';
+      const defaultTitle = packageId ? `${client?.program ?? 'Engagement'} Program` : 'Single Sessions';
+      const packageTitle = (session as SessionDto & { packageName?: string; engagementName?: string }).packageName
+        ?? (session as SessionDto & { packageName?: string; engagementName?: string }).engagementName
+        ?? defaultTitle;
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          id: key,
+          title: packageTitle,
+          sessions: [],
+          totalSessions: packageId ? 0 : client?.totalSessions ?? 0,
+          sessionsUsed: 0,
+          price: (session as SessionDto & { packagePrice?: string }).packagePrice,
+          dateRange: undefined,
+        });
+      }
+
+      const group = groups.get(key)!;
+      group.sessions.push(session);
+      group.sessionsUsed += session.status === 'completed' ? 1 : 0;
+    }
+
+    for (const group of groups.values()) {
+      const timestamps = group.sessions.map((s) => new Date(s.date).getTime());
+      if (timestamps.length > 0) {
+        const min = new Date(Math.min(...timestamps));
+        const max = new Date(Math.max(...timestamps));
+        group.dateRange = `${format(min, 'MMM d, yyyy')} - ${format(max, 'MMM d, yyyy')}`;
+      }
+      if (!group.totalSessions) {
+        group.totalSessions = group.sessions.length;
+      }
+      group.sessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
+    return [...groups.values()];
+  }, [sessions, client?.program, client?.totalSessions]);
+
+  if (!id) return <Typography>Client not found.</Typography>;
+  if (!client) return <Typography>Loading client...</Typography>;
 
   return (
     <Box>
-      <Box sx={{ mb: 4 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/clients')} sx={{ textTransform: 'none' }}>
-          Back to Clients
-        </Button>
-      </Box>
+      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/clients')} sx={{ textTransform: 'none', mb: 3 }}>
+        Back to Clients
+      </Button>
 
-      <Box sx={{ bgcolor: 'white', borderRadius: '14px', border: '1px solid rgba(0,0,0,0.06)', p: 4, mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ bgcolor: client.avatarColor }}>{client.initials}</Avatar>
-            <Typography variant="h5">{client.name}</Typography>
-            <Chip label={client.status} size="small" />
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, alignItems: 'start' }}>
+        <Stack spacing={3}>
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2}>
+                <Box>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Typography variant="h5">{client.name}</Typography>
+                    <Chip label={client.status} size="small" />
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Client since {format(new Date(client.startDate), 'MMMM d, yyyy')}
+                  </Typography>
+                </Box>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsNewSessionModalOpen(true)}>
+                  New Session
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.75 }}>
+                Next Step
+              </Typography>
+              <Typography variant="h6" sx={{ mb: 0.5 }}>
+                Next session scheduled
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {nextSessionLabel}
+              </Typography>
+            </CardContent>
+          </Card>
+
+          <Box>
+            <Typography variant="h6" sx={{ mb: 1.5 }}>Engagements</Typography>
+            <Stack spacing={1.5}>
+              {groupedEngagements.map((engagement) => {
+                const progressPercent = engagement.totalSessions > 0
+                  ? Math.round((engagement.sessionsUsed / engagement.totalSessions) * 100)
+                  : 0;
+
+                return (
+                  <Accordion key={engagement.id} defaultExpanded disableGutters>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box sx={{ width: '100%' }}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
+                          <Typography variant="subtitle1">{engagement.title}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {engagement.price ?? 'Price unavailable'}
+                          </Typography>
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary">
+                          {engagement.dateRange ?? 'Date range unavailable'}
+                        </Typography>
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {engagement.sessionsUsed}/{engagement.totalSessions} sessions used
+                          </Typography>
+                          <LinearProgress variant="determinate" value={progressPercent} sx={{ mt: 0.5 }} />
+                        </Box>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List disablePadding>
+                        {engagement.sessions.map((session) => (
+                          <ListItemButton key={session.id} onClick={() => setSelectedSession(session)}>
+                            <ListItemText
+                              primary={session.sessionType}
+                              secondary={format(new Date(session.date), 'MMM d, yyyy • h:mm a')}
+                            />
+                            <Chip label={statusLabelMap[session.status] ?? session.status} size="small" />
+                          </ListItemButton>
+                        ))}
+                        {engagement.sessions.length === 0 && <Typography variant="body2">No sessions yet.</Typography>}
+                      </List>
+                    </AccordionDetails>
+                  </Accordion>
+                );
+              })}
+            </Stack>
           </Box>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsNewSessionModalOpen(true)}>
-            New Session
-          </Button>
-        </Box>
+        </Stack>
 
-        <Typography variant="body2" sx={{ color: 'rgba(100,100,100,0.8)', mb: 2 }}>
-          Client since {format(new Date(client.startDate), 'MMMM d, yyyy')}
-        </Typography>
+        <Stack spacing={2}>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 1.5 }}>Contact Information</Typography>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <EmailIcon fontSize="small" color="action" />
+                  <Typography variant="body2">{client.email}</Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <PhoneIcon fontSize="small" color="action" />
+                  <Typography variant="body2">{client.phone}</Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CalendarTodayIcon fontSize="small" color="action" />
+                  <Typography variant="body2">{format(new Date(client.startDate), 'MMM d, yyyy')}</Typography>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2 }}>
-          <Card variant="outlined"><CardContent><Typography variant="caption">Sessions</Typography><Typography>{client.sessionsCompleted}/{client.totalSessions}</Typography></CardContent></Card>
-          <Card variant="outlined"><CardContent><Typography variant="caption">Program</Typography><Typography>{client.program}</Typography></CardContent></Card>
-          <Card variant="outlined"><CardContent><Typography variant="caption">Next Session</Typography><Typography>{nextSessionLabel}</Typography></CardContent></Card>
-        </Box>
-
-        <Divider sx={{ my: 3 }} />
-
-        <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><EmailIcon sx={{ color: colors.text.tertiary }} /><Typography>{client.email}</Typography></Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><PhoneIcon sx={{ color: colors.text.tertiary }} /><Typography>{client.phone}</Typography></Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><WorkIcon sx={{ color: colors.text.tertiary }} /><Typography>{client.program}</Typography></Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><CalendarTodayIcon sx={{ color: colors.text.tertiary }} /><Typography>{format(new Date(client.startDate), 'MMM d, yyyy')}</Typography></Box>
-        </Box>
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                <Typography variant="h6">Client Notes</Typography>
+                <Button size="small">Add Note</Button>
+              </Stack>
+              <Stack spacing={1}>
+                {client.notes ? (
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <NotesIcon fontSize="small" color="action" sx={{ mt: 0.3 }} />
+                    <Typography variant="body2" color="text.secondary">{client.notes}</Typography>
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No notes yet.</Typography>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Stack>
       </Box>
 
-      <Box>
-        <Typography variant="h6" sx={{ mb: 2 }}>Sessions</Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {sessions.map((session) => (
-            <Card
-              key={session.id}
-              variant="outlined"
-              sx={{ cursor: 'pointer' }}
-              onClick={() => {
-                setSelectedSessionId(session.id);
-                setDrawerOpen(true);
-              }}
-            >
-              <CardContent sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography>{session.sessionType}</Typography>
-                <Typography>{format(new Date(session.date), 'MMM d, yyyy • h:mm a')}</Typography>
-              </CardContent>
-            </Card>
-          ))}
-          {sessions.length === 0 && <Typography variant="body2">No sessions yet.</Typography>}
-        </Box>
-      </Box>
-
-      <SessionDetailsDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        sessionId={selectedSessionId}
-        sessions={sessions.map((s) => ({ ...s, date: new Date(s.date) }))}
-        onUpdateSession={async () => {
-          await loadData();
-        }}
-      />
+      <Drawer
+        anchor="right"
+        open={Boolean(selectedSession)}
+        onClose={() => setSelectedSession(null)}
+        PaperProps={{ sx: { width: { xs: '100%', sm: 420 } } }}
+      >
+        {selectedSession && (
+          <Box sx={{ p: 2.5 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6">Session Details</Typography>
+              <IconButton onClick={() => setSelectedSession(null)} aria-label="close">
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+            <Divider sx={{ my: 2 }} />
+            <Stack spacing={1.5}>
+              <Typography variant="subtitle1">{selectedSession.sessionType}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {format(new Date(selectedSession.date), 'MMM d, yyyy • h:mm a')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Duration: {selectedSession.duration} min
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Location: {locationLabelMap[selectedSession.location] ?? selectedSession.location}
+              </Typography>
+              <Chip label={statusLabelMap[selectedSession.status] ?? selectedSession.status} size="small" sx={{ width: 'fit-content' }} />
+              <Box>
+                <Typography variant="subtitle2">Notes</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {selectedSession.notes || 'No notes available.'}
+                </Typography>
+              </Box>
+            </Stack>
+            <Stack direction="row" spacing={1} sx={{ mt: 3 }}>
+              <Button variant="contained" onClick={() => navigate('/sessions')}>
+                Open Session
+              </Button>
+              <Button variant="outlined" onClick={() => setSelectedSession(null)}>
+                Close
+              </Button>
+            </Stack>
+          </Box>
+        )}
+      </Drawer>
 
       <NewSessionModal
         open={isNewSessionModalOpen}
