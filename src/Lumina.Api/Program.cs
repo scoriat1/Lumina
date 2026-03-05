@@ -329,6 +329,36 @@ api.MapGet("/sessions", async (int? clientId, LuminaDbContext db, HttpContext co
     return Results.Ok(sessions);
 });
 
+api.MapGet("/sessions/{id:int}", async (int id, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var session = await db.Sessions
+        .Where(s => s.PracticeId == scope.Value.practiceId && s.Id == id)
+        .Include(s => s.Client)
+        .Select(s => new
+        {
+            id = s.Id,
+            clientId = s.ClientId,
+            client = s.Client.Name,
+            sessionType = s.SessionType,
+            date = s.Date,
+            duration = s.Duration,
+            location = s.Location.ToString().ToLowerInvariant(),
+            status = s.Status.ToString().ToLowerInvariant(),
+            payment = "paid",
+            paymentStatus = "paid",
+            billingSource = "pay-per-session",
+            packageRemaining = (int?)null,
+            focus = s.Focus,
+            notes = s.Notes
+        })
+        .FirstOrDefaultAsync();
+
+    return session is null ? Results.NotFound() : Results.Ok(session);
+});
+
 api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
@@ -360,6 +390,7 @@ api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, Lu
     if (request.Date is not null) session.Date = request.Date.Value;
     if (!string.IsNullOrWhiteSpace(request.SessionType)) session.SessionType = request.SessionType;
     if (!string.IsNullOrWhiteSpace(request.Focus)) session.Focus = request.Focus;
+    if (request.Notes is not null) session.Notes = request.Notes;
     await db.SaveChangesAsync();
     return Results.Ok();
 });
@@ -713,7 +744,7 @@ static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpConte
 }
 
 public record LoginRequest(string Email, string Password);
-public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, string? Focus);
+public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, string? Focus, string? Notes);
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);

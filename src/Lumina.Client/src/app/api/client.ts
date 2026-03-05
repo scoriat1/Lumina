@@ -135,6 +135,10 @@ export const apiClient = {
     const sessions = await request<SessionApiDto[]>(`/api/sessions${query}`);
     return sessions.map(mapSessionDto);
   },
+  getSession: async (id: string) => {
+    const session = await request<SessionApiDto>(`/api/sessions/${id}`);
+    return mapSessionDto(session);
+  },
   getClientSessions: async (id: string) => {
     const sessions = await request<SessionApiDto[]>(`/api/clients/${id}/sessions`);
     return sessions.map(mapSessionDto);
