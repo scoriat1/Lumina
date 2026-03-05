@@ -4,10 +4,10 @@ namespace Lumina.Domain.Entities;
 
 public class Invoice
 {
-    public Guid Id { get; set; }
-    public Guid PracticeId { get; set; }
+    public int Id { get; set; }
+    public int PracticeId { get; set; }
     public Practice Practice { get; set; } = default!;
-    public Guid ClientId { get; set; }
+    public int ClientId { get; set; }
     public Client Client { get; set; } = default!;
     public string InvoiceNumber { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

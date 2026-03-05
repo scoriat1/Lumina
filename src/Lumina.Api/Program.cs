@@ -15,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<LuminaDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Lumina")));
 
-builder.Services.AddIdentity<AppUser, IdentityRole<Guid>>(options =>
+builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
     {
         options.Password.RequireDigit = true;
         options.Password.RequireUppercase = true;
@@ -128,11 +128,10 @@ app.MapGet("/api/auth/google/callback", async (HttpContext httpContext, SignInMa
 
         await userManager.AddLoginAsync(user, externalLoginInfo);
 
-        var practice = new Practice { Id = Guid.NewGuid(), Name = $"{displayName} Practice", CreatedAt = DateTimeOffset.UtcNow };
+        var practice = new Practice { Name = $"{displayName} Practice", CreatedAt = DateTimeOffset.UtcNow };
         db.Practices.Add(practice);
         db.Providers.Add(new Provider
         {
-            Id = Guid.NewGuid(),
             PracticeId = practice.Id,
             UserId = user.Id,
             DisplayName = displayName,
@@ -182,7 +181,6 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
     {
         id = c.Id,
         name = c.Name,
-        avatarColor = c.AvatarColor,
         program = c.Program,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
         totalSessions = c.Sessions.Count,
@@ -197,7 +195,7 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
     return Results.Ok(clients);
 });
 
-api.MapGet("/clients/{id:guid}", async (Guid id, LuminaDbContext db, HttpContext context) =>
+api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
@@ -206,7 +204,6 @@ api.MapGet("/clients/{id:guid}", async (Guid id, LuminaDbContext db, HttpContext
     {
         id = c.Id,
         name = c.Name,
-        avatarColor = c.AvatarColor,
         program = c.Program,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
         totalSessions = c.Sessions.Count,
@@ -227,13 +224,11 @@ api.MapPost("/clients", async (ClientUpsertRequest request, LuminaDbContext db, 
     if (scope is null) return Results.Unauthorized();
     var client = new Client
     {
-        Id = Guid.NewGuid(),
         PracticeId = scope.Value.practiceId,
         Name = request.Name,
         Email = request.Email,
         Phone = request.Phone,
         Program = request.Program,
-        AvatarColor = request.AvatarColor,
         StartDate = request.StartDate,
         Status = request.Status,
         Notes = request.Notes
@@ -243,7 +238,7 @@ api.MapPost("/clients", async (ClientUpsertRequest request, LuminaDbContext db, 
     return Results.Ok(new { id = client.Id });
 });
 
-api.MapPut("/clients/{id:guid}", async (Guid id, ClientUpsertRequest request, LuminaDbContext db, HttpContext context) =>
+api.MapPut("/clients/{id:int}", async (int id, ClientUpsertRequest request, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
@@ -253,7 +248,6 @@ api.MapPut("/clients/{id:guid}", async (Guid id, ClientUpsertRequest request, Lu
     client.Email = request.Email;
     client.Phone = request.Phone;
     client.Program = request.Program;
-    client.AvatarColor = request.AvatarColor;
     client.StartDate = request.StartDate;
     client.Status = request.Status;
     client.Notes = request.Notes;
@@ -261,7 +255,7 @@ api.MapPut("/clients/{id:guid}", async (Guid id, ClientUpsertRequest request, Lu
     return Results.Ok();
 });
 
-api.MapGet("/clients/{id:guid}/sessions", async (Guid id, LuminaDbContext db, HttpContext context) =>
+api.MapGet("/clients/{id:int}/sessions", async (int id, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
@@ -275,8 +269,7 @@ api.MapGet("/clients/{id:guid}/sessions", async (Guid id, LuminaDbContext db, Ht
             id = s.Id,
             clientId = s.ClientId,
             client = s.Client.Name,
-            avatarColor = s.Client.AvatarColor,
-            sessionType = s.SessionType,
+                sessionType = s.SessionType,
             date = s.Date,
             duration = s.Duration,
             location = s.Location.ToString().ToLowerInvariant(),
@@ -293,7 +286,7 @@ api.MapGet("/clients/{id:guid}/sessions", async (Guid id, LuminaDbContext db, Ht
     return Results.Ok(sessions);
 });
 
-api.MapGet("/sessions", async (Guid? clientId, LuminaDbContext db, HttpContext context) =>
+api.MapGet("/sessions", async (int? clientId, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
@@ -309,7 +302,6 @@ api.MapGet("/sessions", async (Guid? clientId, LuminaDbContext db, HttpContext c
         id = s.Id,
         clientId = s.ClientId,
         client = s.Client.Name,
-        avatarColor = s.Client.AvatarColor,
         sessionType = s.SessionType,
         date = s.Date,
         duration = s.Duration,
@@ -332,7 +324,6 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
     if (scope is null) return Results.Unauthorized();
     var session = new Session
     {
-        Id = Guid.NewGuid(),
         PracticeId = scope.Value.practiceId,
         ProviderId = scope.Value.providerId,
         ClientId = request.ClientId,
@@ -348,7 +339,7 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
     return Results.Ok(new { id = session.Id });
 });
 
-api.MapPut("/sessions/{id:guid}", async (Guid id, SessionUpdateRequest request, LuminaDbContext db, HttpContext context) =>
+api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
@@ -384,7 +375,7 @@ api.MapGet("/billing/invoices", async (LuminaDbContext db, HttpContext context) 
         id = i.Id,
         invoiceNumber = i.InvoiceNumber,
         clientName = i.Client.Name,
-        clientColor = i.Client.AvatarColor,
+        clientId = i.ClientId,
         amount = i.Amount,
         date = i.CreatedAt,
         dueDate = i.DueDate,
@@ -451,7 +442,6 @@ api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, L
 
     var template = new Template
     {
-        Id = Guid.NewGuid(),
         PracticeId = scope.Value.practiceId,
         Name = preset.Name,
         Description = preset.Description,
@@ -459,7 +449,6 @@ api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, L
         CreatedAt = DateTimeOffset.UtcNow,
         Fields = preset.Fields.OrderBy(f => f.SortOrder).Select(f => new TemplateField
         {
-            Id = Guid.NewGuid(),
             Label = f.Label,
             SortOrder = f.SortOrder,
             FieldType = f.FieldType
@@ -487,7 +476,6 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
         id = s.Id,
         clientId = s.ClientId,
         client = s.Client.Name,
-        avatarColor = s.Client.AvatarColor,
         sessionType = s.SessionType,
         date = s.Date,
         duration = s.Duration,
@@ -500,7 +488,6 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
     {
         id = c.Id,
         name = c.Name,
-        avatarColor = c.AvatarColor,
         program = c.Program,
         progress = 0,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
@@ -526,16 +513,16 @@ if (seedEnabled)
 
 app.Run();
 
-static async Task<(Guid practiceId, Guid providerId)?> ResolveScopeAsync(HttpContext context, LuminaDbContext db)
+static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpContext context, LuminaDbContext db)
 {
     var userIdRaw = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
-    if (!Guid.TryParse(userIdRaw, out var userId)) return null;
-    var provider = await db.Providers.FirstOrDefaultAsync(p => p.UserId == userId && p.IsActive);
+    if (string.IsNullOrWhiteSpace(userIdRaw)) return null;
+    var provider = await db.Providers.FirstOrDefaultAsync(p => p.UserId == userIdRaw && p.IsActive);
     return provider is null ? null : (provider.PracticeId, provider.Id);
 }
 
 public record LoginRequest(string Email, string Password);
 public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, string? Focus);
-public record SessionCreateRequest(Guid ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
-public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, string AvatarColor, DateOnly StartDate, ClientStatus Status, string? Notes);
-public record FromPresetRequest(Guid PresetId);
+public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
+public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
+public record FromPresetRequest(int PresetId);

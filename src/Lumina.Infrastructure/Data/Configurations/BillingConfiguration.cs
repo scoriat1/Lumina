@@ -9,6 +9,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
     public void Configure(EntityTypeBuilder<Invoice> builder)
     {
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
 
         builder.Property(x => x.InvoiceNumber)
             .HasMaxLength(50)
@@ -41,6 +42,7 @@ public class PackageConfiguration : IEntityTypeConfiguration<Package>
     public void Configure(EntityTypeBuilder<Package> builder)
     {
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
         builder.Property(x => x.Name).HasMaxLength(150).IsRequired();
     }
 }
@@ -50,6 +52,7 @@ public class ClientPackageConfiguration : IEntityTypeConfiguration<ClientPackage
     public void Configure(EntityTypeBuilder<ClientPackage> builder)
     {
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
 
         builder.HasIndex(x => new { x.PracticeId, x.ClientId, x.PackageId });
 
