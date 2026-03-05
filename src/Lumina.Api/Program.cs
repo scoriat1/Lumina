@@ -433,15 +433,21 @@ api.MapGet("/templates/presets", async (LuminaDbContext db) =>
     return Results.Ok(presets);
 });
 
-api.MapGet("/templates/custom", async (LuminaDbContext db, HttpContext context) =>
+api.MapGet("/templates/custom", async (int? practiceId, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
 
+    var resolvedPracticeId = practiceId ?? scope.Value.practiceId;
+    if (resolvedPracticeId != scope.Value.practiceId)
+    {
+        return Results.Forbid();
+    }
+
     var templates = await db.Templates
         .AsNoTracking()
         .Include(t => t.Fields)
-        .Where(t => t.PracticeId == scope.Value.practiceId)
+        .Where(t => t.PracticeId == resolvedPracticeId)
         .OrderBy(t => t.Name)
         .ToListAsync();
 
@@ -531,6 +537,101 @@ api.MapPost("/templates/from-preset", async (FromPresetRequest request, LuminaDb
     return Results.Ok(MapTemplateResponse(createdTemplate));
 });
 
+api.MapPut("/templates/{templateId:int}", async (int templateId, TemplateUpdateRequest request, LuminaDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
+{
+    var logger = loggerFactory.CreateLogger("TemplateUpdates");
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    if (request.PracticeId != scope.Value.practiceId)
+    {
+        return Results.Forbid();
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.BadRequest(new { message = "Template name is required." });
+    }
+
+    var template = await db.Templates
+        .Include(t => t.Fields)
+        .FirstOrDefaultAsync(t => t.Id == templateId && t.PracticeId == request.PracticeId);
+
+    if (template is null)
+    {
+        return Results.NotFound(new { message = "Template not found for this practice." });
+    }
+
+    var incomingFields = (request.Fields ?? [])
+        .Select((field, index) => new
+        {
+            field.Id,
+            Label = (field.Label ?? string.Empty).Trim(),
+            FieldType = string.IsNullOrWhiteSpace(field.FieldType) ? null : field.FieldType.Trim(),
+            SortOrder = field.SortOrder > 0 ? field.SortOrder : index + 1,
+            PayloadOrder = index
+        })
+        .Where(field => !string.IsNullOrWhiteSpace(field.Label))
+        .OrderBy(field => field.SortOrder)
+        .ThenBy(field => field.PayloadOrder)
+        .ToList();
+
+    template.Name = request.Name.Trim();
+    template.Description = request.Description?.Trim() ?? string.Empty;
+
+    var existingById = template.Fields.ToDictionary(field => field.Id);
+    var incomingIds = incomingFields.Where(field => field.Id > 0).Select(field => field.Id).ToHashSet();
+
+    var toDelete = template.Fields.Where(field => !incomingIds.Contains(field.Id)).ToList();
+    if (toDelete.Count > 0)
+    {
+        db.TemplateFields.RemoveRange(toDelete);
+    }
+
+    var inserted = 0;
+    var updated = 0;
+    var normalizedSortOrder = 1;
+
+    foreach (var field in incomingFields)
+    {
+        if (field.Id > 0 && existingById.TryGetValue(field.Id, out var existingField))
+        {
+            existingField.Label = field.Label;
+            existingField.FieldType = field.FieldType;
+            existingField.SortOrder = normalizedSortOrder++;
+            updated++;
+            continue;
+        }
+
+        db.TemplateFields.Add(new TemplateField
+        {
+            TemplateId = template.Id,
+            Label = field.Label,
+            FieldType = field.FieldType,
+            SortOrder = normalizedSortOrder++
+        });
+        inserted++;
+    }
+
+    await db.SaveChangesAsync();
+
+    logger.LogInformation(
+        "Template update persisted. TemplateId={TemplateId}; PracticeId={PracticeId}; FieldCount={FieldCount}; Inserted={Inserted}; Updated={Updated}; Deleted={Deleted}",
+        templateId,
+        request.PracticeId,
+        incomingFields.Count,
+        inserted,
+        updated,
+        toDelete.Count);
+
+    var updatedTemplate = await db.Templates
+        .AsNoTracking()
+        .Include(t => t.Fields)
+        .FirstAsync(t => t.Id == template.Id);
+
+    return Results.Ok(MapTemplateResponse(updatedTemplate));
+});
+
 api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
@@ -616,5 +717,7 @@ public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, st
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
+public record TemplateUpdateRequest(int PracticeId, string Name, string? Description, IReadOnlyList<TemplateUpdateFieldRequest> Fields);
+public record TemplateUpdateFieldRequest(int Id, string Label, int SortOrder, string? FieldType);
 public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
 public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);
