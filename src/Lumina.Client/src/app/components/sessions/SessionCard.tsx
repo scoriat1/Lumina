@@ -73,7 +73,8 @@ export function SessionCard({
               >
                 {clientName}
               </Typography>
-              <IconButton size="small" sx={{ ml: 1 }}>
+              <IconButton size="small" disabled sx={{ ml: 1 }}>
+                {/* TODO(nav): wire session card overflow actions when contextual actions are implemented. */}
                 <MoreVertIcon sx={{ fontSize: 18, color: colors.text.muted }} />
               </IconButton>
             </Box>

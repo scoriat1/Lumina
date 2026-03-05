@@ -213,8 +213,10 @@ export function BillingPage() {
         >
           Recent Invoices
         </Typography>
+        {/* TODO(nav): wire create invoice flow once composer route/modal is available. */}
         <Button
           variant="contained"
+          disabled
           sx={{
             bgcolor: '#9B8B9E',
             color: '#FFFFFF',
@@ -534,9 +536,11 @@ export function BillingPage() {
                 gap: 2,
               }}
             >
+              {/* TODO(nav): wire invoice download action to generated invoice file endpoint. */}
               <Button
                 fullWidth
                 variant="outlined"
+                disabled
                 startIcon={<DownloadIcon />}
                 sx={{
                   borderColor: '#E8E5E1',
@@ -554,9 +558,12 @@ export function BillingPage() {
                 Download
               </Button>
               {selectedInvoice?.status !== 'paid' && (
-                <Button
-                  fullWidth
-                  variant="contained"
+                <>
+                  {/* TODO(nav): wire mark-as-paid action to billing status update endpoint. */}
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    disabled
                   startIcon={<PaymentIcon />}
                   sx={{
                     bgcolor: '#9B8B9E',
@@ -571,7 +578,8 @@ export function BillingPage() {
                   }}
                 >
                   Mark as Paid
-                </Button>
+                  </Button>
+                </>
               )}
             </Box>
           </Box>

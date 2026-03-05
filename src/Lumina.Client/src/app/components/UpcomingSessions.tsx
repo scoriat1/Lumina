@@ -172,7 +172,8 @@ export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
                       borderRadius: '6px',
                     }}
                   />
-                  <IconButton size="small" sx={{ color: colors.text.secondary }}>
+                  <IconButton size="small" disabled sx={{ color: colors.text.secondary }}>
+                    {/* TODO(nav): wire upcoming session row overflow actions when actions menu is implemented. */}
                     <MoreVertIcon fontSize="small" />
                   </IconButton>
                 </Box>

@@ -265,7 +265,10 @@ export function ClientDetailPage() {
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                 <Typography variant="h6">Contact Information</Typography>
-                <IconButton size="small"><EditIcon fontSize="small" /></IconButton>
+                <IconButton size="small" disabled>
+                  {/* TODO(nav): wire Contact Information edit action once editable client contact flow is implemented. */}
+                  <EditIcon fontSize="small" />
+                </IconButton>
               </Stack>
               <Stack spacing={1}>
                 <Stack direction="row" spacing={1} alignItems="center">
@@ -284,7 +287,10 @@ export function ClientDetailPage() {
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.25 }}>
                 <Typography variant="h6">Client Notes</Typography>
-                <Button size="small">Add Note</Button>
+                <Button size="small" disabled>
+                  {/* TODO(nav): wire Add Note to a client note composer/modal once note creation flow is available. */}
+                  Add Note
+                </Button>
               </Stack>
               <Stack spacing={1}>
                 {(client.notes?.split('\n').filter(Boolean) ?? []).length > 0 ? (

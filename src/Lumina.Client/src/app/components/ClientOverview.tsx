@@ -128,7 +128,8 @@ export function ClientOverview({ clients }: ClientOverviewProps) {
                       }}>
                         {client.name}
                       </Typography>
-                      <IconButton size="small" sx={{ color: colors.text.secondary, mt: -0.5 }}>
+                      <IconButton size="small" disabled sx={{ color: colors.text.secondary, mt: -0.5 }}>
+                        {/* TODO(nav): wire client card quick actions menu when per-client actions are defined. */}
                         <MoreVertIcon fontSize="small" />
                       </IconButton>
                     </Box>
