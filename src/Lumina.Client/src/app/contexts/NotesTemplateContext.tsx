@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { apiClient } from '../api/client';
+import { useAuth } from './AuthContext';
 
 export interface Template {
   id: string;
@@ -15,7 +16,7 @@ interface NotesTemplateContextType {
   presetTemplates: Template[];
   setTemplateMode: (mode: 'default' | 'template') => void;
   setSelectedTemplateId: (id: string) => void;
-  setCustomTemplates: (templates: Template[]) => void;
+  setCustomTemplates: Dispatch<SetStateAction<Template[]>>;
   refreshTemplates: () => Promise<void>;
   getActiveTemplate: () => Template | null;
 }
@@ -23,20 +24,25 @@ interface NotesTemplateContextType {
 const NotesTemplateContext = createContext<NotesTemplateContextType | undefined>(undefined);
 
 export function NotesTemplateProvider({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
   const [templateMode, setTemplateMode] = useState<'default' | 'template'>('default');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [customTemplates, setCustomTemplates] = useState<Template[]>([]);
   const [presetTemplates, setPresetTemplates] = useState<Template[]>([]);
 
-  const refreshTemplates = async () => {
+  const refreshTemplates = useCallback(async () => {
+    if (!user?.practiceId) return;
+
     const [presets, custom] = await Promise.all([apiClient.getTemplatePresets(), apiClient.getCustomTemplates()]);
     setPresetTemplates(presets);
     setCustomTemplates(custom);
-  };
+  }, [user?.practiceId]);
 
   useEffect(() => {
+    if (loading || !user?.practiceId) return;
+
     refreshTemplates().catch(() => undefined);
-  }, []);
+  }, [loading, refreshTemplates, user?.practiceId]);
 
   const getActiveTemplate = (): Template | null => {
     if (templateMode === 'default' || !selectedTemplateId) return null;

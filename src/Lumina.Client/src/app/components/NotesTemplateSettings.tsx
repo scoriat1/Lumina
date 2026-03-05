@@ -4,9 +4,12 @@ import { Add, ContentCopy, Edit } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { colors } from '../styles/colors';
 import { useNotesTemplate, Template } from '../contexts/NotesTemplateContext';
+import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../api/client';
 
 export function NotesTemplateSettings() {
+  const { user } = useAuth();
+
   const {
     templateMode,
     setTemplateMode,
@@ -65,7 +68,18 @@ export function NotesTemplateSettings() {
   };
 
   const handleDuplicateTemplate = async (template: Template) => {
-    await apiClient.duplicateTemplateFromPreset(template.id);
+    if (!user?.practiceId) return;
+
+    const createdTemplate = await apiClient.duplicateTemplateFromPreset({
+      practiceId: user.practiceId,
+      sourcePresetId: template.id,
+    });
+
+    setCustomTemplates(prev => {
+      if (prev.some(existing => existing.id === createdTemplate.id)) return prev;
+      return [...prev, createdTemplate];
+    });
+
     await refreshTemplates();
   };
 

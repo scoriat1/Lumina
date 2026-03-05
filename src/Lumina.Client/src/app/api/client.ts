@@ -139,9 +139,13 @@ export const apiClient = {
   },
   getTemplatePresets: () => request<TemplateDto[]>('/api/templates/presets'),
   getCustomTemplates: () => request<TemplateDto[]>('/api/templates/custom'),
-  duplicateTemplateFromPreset: (presetId: string | number) => request('/api/templates/custom/from-preset', {
+  duplicateTemplateFromPreset: (payload: { practiceId: string | number; sourcePresetId: string | number; name?: string }) => request<TemplateDto>('/api/templates/custom/from-preset', {
     method: 'POST',
-    body: JSON.stringify({ presetId: Number(presetId) }),
+    body: JSON.stringify({
+      practiceId: Number(payload.practiceId),
+      sourcePresetId: Number(payload.sourcePresetId),
+      name: payload.name?.trim() || undefined,
+    }),
   }),
   googleLoginUrl: `${API_BASE_URL}/api/auth/google/login`,
 };

@@ -422,28 +422,57 @@ api.MapGet("/templates/custom", async (LuminaDbContext db, HttpContext context) 
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
 
-    var templates = await db.Templates.Where(t => t.PracticeId == scope.Value.practiceId).OrderBy(t => t.Name).Select(t => new
+    var templates = await db.Templates
+        .Where(t => t.PracticeId == scope.Value.practiceId)
+        .OrderBy(t => t.Name)
+        .Select(t => new
     {
         id = t.Id,
         name = t.Name,
+        description = t.Description,
+        sourcePresetId = t.SourcePresetId,
+        createdAt = t.CreatedAt,
         fields = t.Fields.OrderBy(f => f.SortOrder).Select(f => f.Label).ToList(),
         custom = true
     }).ToListAsync();
+
     return Results.Ok(templates);
 });
 
-api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, LuminaDbContext db, HttpContext context) =>
+api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, LuminaDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
 {
+    var logger = loggerFactory.CreateLogger("TemplateDuplication");
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
 
-    var preset = await db.TemplatePresets.Include(p => p.Fields).FirstOrDefaultAsync(p => p.Id == request.PresetId);
-    if (preset is null) return Results.NotFound();
+    var practiceId = request.PracticeId ?? scope.Value.practiceId;
+    if (practiceId != scope.Value.practiceId)
+    {
+        return Results.Forbid();
+    }
+
+    var practiceExists = await db.Practices.AnyAsync(p => p.Id == practiceId);
+    if (!practiceExists)
+    {
+        return Results.BadRequest(new { message = "Invalid practiceId." });
+    }
+
+    var preset = await db.TemplatePresets
+        .Include(p => p.Fields)
+        .FirstOrDefaultAsync(p => p.Id == request.SourcePresetId);
+    if (preset is null)
+    {
+        return Results.BadRequest(new { message = "Invalid sourcePresetId." });
+    }
+
+    var templateName = string.IsNullOrWhiteSpace(request.Name)
+        ? $"{preset.Name} Copy"
+        : request.Name.Trim();
 
     var template = new Template
     {
-        PracticeId = scope.Value.practiceId,
-        Name = preset.Name,
+        PracticeId = practiceId,
+        Name = templateName,
         Description = preset.Description,
         SourcePresetId = preset.Id,
         CreatedAt = DateTimeOffset.UtcNow,
@@ -455,9 +484,31 @@ api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, L
         }).ToList()
     };
 
+    logger.LogInformation(
+        "Duplicating template preset {PresetId} for practice {PracticeId} with {FieldCount} fields.",
+        preset.Id,
+        practiceId,
+        template.Fields.Count);
+
     db.Templates.Add(template);
     await db.SaveChangesAsync();
-    return Results.Ok(new { id = template.Id });
+
+    logger.LogInformation(
+        "Template duplication saved. TemplateId={TemplateId}, PracticeId={PracticeId}, FieldCount={FieldCount}.",
+        template.Id,
+        practiceId,
+        template.Fields.Count);
+
+    return Results.Ok(new
+    {
+        id = template.Id,
+        name = template.Name,
+        description = template.Description,
+        sourcePresetId = template.SourcePresetId,
+        createdAt = template.CreatedAt,
+        fields = template.Fields.OrderBy(f => f.SortOrder).Select(f => f.Label).ToList(),
+        custom = true
+    });
 });
 
 api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
@@ -525,4 +576,4 @@ public record LoginRequest(string Email, string Password);
 public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, string? Focus);
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
-public record FromPresetRequest(int PresetId);
+public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
