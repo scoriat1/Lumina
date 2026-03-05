@@ -9,7 +9,7 @@ import type {
   TemplateDto,
 } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
 
 
 const avatarPalette = ["#9B8B9E", "#A8B5A0", "#9DAAB5", "#D4B88A", "#8AAF7D", "#8B6B9E", "#D9A66E", "#7B9AB5"];
@@ -154,7 +154,7 @@ export const apiClient = {
     return templates.map(mapTemplateDto);
   },
   duplicateTemplateFromPreset: async (payload: { practiceId: string | number; sourcePresetId: string | number; name?: string }) => {
-    const template = await request<TemplateDto>('/api/templates/custom/from-preset', {
+    const template = await request<TemplateDto>('/api/templates/from-preset', {
       method: 'POST',
       body: JSON.stringify({
         practiceId: Number(payload.practiceId),
