@@ -71,6 +71,17 @@ builder.Services.Configure<JsonOptions>(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<LuminaDbContext>();
+    var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
+    var connection = db.Database.GetDbConnection();
+    startupLogger.LogInformation(
+        "SQL connection configured. DataSource={DataSource}; Database={Database}",
+        connection.DataSource,
+        connection.Database);
+}
+
 app.UseCors("client");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -437,7 +448,8 @@ api.MapGet("/templates/custom", async (LuminaDbContext db, HttpContext context) 
     return Results.Ok(templates.Select(MapTemplateResponse));
 });
 
-api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, LuminaDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
+
+api.MapPost("/templates/from-preset", async (FromPresetRequest request, LuminaDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
 {
     var logger = loggerFactory.CreateLogger("TemplateDuplication");
     var scope = await ResolveScopeAsync(context, db);
@@ -474,9 +486,9 @@ api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, L
         : request.Name.Trim();
 
     logger.LogInformation(
-        "Duplicating template preset {SourcePresetId} for practice {PracticeId}.",
-        request.SourcePresetId,
-        practiceId);
+        "FromPreset called. PracticeId={PracticeId}; SourcePresetId={SourcePresetId}",
+        practiceId,
+        request.SourcePresetId);
 
     await using var transaction = await db.Database.BeginTransactionAsync();
 
@@ -505,9 +517,9 @@ api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, L
     await transaction.CommitAsync();
 
     logger.LogInformation(
-        "Template duplication saved. SourcePresetId={SourcePresetId}, PracticeId={PracticeId}, TemplateId={TemplateId}, FieldCount={FieldCount}.",
-        request.SourcePresetId,
+        "FromPreset persisted. PracticeId={PracticeId}; SourcePresetId={SourcePresetId}; CreatedTemplateId={CreatedTemplateId}; FieldCount={FieldCount}",
         practiceId,
+        request.SourcePresetId,
         template.Id,
         templateFields.Count);
 
