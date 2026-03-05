@@ -407,13 +407,18 @@ api.MapGet("/settings/providers", async (LuminaDbContext db, HttpContext context
 
 api.MapGet("/templates/presets", async (LuminaDbContext db) =>
 {
-    var presets = await db.TemplatePresets.Where(p => p.IsActive).OrderBy(p => p.Name).Select(p => new
-    {
-        id = p.Id,
-        name = p.Name,
-        description = p.Description,
-        fields = p.Fields.OrderBy(f => f.SortOrder).Select(f => f.Label).ToList()
-    }).ToListAsync();
+    var presets = await db.TemplatePresets
+        .Where(p => p.IsActive)
+        .OrderBy(p => p.Name)
+        .Select(p => new
+        {
+            id = p.Id,
+            name = p.Name,
+            description = p.Description,
+            fields = p.Fields.OrderBy(f => f.SortOrder).Select(f => f.Label).ToList()
+        })
+        .ToListAsync();
+
     return Results.Ok(presets);
 });
 
@@ -423,20 +428,13 @@ api.MapGet("/templates/custom", async (LuminaDbContext db, HttpContext context) 
     if (scope is null) return Results.Unauthorized();
 
     var templates = await db.Templates
+        .AsNoTracking()
+        .Include(t => t.Fields)
         .Where(t => t.PracticeId == scope.Value.practiceId)
         .OrderBy(t => t.Name)
-        .Select(t => new
-    {
-        id = t.Id,
-        name = t.Name,
-        description = t.Description,
-        sourcePresetId = t.SourcePresetId,
-        createdAt = t.CreatedAt,
-        fields = t.Fields.OrderBy(f => f.SortOrder).Select(f => f.Label).ToList(),
-        custom = true
-    }).ToListAsync();
+        .ToListAsync();
 
-    return Results.Ok(templates);
+    return Results.Ok(templates.Select(MapTemplateResponse));
 });
 
 api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, LuminaDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
@@ -458,16 +456,29 @@ api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, L
     }
 
     var preset = await db.TemplatePresets
-        .Include(p => p.Fields)
+        .AsNoTracking()
         .FirstOrDefaultAsync(p => p.Id == request.SourcePresetId);
     if (preset is null)
     {
         return Results.BadRequest(new { message = "Invalid sourcePresetId." });
     }
 
+    var presetFields = await db.TemplatePresetFields
+        .AsNoTracking()
+        .Where(f => f.TemplatePresetId == preset.Id)
+        .OrderBy(f => f.SortOrder)
+        .ToListAsync();
+
     var templateName = string.IsNullOrWhiteSpace(request.Name)
-        ? $"{preset.Name} Copy"
+        ? $"{preset.Name} (Copy)"
         : request.Name.Trim();
+
+    logger.LogInformation(
+        "Duplicating template preset {SourcePresetId} for practice {PracticeId}.",
+        request.SourcePresetId,
+        practiceId);
+
+    await using var transaction = await db.Database.BeginTransactionAsync();
 
     var template = new Template
     {
@@ -475,40 +486,37 @@ api.MapPost("/templates/custom/from-preset", async (FromPresetRequest request, L
         Name = templateName,
         Description = preset.Description,
         SourcePresetId = preset.Id,
-        CreatedAt = DateTimeOffset.UtcNow,
-        Fields = preset.Fields.OrderBy(f => f.SortOrder).Select(f => new TemplateField
-        {
-            Label = f.Label,
-            SortOrder = f.SortOrder,
-            FieldType = f.FieldType
-        }).ToList()
+        CreatedAt = DateTimeOffset.UtcNow
     };
-
-    logger.LogInformation(
-        "Duplicating template preset {PresetId} for practice {PracticeId} with {FieldCount} fields.",
-        preset.Id,
-        practiceId,
-        template.Fields.Count);
 
     db.Templates.Add(template);
     await db.SaveChangesAsync();
 
-    logger.LogInformation(
-        "Template duplication saved. TemplateId={TemplateId}, PracticeId={PracticeId}, FieldCount={FieldCount}.",
-        template.Id,
-        practiceId,
-        template.Fields.Count);
-
-    return Results.Ok(new
+    var templateFields = presetFields.Select(presetField => new TemplateField
     {
-        id = template.Id,
-        name = template.Name,
-        description = template.Description,
-        sourcePresetId = template.SourcePresetId,
-        createdAt = template.CreatedAt,
-        fields = template.Fields.OrderBy(f => f.SortOrder).Select(f => f.Label).ToList(),
-        custom = true
-    });
+        TemplateId = template.Id,
+        Label = presetField.Label,
+        SortOrder = presetField.SortOrder,
+        FieldType = presetField.FieldType
+    }).ToList();
+
+    db.TemplateFields.AddRange(templateFields);
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+
+    logger.LogInformation(
+        "Template duplication saved. SourcePresetId={SourcePresetId}, PracticeId={PracticeId}, TemplateId={TemplateId}, FieldCount={FieldCount}.",
+        request.SourcePresetId,
+        practiceId,
+        template.Id,
+        templateFields.Count);
+
+    var createdTemplate = await db.Templates
+        .AsNoTracking()
+        .Include(t => t.Fields)
+        .FirstAsync(t => t.Id == template.Id);
+
+    return Results.Ok(MapTemplateResponse(createdTemplate));
 });
 
 api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
@@ -562,6 +570,25 @@ if (seedEnabled)
     await DbInitializer.SeedAsync(db, userManager, true);
 }
 
+static TemplateResponse MapTemplateResponse(Template template)
+{
+    var fields = template.Fields
+        .OrderBy(f => f.SortOrder)
+        .Select(f => new TemplateFieldResponse(f.Id, f.Label, f.SortOrder, f.FieldType))
+        .ToList();
+
+    return new TemplateResponse(
+        template.Id,
+        template.Name,
+        template.Description,
+        template.PracticeId,
+        template.SourcePresetId,
+        template.CreatedAt,
+        fields,
+        fields.Select(field => field.Label).ToList(),
+        true);
+}
+
 app.Run();
 
 static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpContext context, LuminaDbContext db)
@@ -577,3 +604,5 @@ public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, st
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
+public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
+public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);

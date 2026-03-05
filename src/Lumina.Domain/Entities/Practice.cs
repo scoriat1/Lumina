@@ -6,4 +6,5 @@ public class Practice
     public string Name { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
     public ICollection<Provider> Providers { get; set; } = new List<Provider>();
+    public ICollection<Template> Templates { get; set; } = new List<Template>();
 }

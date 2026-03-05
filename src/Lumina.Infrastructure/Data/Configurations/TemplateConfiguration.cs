@@ -13,6 +13,11 @@ public class TemplatePresetConfiguration : IEntityTypeConfiguration<TemplatePres
         builder.Property(x => x.Name).HasMaxLength(150).IsRequired();
         builder.Property(x => x.Description).HasMaxLength(500).IsRequired();
         builder.Property(x => x.Category).HasMaxLength(100).IsRequired();
+
+        builder.HasMany(x => x.Fields)
+            .WithOne(x => x.TemplatePreset)
+            .HasForeignKey(x => x.TemplatePresetId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
@@ -37,6 +42,21 @@ public class TemplateConfiguration : IEntityTypeConfiguration<Template>
         builder.Property(x => x.Name).HasMaxLength(150).IsRequired();
         builder.Property(x => x.Description).HasMaxLength(500).IsRequired();
         builder.HasIndex(x => new { x.PracticeId, x.Name });
+
+        builder.HasOne(x => x.Practice)
+            .WithMany(x => x.Templates)
+            .HasForeignKey(x => x.PracticeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.Fields)
+            .WithOne(x => x.Template)
+            .HasForeignKey(x => x.TemplateId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.SourcePreset)
+            .WithMany()
+            .HasForeignKey(x => x.SourcePresetId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 

@@ -78,6 +78,14 @@ const mapProviderDto = (provider: ProviderApiDto): ProviderDto => ({
   initials: provider.initials ?? computeInitials(provider.name),
 });
 
+const mapTemplateDto = (template: TemplateDto): TemplateDto => ({
+  ...template,
+  id: String(template.id),
+  fields: template.fieldsDetail?.length
+    ? [...template.fieldsDetail].sort((a, b) => a.sortOrder - b.sortOrder).map((field) => field.label)
+    : template.fields,
+});
+
 export const apiClient = {
   getHealth: () => request<{ status: string }>('/health'),
   login: (email: string, password: string) => request<void>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
@@ -137,15 +145,25 @@ export const apiClient = {
     const providers = await request<ProviderApiDto[]>('/api/settings/providers');
     return providers.map(mapProviderDto);
   },
-  getTemplatePresets: () => request<TemplateDto[]>('/api/templates/presets'),
-  getCustomTemplates: () => request<TemplateDto[]>('/api/templates/custom'),
-  duplicateTemplateFromPreset: (payload: { practiceId: string | number; sourcePresetId: string | number; name?: string }) => request<TemplateDto>('/api/templates/custom/from-preset', {
-    method: 'POST',
-    body: JSON.stringify({
-      practiceId: Number(payload.practiceId),
-      sourcePresetId: Number(payload.sourcePresetId),
-      name: payload.name?.trim() || undefined,
-    }),
-  }),
+  getTemplatePresets: async () => {
+    const templates = await request<TemplateDto[]>('/api/templates/presets');
+    return templates.map(mapTemplateDto);
+  },
+  getCustomTemplates: async () => {
+    const templates = await request<TemplateDto[]>('/api/templates/custom');
+    return templates.map(mapTemplateDto);
+  },
+  duplicateTemplateFromPreset: async (payload: { practiceId: string | number; sourcePresetId: string | number; name?: string }) => {
+    const template = await request<TemplateDto>('/api/templates/custom/from-preset', {
+      method: 'POST',
+      body: JSON.stringify({
+        practiceId: Number(payload.practiceId),
+        sourcePresetId: Number(payload.sourcePresetId),
+        name: payload.name?.trim() || undefined,
+      }),
+    });
+
+    return mapTemplateDto(template);
+  },
   googleLoginUrl: `${API_BASE_URL}/api/auth/google/login`,
 };
