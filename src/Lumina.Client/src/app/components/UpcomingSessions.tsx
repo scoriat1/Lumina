@@ -37,16 +37,11 @@ export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
   };
 
   const handleSessionClick = (session: Session) => {
-    navigate('/sessions', { 
-      state: { 
-        sessionId: session.id,
-        fromDashboard: true,
-      }
-    });
+    navigate(`/sessions?range=upcoming&focusSessionId=${session.id}`);
   };
 
   const handleViewAll = () => {
-    navigate('/sessions');
+    navigate('/sessions?range=upcoming');
   };
 
   return (

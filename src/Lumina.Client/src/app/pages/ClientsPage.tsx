@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Box,
   Card,
@@ -31,7 +31,7 @@ import EventIcon from '@mui/icons-material/Event';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddIcon from '@mui/icons-material/Add';
-import { useLocation, useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { PageHeader } from '../components/PageHeader';
 import { AddClientModal, ClientFormData } from '../components/AddClientModal';
 import { apiClient } from '../api/client';
@@ -63,8 +63,13 @@ export function ClientsPage() {
   const [programFilters, setProgramFilters] = useState<Set<string>>(new Set());
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
-  const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightedClientRef = useRef<HTMLDivElement | null>(null);
+
+  const focusClientId = searchParams.get('focusClientId');
+  const statusParam = searchParams.get('status');
+  const qParam = searchParams.get('q') ?? '';
 
   const loadClients = async () => {
     const data = await apiClient.getClients();
@@ -75,19 +80,22 @@ export function ClientsPage() {
     loadClients().catch(() => setClients([]));
   }, []);
 
-  // Check if we navigated from dashboard with a client ID to filter
   useEffect(() => {
-    if (location.state?.clientId && location.state?.fromDashboard) {
-      const client = clients.find((c) => c.id === location.state.clientId);
-      if (client) {
-        setSearchQuery(client.name);
-      }
+    setSearchQuery(qParam);
+  }, [qParam]);
+
+  const validStatuses = useMemo(() => new Set(clients.map((client) => client.status)), [clients]);
+
+  useEffect(() => {
+    if (statusParam && validStatuses.has(statusParam as Client['status'])) {
+      setStatusFilters(new Set([statusParam]));
+      return;
     }
-    // Check if we navigated from dashboard with a status filter
-    if (location.state?.statusFilter && location.state?.fromDashboard) {
-      setStatusFilters(new Set([location.state.statusFilter]));
+
+    if (!statusParam) {
+      setStatusFilters(new Set());
     }
-  }, [location.state]);
+  }, [statusParam, validStatuses]);
 
   const handleRowClick = (client: Client) => {
     navigate(`/clients/${client.id}`);
@@ -168,6 +176,22 @@ export function ClientsPage() {
   });
 
   const activeFilterCount = statusFilters.size + programFilters.size;
+
+  useEffect(() => {
+    if (!focusClientId) {
+      setSelectedClientId(null);
+      return;
+    }
+
+    const isFocusedClientVisible = filteredClients.some((client) => client.id === focusClientId);
+    setSelectedClientId(isFocusedClientVisible ? focusClientId : null);
+  }, [focusClientId, filteredClients]);
+
+  useEffect(() => {
+    if (selectedClientId && highlightedClientRef.current) {
+      highlightedClientRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [selectedClientId]);
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -429,6 +453,7 @@ export function ClientsPage() {
               return (
                 <Box
                   key={client.id}
+                  ref={isHighlighted ? highlightedClientRef : null}
                   onClick={() => handleRowClick(client)}
                   sx={{
                     display: 'flex',

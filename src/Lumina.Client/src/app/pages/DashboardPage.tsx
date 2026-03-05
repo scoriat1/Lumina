@@ -74,10 +74,10 @@ export function DashboardPage() {
   });
 
   const metricLinks = [
-    () => navigate('/clients', { state: { statusFilter: 'active', fromDashboard: true } }),
-    () => navigate('/sessions', { state: { dateRange: 'this-month', fromDashboard: true } }),
-    () => navigate('/billing'),
-    () => navigate('/calendar', { state: { viewMonth: 'current', fromDashboard: true } }),
+    () => navigate('/clients?status=active'),
+    () => navigate('/sessions?range=thisMonth'),
+    () => navigate('/billing?range=thisMonth'),
+    () => navigate('/calendar?range=thisMonth'),
   ];
 
   return (

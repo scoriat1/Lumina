@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   Accordion,
   AccordionDetails,
@@ -57,10 +57,12 @@ const locationLabelMap: Record<string, string> = {
 export function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [client, setClient] = useState<ClientDto | null>(null);
   const [sessions, setSessions] = useState<SessionDto[]>([]);
   const [selectedSession, setSelectedSession] = useState<SessionDto | null>(null);
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
+  const sessionsSectionRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = async () => {
     if (!id) return;
@@ -126,6 +128,12 @@ export function ClientDetailPage() {
     return [...groups.values()];
   }, [sessions, client?.program, client?.totalSessions]);
 
+  useEffect(() => {
+    if (searchParams.get('focus') === 'sessions' && sessionsSectionRef.current) {
+      sessionsSectionRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [searchParams, groupedEngagements.length]);
+
   if (!id) return <Typography>Client not found.</Typography>;
   if (!client) return <Typography>Loading client...</Typography>;
 
@@ -170,7 +178,7 @@ export function ClientDetailPage() {
             </CardContent>
           </Card>
 
-          <Box>
+          <Box ref={sessionsSectionRef}>
             <Typography variant="h6" sx={{ mb: 1.5 }}>Engagements</Typography>
             <Stack spacing={1.5}>
               {groupedEngagements.map((engagement) => {
