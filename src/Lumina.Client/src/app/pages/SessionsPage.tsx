@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Box,
   TextField,
@@ -48,7 +49,6 @@ import { apiClient } from '../api/client';
 type StatusFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
 type Session = Omit<SessionDto, 'date'> & { date: Date };
 const toSession = (session: SessionDto): Session => ({ ...session, date: new Date(session.date) });
-import { useSearchParams } from 'react-router';
 
 export function SessionsPage() {
   const [searchParams] = useSearchParams();
@@ -65,11 +65,28 @@ export function SessionsPage() {
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
-  const highlightedSessionRef = useRef<HTMLDivElement | HTMLTableRowElement | null>(null);
+  const sessionRowRefs = useRef(new Map<string, HTMLDivElement | HTMLTableRowElement | null>());
 
   const qParam = searchParams.get('q') ?? '';
   const rangeParam = searchParams.get('range');
-  const focusSessionId = searchParams.get('focusSessionId');
+  const focusSessionIdParam = searchParams.get('focusSessionId');
+  const focusSessionId = useMemo(() => {
+    if (!focusSessionIdParam) {
+      return null;
+    }
+
+    const parsed = Number(focusSessionIdParam);
+    return Number.isNaN(parsed) ? null : parsed;
+  }, [focusSessionIdParam]);
+
+  const setSessionRowRef = (sessionId: string) => (element: HTMLDivElement | HTMLTableRowElement | null) => {
+    if (element) {
+      sessionRowRefs.current.set(sessionId, element);
+      return;
+    }
+
+    sessionRowRefs.current.delete(sessionId);
+  };
 
   const loadSessions = async () => {
     const data = await apiClient.getSessions();
@@ -204,21 +221,35 @@ export function SessionsPage() {
   const hasMoreUpcoming = upcomingSessions.length > 6;
 
   useEffect(() => {
-    if (!focusSessionId) {
+    if (focusSessionId === null) {
       return;
     }
 
-    const focusedUpcomingSession = upcomingSessions.some((session) => session.id === focusSessionId);
-    if (focusedUpcomingSession) {
+    const focusedSession = sessionsData.find((session) => Number(session.id) === focusSessionId);
+    if (!focusedSession) {
+      return;
+    }
+
+    setSelectedSessionId(focusedSession.id);
+
+    if (rangeParam === 'upcoming' && focusedSession.status === 'upcoming') {
       setShowAllUpcoming(true);
     }
-  }, [focusSessionId, upcomingSessions]);
+  }, [focusSessionId, rangeParam, sessionsData]);
 
   useEffect(() => {
-    if (focusSessionId && highlightedSessionRef.current) {
-      highlightedSessionRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (focusSessionId === null) {
+      return;
     }
-  }, [focusSessionId, displayedUpcomingSessions, pastSessions]);
+
+    const focusedSession = filteredSessions.find((session) => Number(session.id) === focusSessionId);
+    if (!focusedSession) {
+      return;
+    }
+
+    const focusedSessionRow = sessionRowRefs.current.get(focusedSession.id);
+    focusedSessionRow?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focusSessionId, filteredSessions, displayedUpcomingSessions.length, pastSessions.length]);
 
   const getStatusStyles = (status: string) => {
     switch (status) {
@@ -723,14 +754,14 @@ export function SessionsPage() {
           </Typography>
           <Stack spacing={2}>
             {displayedUpcomingSessions.map((session) => {
-              const isHighlighted = session.id === focusSessionId;
+              const isHighlighted = session.id === selectedSessionId;
               const statusStyles = getStatusStyles(session.status);
               const paymentStyles = getPaymentStyles(session.payment);
 
               return (
                 <Box
                   key={session.id}
-                  ref={isHighlighted ? highlightedSessionRef : null}
+                  ref={setSessionRowRef(session.id)}
                   onClick={() => handleSessionClick(session)}
                   sx={{
                     display: 'flex',
@@ -999,12 +1030,13 @@ export function SessionsPage() {
                 <TableBody>
                   {pastSessions.map((session) => {
                     const statusStyles = getStatusStyles(session.status);
-                    const isHighlighted = session.id === focusSessionId;
+                    const isHighlighted = session.id === selectedSessionId;
 
                     return (
                       <TableRow
                         key={session.id}
-                        ref={isHighlighted ? highlightedSessionRef : null}
+                        ref={setSessionRowRef(session.id)}
+                        selected={isHighlighted}
                         onClick={() => handleSessionClick(session)}
                         sx={{
                           cursor: 'pointer',
