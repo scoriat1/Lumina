@@ -55,7 +55,7 @@ const locationLabelMap: Record<string, string> = {
 export function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [client, setClient] = useState<ClientDto | null>(null);
   const [sessions, setSessions] = useState<SessionDto[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -130,6 +130,35 @@ export function ClientDetailPage() {
     }
   }, [searchParams, groupedEngagements.length]);
 
+  useEffect(() => {
+    const sessionIdParam = searchParams.get('sessionId');
+
+    if (!sessionIdParam) {
+      setSelectedSessionId(null);
+      return;
+    }
+
+    setSelectedSessionId(sessionIdParam);
+  }, [searchParams]);
+
+  const handleOpenSessionDetails = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('sessionId', sessionId);
+      return next;
+    });
+  };
+
+  const handleCloseSessionDetails = () => {
+    setSelectedSessionId(null);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('sessionId');
+      return next;
+    });
+  };
+
   if (!id) return <Typography>Client not found.</Typography>;
   if (!client) return <Typography>Loading client...</Typography>;
 
@@ -174,7 +203,7 @@ export function ClientDetailPage() {
               )}
             </Box>
             {upcomingSession ? (
-              <Button onClick={() => setSelectedSessionId(upcomingSession.id)}>Open</Button>
+              <Button onClick={() => handleOpenSessionDetails(upcomingSession.id)}>Open</Button>
             ) : (
               <Button onClick={() => setIsNewSessionModalOpen(true)}>Schedule Session</Button>
             )}
@@ -209,7 +238,7 @@ export function ClientDetailPage() {
                   <AccordionDetails>
                     <List disablePadding>
                       {engagement.sessions.map((session) => (
-                        <ListItemButton key={session.id} onClick={() => setSelectedSessionId(session.id)}>
+                        <ListItemButton key={session.id} onClick={() => handleOpenSessionDetails(session.id)}>
                           <ListItemText
                             primary={session.sessionType}
                             secondary={`${format(new Date(session.date), 'MMM d, yyyy • h:mm a')} • ${session.duration} min • ${locationLabelMap[session.location] ?? session.location}`}
@@ -268,7 +297,7 @@ export function ClientDetailPage() {
 
       <SessionDetailsDrawer
         open={Boolean(selectedSessionId)}
-        onClose={() => setSelectedSessionId(null)}
+        onClose={handleCloseSessionDetails}
         sessionId={selectedSessionId}
         sessions={sessions}
         onSaved={loadData}
