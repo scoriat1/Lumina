@@ -26,7 +26,11 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
-          <IconButton aria-label="notifications" sx={{ color: colors.text.secondary, transition: transitions.base, '&:hover': { bgcolor: colors.surface.elevated } }}>
+          <IconButton
+            aria-label="notifications"
+            onClick={() => navigate('/notifications')}
+            sx={{ color: colors.text.secondary, transition: transitions.base, '&:hover': { bgcolor: colors.surface.elevated } }}
+          >
             <Badge badgeContent={3} sx={{ '& .MuiBadge-badge': { bgcolor: colors.brand.purple, color: '#FFFFFF', fontWeight: 600, fontSize: '11px', minWidth: '18px', height: '18px' } }}>
               <NotificationsIcon sx={{ fontSize: 22 }} />
             </Badge>

@@ -387,8 +387,10 @@ function PracticeSettings({
               <Typography sx={{ fontSize: '13px', fontWeight: 500, color: colors.text.primary, mb: 1 }}>
                 Practice Logo
               </Typography>
+              {/* TODO(nav): wire logo upload picker and persistence endpoint. */}
               <Button
                 variant="outlined"
+                disabled
                 startIcon={<CloudUpload sx={{ fontSize: '18px' }} />}
                 sx={{
                   borderColor: colors.neutral.gray200,
@@ -618,8 +620,10 @@ function ProvidersSettings({ providers }: any) {
       <ContentCard>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <SectionHeader title="Providers" />
+          {/* TODO(nav): wire provider invitation flow. */}
           <Button
             variant="outlined"
+            disabled
             startIcon={<Add sx={{ fontSize: '18px' }} />}
             sx={{
               borderColor: colors.neutral.gray200,
@@ -716,7 +720,8 @@ function ProvidersSettings({ providers }: any) {
                 </Typography>
               </Box>
 
-              <IconButton size="small" sx={{ color: colors.text.secondary }}>
+              <IconButton size="small" disabled sx={{ color: colors.text.secondary }}>
+                {/* TODO(nav): wire provider overflow actions menu. */}
                 <MoreVert sx={{ fontSize: '20px' }} />
               </IconButton>
             </Box>
@@ -749,8 +754,10 @@ function PackagesSettings({ packages }: any) {
       <ContentCard>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <SectionHeader title="Packages" />
+          {/* TODO(nav): wire package creation flow. */}
           <Button
             variant="outlined"
+            disabled
             startIcon={<Add sx={{ fontSize: '18px' }} />}
             sx={{
               borderColor: colors.neutral.gray200,
@@ -852,8 +859,10 @@ function PackagesSettings({ packages }: any) {
                     }}
                   />
                 </Box>
+                {/* TODO(nav): wire package edit flow. */}
                 <IconButton
                   size="small"
+                  disabled
                   sx={{
                     color: colors.text.secondary,
                     '&:hover': { color: colors.primary.main },
@@ -1126,9 +1135,11 @@ function AvailabilitySettings({ timeZone, applyToAllProviders, setApplyToAllProv
                   sx={textFieldStyles}
                 />
               </Box>
+              {/* TODO(nav): wire remove time slot action to working hours state. */}
               <Button
                 variant="text"
                 size="small"
+                disabled
                 sx={{
                   color: colors.text.secondary,
                   textTransform: 'none',
@@ -1143,8 +1154,10 @@ function AvailabilitySettings({ timeZone, applyToAllProviders, setApplyToAllProv
           ))}
         </Box>
 
+        {/* TODO(nav): wire add time slot action to working hours state. */}
         <Button
           variant="text"
+          disabled
           startIcon={<Add sx={{ fontSize: '16px' }} />}
           sx={{
             color: colors.text.secondary,
@@ -1327,8 +1340,10 @@ function RolesSettings({ roles }: any) {
                     {role.description}
                   </Typography>
                 </Box>
+                {/* TODO(nav): wire role edit flow. */}
                 <IconButton
                   size="small"
+                  disabled
                   sx={{
                     color: colors.text.secondary,
                     '&:hover': { color: colors.primary.main },
