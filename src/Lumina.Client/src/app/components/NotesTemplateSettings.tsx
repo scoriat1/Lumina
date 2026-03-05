@@ -3,7 +3,7 @@ import { Box, Typography, Button, TextField, Chip, IconButton, Tooltip } from '@
 import { Add, ContentCopy, Edit } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { colors } from '../styles/colors';
-import { useNotesTemplate, Template } from '../contexts/NotesTemplateContext';
+import { useNotesTemplate, Template, TemplateField } from '../contexts/NotesTemplateContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../api/client';
 
@@ -25,46 +25,70 @@ export function NotesTemplateSettings() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateFields, setNewTemplateFields] = useState<string[]>(['']);
+  const [newTemplateFieldDetails, setNewTemplateFieldDetails] = useState<TemplateField[]>([{ id: 0, label: '', sortOrder: 1 }]);
 
   const handleAddField = () => {
     setNewTemplateFields([...newTemplateFields, '']);
+    setNewTemplateFieldDetails([...newTemplateFieldDetails, { id: 0, label: '', sortOrder: newTemplateFieldDetails.length + 1 }]);
   };
 
   const handleRemoveField = (index: number) => {
     const updated = newTemplateFields.filter((_, i) => i !== index);
     setNewTemplateFields(updated);
+    const updatedDetails = newTemplateFieldDetails
+      .filter((_, i) => i !== index)
+      .map((field, idx) => ({ ...field, sortOrder: idx + 1 }));
+    setNewTemplateFieldDetails(updatedDetails);
   };
 
   const handleFieldChange = (index: number, value: string) => {
     const updated = [...newTemplateFields];
     updated[index] = value;
     setNewTemplateFields(updated);
+
+    const updatedDetails = [...newTemplateFieldDetails];
+    updatedDetails[index] = { ...updatedDetails[index], label: value };
+    setNewTemplateFieldDetails(updatedDetails);
   };
 
-  const handleSaveCustomTemplate = () => {
-    if (newTemplateName.trim() && newTemplateFields.some(f => f.trim())) {
-      if (editingTemplateId) {
-        // Update existing template
-        setCustomTemplates(customTemplates.map(t => 
-          t.id === editingTemplateId 
-            ? { ...t, name: newTemplateName, fields: newTemplateFields.filter(f => f.trim()) }
-            : t
-        ));
-        setEditingTemplateId(null);
-      } else {
-        // Create new template
-        const newTemplate: Template = {
-          id: `custom-${Date.now()}`,
+  const resetEditor = () => {
+    setIsCreatingTemplate(false);
+    setEditingTemplateId(null);
+    setNewTemplateName('');
+    setNewTemplateFields(['']);
+    setNewTemplateFieldDetails([{ id: 0, label: '', sortOrder: 1 }]);
+  };
+
+  const handleSaveCustomTemplate = async () => {
+    if (!user?.practiceId || !newTemplateName.trim() || !newTemplateFields.some(f => f.trim())) return;
+
+    if (editingTemplateId) {
+      try {
+        const payloadFields = newTemplateFieldDetails
+          .map((field, index) => ({
+            ...field,
+            label: (newTemplateFields[index] ?? field.label).trim(),
+            sortOrder: index + 1,
+          }))
+          .filter((field) => field.label);
+
+        const updatedTemplate = await apiClient.updateTemplate(editingTemplateId, {
+          practiceId: user.practiceId,
           name: newTemplateName,
-          fields: newTemplateFields.filter(f => f.trim()),
-          custom: true,
-        };
-        setCustomTemplates([...customTemplates, newTemplate]);
+          fields: payloadFields,
+        });
+
+        setCustomTemplates(customTemplates.map(t => (t.id === editingTemplateId ? updatedTemplate : t)));
+        resetEditor();
+        window.alert('Template saved.');
+      } catch {
+        window.alert('Failed to save template changes.');
       }
-      setIsCreatingTemplate(false);
-      setNewTemplateName('');
-      setNewTemplateFields(['']);
+
+      return;
     }
+
+    window.alert('Create custom template from a preset using Duplicate.');
   };
 
   const handleDuplicateTemplate = async (template: Template) => {
@@ -86,6 +110,7 @@ export function NotesTemplateSettings() {
   const handleEditCustomTemplate = (template: Template) => {
     setNewTemplateName(template.name);
     setNewTemplateFields([...template.fields]);
+    setNewTemplateFieldDetails(template.fieldsDetail?.map((field, index) => ({ ...field, sortOrder: index + 1 })) ?? template.fields.map((field, index) => ({ id: 0, label: field, sortOrder: index + 1 })));
     setEditingTemplateId(template.id);
     setIsCreatingTemplate(true);
   };
@@ -98,10 +123,7 @@ export function NotesTemplateSettings() {
   };
 
   const handleCancelEdit = () => {
-    setIsCreatingTemplate(false);
-    setEditingTemplateId(null);
-    setNewTemplateName('');
-    setNewTemplateFields(['']);
+    resetEditor();
   };
 
   return (

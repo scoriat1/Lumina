@@ -2,10 +2,19 @@ import { createContext, useCallback, useContext, useEffect, useState, type Dispa
 import { apiClient } from '../api/client';
 import { useAuth } from './AuthContext';
 
+export interface TemplateField {
+  id: number;
+  label: string;
+  sortOrder: number;
+  fieldType?: string;
+}
+
 export interface Template {
   id: string;
   name: string;
+  description?: string;
   fields: string[];
+  fieldsDetail?: TemplateField[];
   custom?: boolean;
 }
 
@@ -33,7 +42,7 @@ export function NotesTemplateProvider({ children }: { children: ReactNode }) {
   const refreshTemplates = useCallback(async () => {
     if (!user?.practiceId) return;
 
-    const [presets, custom] = await Promise.all([apiClient.getTemplatePresets(), apiClient.getCustomTemplates()]);
+    const [presets, custom] = await Promise.all([apiClient.getTemplatePresets(), apiClient.getCustomTemplates(user.practiceId)]);
     setPresetTemplates(presets);
     setCustomTemplates(custom);
   }, [user?.practiceId]);

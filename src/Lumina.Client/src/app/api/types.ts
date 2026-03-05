@@ -85,7 +85,7 @@ export interface ProviderDto {
 }
 
 export interface TemplateFieldDto {
-  id: string;
+  id: number;
   label: string;
   sortOrder: number;
   fieldType?: string;

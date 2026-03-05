@@ -7,6 +7,7 @@ import type {
   ProviderDto,
   SessionDto,
   TemplateDto,
+  TemplateFieldDto,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
@@ -78,13 +79,23 @@ const mapProviderDto = (provider: ProviderApiDto): ProviderDto => ({
   initials: provider.initials ?? computeInitials(provider.name),
 });
 
-const mapTemplateDto = (template: TemplateDto): TemplateDto => ({
-  ...template,
-  id: String(template.id),
-  fields: template.fieldsDetail?.length
-    ? [...template.fieldsDetail].sort((a, b) => a.sortOrder - b.sortOrder).map((field) => field.label)
-    : template.fields,
-});
+const mapTemplateDto = (template: TemplateDto): TemplateDto => {
+  const normalizedFields = template.fieldsDetail?.length
+    ? [...template.fieldsDetail].sort((a, b) => a.sortOrder - b.sortOrder)
+    : (template.fields || []).map((label, index) => ({
+      id: 0,
+      label,
+      sortOrder: index + 1,
+      fieldType: undefined,
+    } as TemplateFieldDto));
+
+  return {
+    ...template,
+    id: String(template.id),
+    fieldsDetail: normalizedFields,
+    fields: normalizedFields.map((field) => field.label),
+  };
+};
 
 export const apiClient = {
   getHealth: () => request<{ status: string }>('/health'),
@@ -149,9 +160,33 @@ export const apiClient = {
     const templates = await request<TemplateDto[]>('/api/templates/presets');
     return templates.map(mapTemplateDto);
   },
-  getCustomTemplates: async () => {
-    const templates = await request<TemplateDto[]>('/api/templates/custom');
+  getCustomTemplates: async (practiceId: string | number) => {
+    const templates = await request<TemplateDto[]>(`/api/templates/custom?practiceId=${encodeURIComponent(String(practiceId))}`);
     return templates.map(mapTemplateDto);
+  },
+
+  updateTemplate: async (templateId: string | number, payload: {
+    practiceId: string | number;
+    name: string;
+    description?: string;
+    fields: Array<{ id: number; label: string; sortOrder: number; fieldType?: string | null }>;
+  }) => {
+    const template = await request<TemplateDto>(`/api/templates/${templateId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        practiceId: Number(payload.practiceId),
+        name: payload.name.trim(),
+        description: payload.description?.trim() || undefined,
+        fields: payload.fields.map((field, index) => ({
+          id: Number(field.id) || 0,
+          label: field.label,
+          sortOrder: index + 1,
+          fieldType: field.fieldType ?? null,
+        })),
+      }),
+    });
+
+    return mapTemplateDto(template);
   },
   duplicateTemplateFromPreset: async (payload: { practiceId: string | number; sourcePresetId: string | number; name?: string }) => {
     const template = await request<TemplateDto>('/api/templates/from-preset', {
