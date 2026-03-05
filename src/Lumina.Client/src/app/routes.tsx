@@ -11,7 +11,8 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProductRulesPage } from './pages/ProductRulesPage';
 import { LoginPage } from './pages/LoginPage';
-import { AuthGate } from './components/AuthGate';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { UnauthorizedPage } from './pages/UnauthorizedPage';
 
 export const router = createBrowserRouter([
   {
@@ -19,8 +20,12 @@ export const router = createBrowserRouter([
     Component: LoginPage,
   },
   {
+    path: '/unauthorized',
+    Component: UnauthorizedPage,
+  },
+  {
     path: '/',
-    element: <AuthGate><RootLayout /></AuthGate>,
+    element: <ProtectedRoute><RootLayout /></ProtectedRoute>,
     children: [
       { index: true, Component: DashboardPage },
       { path: 'product-rules', Component: ProductRulesPage },

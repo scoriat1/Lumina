@@ -39,7 +39,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             <KeyboardArrowDownIcon sx={{ display: { xs: 'none', sm: 'block' }, fontSize: 20, color: colors.text.muted }} />
           </Box>
           <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-            <MenuItem onClick={async () => { await logout(); navigate('/login'); }}>Logout</MenuItem>
+            <MenuItem onClick={async () => { try { await logout(); } finally { navigate('/login'); } }}>Logout</MenuItem>
           </Menu>
         </Box>
       </Toolbar>

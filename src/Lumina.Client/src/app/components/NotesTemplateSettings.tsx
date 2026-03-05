@@ -6,6 +6,7 @@ import { colors } from '../styles/colors';
 import { useNotesTemplate, Template, TemplateField } from '../contexts/NotesTemplateContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiClient } from '../api/client';
+import toast from 'react-hot-toast';
 
 export function NotesTemplateSettings() {
   const { user } = useAuth();
@@ -80,15 +81,15 @@ export function NotesTemplateSettings() {
 
         setCustomTemplates(customTemplates.map(t => (t.id === editingTemplateId ? updatedTemplate : t)));
         resetEditor();
-        window.alert('Template saved.');
+        toast.success('Template saved');
       } catch {
-        window.alert('Failed to save template changes.');
+        toast.error('Failed to save template');
       }
 
       return;
     }
 
-    window.alert('Create custom template from a preset using Duplicate.');
+    toast.error('Create custom template from a preset using Duplicate.');
   };
 
   const handleDuplicateTemplate = async (template: Template) => {
