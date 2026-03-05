@@ -84,10 +84,21 @@ export interface ProviderDto {
   avatarColor: string;
 }
 
+export interface TemplateFieldDto {
+  id: string;
+  label: string;
+  sortOrder: number;
+  fieldType?: string;
+}
+
 export interface TemplateDto {
   id: string;
   name: string;
   description?: string;
+  practiceId?: number;
+  sourcePresetId?: number;
+  createdAt?: string;
   fields: string[];
+  fieldsDetail?: TemplateFieldDto[];
   custom?: boolean;
 }
