@@ -242,6 +242,7 @@ export function BillingPage() {
           return (
             <Box
               key={invoice.id}
+              data-testid={`billing-invoice-row-${invoice.id}`}
               onClick={() => handleInvoiceClick(invoice)}
               sx={{
                 display: 'flex',
@@ -374,6 +375,7 @@ export function BillingPage() {
 
       {/* Invoice Detail Drawer */}
       <Drawer
+        data-testid="billing-invoice-drawer"
         anchor="right"
         open={drawerOpen}
         onClose={handleDrawerClose}
@@ -421,7 +423,7 @@ export function BillingPage() {
                   }}
                 />
               </Box>
-              <IconButton onClick={handleDrawerClose} sx={{ color: '#7A746F' }}>
+              <IconButton data-testid="billing-invoice-drawer-close" onClick={handleDrawerClose} sx={{ color: '#7A746F' }}>
                 <CloseIcon />
               </IconButton>
             </Box>

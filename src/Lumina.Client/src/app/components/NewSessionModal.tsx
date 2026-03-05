@@ -217,7 +217,7 @@ export function NewSessionModal({ open, onClose, onCreated, preselectedClientId,
   };
 
   return (
-    <Dialog
+    <Dialog data-testid="new-session-modal"
       open={open}
       onClose={onClose}
       maxWidth="lg"
@@ -258,7 +258,7 @@ export function NewSessionModal({ open, onClose, onCreated, preselectedClientId,
           Schedule Session
         </Typography>
 
-        <IconButton
+        <IconButton data-testid="new-session-modal-close"
           onClick={onClose}
           sx={{
             color: colors.text.tertiary,

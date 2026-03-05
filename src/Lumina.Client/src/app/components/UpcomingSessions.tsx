@@ -66,7 +66,9 @@ export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
           }}>
             Upcoming Sessions
           </Typography>
-          <Typography variant="body2" sx={{
+          <Typography
+            data-testid="dashboard-upcoming-view-all"
+            variant="body2" sx={{
             color: colors.text.secondary,
             fontWeight: 600,
             cursor: 'pointer',
@@ -86,6 +88,7 @@ export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
             return (
               <Box
                 key={session.id}
+                data-testid={`dashboard-upcoming-session-${session.id}`}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',

@@ -186,7 +186,7 @@ export function ClientDetailPage() {
                 <Typography variant="body2" color="text.secondary">Client since {format(new Date(client.startDate), 'MMMM d, yyyy')}</Typography>
               </Box>
             </Stack>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsNewSessionModalOpen(true)}>New Session</Button>
+            <Button data-testid="client-detail-new-session" variant="contained" startIcon={<AddIcon />} onClick={() => setIsNewSessionModalOpen(true)}>New Session</Button>
           </Stack>
         </CardContent>
       </Card>
@@ -243,7 +243,7 @@ export function ClientDetailPage() {
                   <AccordionDetails>
                     <List disablePadding>
                       {engagement.sessions.map((session) => (
-                        <ListItemButton key={session.id} onClick={() => handleOpenSessionDetails(session.id)}>
+                        <ListItemButton data-testid={`client-detail-session-row-${session.id}`} key={session.id} onClick={() => handleOpenSessionDetails(session.id)}>
                           <ListItemText
                             primary={session.sessionType}
                             secondary={`${format(new Date(session.date), 'MMM d, yyyy • h:mm a')} • ${session.duration} min • ${locationLabelMap[session.location] ?? session.location}`}

@@ -84,6 +84,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
               <Tooltip title={item.text} placement="right" arrow>
                 <ListItemButton
+                  data-testid={`sidebar-nav-${item.path === '/' ? 'dashboard' : item.path.slice(1)}`}
                   onClick={() => handleNavigation(item.path)}
                   sx={{
                     borderRadius: borderRadius.xl,
@@ -125,6 +126,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
               <Tooltip title={item.text} placement="right" arrow>
                 <ListItemButton
+                  data-testid={`sidebar-nav-${item.path.slice(1)}`}
                   onClick={() => handleNavigation(item.path)}
                   sx={{
                     borderRadius: borderRadius.xl,

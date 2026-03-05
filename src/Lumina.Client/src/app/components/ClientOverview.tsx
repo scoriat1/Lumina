@@ -63,7 +63,9 @@ export function ClientOverview({ clients }: ClientOverviewProps) {
           }}>
             Active Clients
           </Typography>
-          <Typography variant="body2" sx={{
+          <Typography
+            data-testid="dashboard-clients-view-all"
+            variant="body2" sx={{
             color: colors.text.secondary,
             fontWeight: 600,
             cursor: 'pointer',

@@ -453,6 +453,7 @@ export function ClientsPage() {
               return (
                 <Box
                   key={client.id}
+                  data-testid={`clients-row-${client.id}`}
                   ref={isHighlighted ? highlightedClientRef : null}
                   onClick={() => handleRowClick(client)}
                   sx={{

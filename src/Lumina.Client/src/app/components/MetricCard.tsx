@@ -18,7 +18,9 @@ interface MetricCardProps {
 
 export function MetricCard({ title, value, subtitle, trend, icon, color, onClick }: MetricCardProps) {
   return (
-    <Card sx={{
+    <Card
+      data-testid={`metric-card-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`}
+      sx={{
       height: '100%',
       bgcolor: 'white',
       border: `1px solid ${colors.border.subtle}`,
