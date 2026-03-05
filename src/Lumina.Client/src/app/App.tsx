@@ -8,7 +8,7 @@ import { Toaster } from 'react-hot-toast';
 
 // Clean theme provider wrapper
 function CleanThemeProvider({ children }: { children: React.ReactNode }) {
-  return MuiThemeProvider({ theme, children });
+  return <MuiThemeProvider theme={theme}>{children}</MuiThemeProvider>;
 }
 
 function AppContent() {
