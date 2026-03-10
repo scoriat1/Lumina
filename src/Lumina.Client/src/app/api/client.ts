@@ -144,6 +144,18 @@ export const apiClient = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  updateClient: (id: string, payload: {
+    name: string;
+    email: string;
+    phone: string;
+    program: string;
+    startDate: string;
+    status: 'active' | 'paused' | 'completed';
+    notes: string | null;
+  }) => request<void>(`/api/clients/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
   getClient: async (id: string) => {
     const client = await request<ClientApiDto>(`/api/clients/${id}`);
     return mapClientDto(client);

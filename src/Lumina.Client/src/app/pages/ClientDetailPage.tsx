@@ -9,6 +9,11 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Alert,
   IconButton,
   LinearProgress,
   List,
@@ -74,6 +79,11 @@ export function ClientDetailPage() {
   const [noteDraft, setNoteDraft] = useState('');
   const [noteType, setNoteType] = useState<NoteType>('general');
   const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [isContactEditOpen, setIsContactEditOpen] = useState(false);
+  const [contactDraft, setContactDraft] = useState({ email: '', phone: '' });
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
   const sessionsSectionRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = async () => {
@@ -139,12 +149,54 @@ export function ClientDetailPage() {
   const handleAddClientNote = async () => {
     if (!id || !noteDraft.trim()) return;
     setSavingNote(true);
+    setNoteError(null);
     try {
       await apiClient.createClientNote(id, { content: noteDraft.trim(), type: noteType, source: 'client-detail' });
       setNoteDraft('');
       await loadData();
+    } catch {
+      setNoteError('Unable to save note. Please try again.');
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  const handleOpenContactEdit = () => {
+    if (!client) return;
+    setContactDraft({ email: client.email ?? '', phone: client.phone ?? '' });
+    setContactError(null);
+    setIsContactEditOpen(true);
+  };
+
+  const handleCancelContactEdit = () => {
+    setIsContactEditOpen(false);
+    setContactError(null);
+    if (client) {
+      setContactDraft({ email: client.email ?? '', phone: client.phone ?? '' });
+    }
+  };
+
+  const handleSaveContactEdit = async () => {
+    if (!id || !client) return;
+    setSavingContact(true);
+    setContactError(null);
+
+    try {
+      await apiClient.updateClient(id, {
+        name: client.name,
+        program: client.program,
+        startDate: client.startDate,
+        status: client.status,
+        notes: client.notes?.trim() ? client.notes : null,
+        email: contactDraft.email.trim(),
+        phone: contactDraft.phone.trim(),
+      });
+      setIsContactEditOpen(false);
+      await loadData();
+    } catch {
+      setContactError('Unable to save contact information. Please try again.');
+    } finally {
+      setSavingContact(false);
     }
   };
 
@@ -309,7 +361,7 @@ export function ClientDetailPage() {
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>Contact Information</Typography>
-                <IconButton size="small" disabled>
+                <IconButton size="small" onClick={handleOpenContactEdit}>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Stack>
@@ -351,6 +403,12 @@ export function ClientDetailPage() {
                 )}
               </Stack>
 
+              {noteError ? (
+                <Alert severity="error" sx={{ mb: 1 }}>
+                  {noteError}
+                </Alert>
+              ) : null}
+
               <TextField
                 size="small"
                 select
@@ -377,6 +435,38 @@ export function ClientDetailPage() {
           </Card>
         </Stack>
       </Box>
+
+      <Dialog open={isContactEditOpen} onClose={savingContact ? undefined : handleCancelContactEdit} fullWidth maxWidth="xs">
+        <DialogTitle>Edit Contact Information</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.25} sx={{ pt: 0.5 }}>
+            {contactError ? <Alert severity="error">{contactError}</Alert> : null}
+            <TextField
+              label="Email"
+              type="email"
+              fullWidth
+              value={contactDraft.email}
+              onChange={(e) => setContactDraft((prev) => ({ ...prev, email: e.target.value }))}
+            />
+            <TextField
+              label="Phone"
+              fullWidth
+              value={contactDraft.phone}
+              onChange={(e) => setContactDraft((prev) => ({ ...prev, phone: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelContactEdit} disabled={savingContact}>Cancel</Button>
+          <Button
+            onClick={handleSaveContactEdit}
+            variant="contained"
+            disabled={savingContact || !contactDraft.email.trim() || !contactDraft.phone.trim()}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <SessionDetailsDrawer
         open={Boolean(selectedSessionId)}
