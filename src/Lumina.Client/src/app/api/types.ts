@@ -32,6 +32,69 @@ export interface SessionDto {
   packageRemaining?: number;
   focus: string;
   notes?: string;
+  packageId?: string;
+  clientPackageId?: string;
+  packageName?: string;
+  packagePrice?: string;
+}
+
+export interface SessionStructuredNoteDto {
+  id: string;
+  sessionId?: string;
+  clientId: string;
+  templateId?: number;
+  noteType: string;
+  source?: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientNoteDto {
+  id: string;
+  clientId: string;
+  sessionId?: string;
+  type: string;
+  content: string;
+  source?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ClientDetailEngagementDto {
+  id: string;
+  packageId?: string;
+  clientPackageId?: string;
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  price?: number;
+  totalSessions: number;
+  usedSessions: number;
+  status: string;
+  sessions: SessionDto[];
+}
+
+export interface ClientTimelineEntryDto {
+  id: string;
+  entryType: 'session' | 'note';
+  category: string;
+  sessionId?: string;
+  createdAt: string;
+  content: string;
+  session?: SessionDto;
+}
+
+export interface ClientDetailViewDto {
+  nextStep?: {
+    sessionId: string;
+    date: string;
+    sessionType: string;
+    location: string;
+  } | null;
+  engagements: ClientDetailEngagementDto[];
+  timeline: ClientTimelineEntryDto[];
+  clientNotes: ClientNoteDto[];
 }
 
 export interface DashboardDto {

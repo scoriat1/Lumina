@@ -297,6 +297,151 @@ api.MapGet("/clients/{id:int}/sessions", async (int id, LuminaDbContext db, Http
     return Results.Ok(sessions);
 });
 
+api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var client = await db.Clients
+        .AsNoTracking()
+        .FirstOrDefaultAsync(c => c.PracticeId == scope.Value.practiceId && c.Id == id);
+    if (client is null) return Results.NotFound();
+
+    var sessions = await db.Sessions
+        .AsNoTracking()
+        .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
+        .OrderBy(s => s.Date)
+        .ToListAsync();
+
+    var packages = await db.ClientPackages
+        .AsNoTracking()
+        .Where(cp => cp.PracticeId == scope.Value.practiceId && cp.ClientId == id)
+        .Include(cp => cp.Package)
+        .OrderBy(cp => cp.PurchasedAt)
+        .ToListAsync();
+
+    var notes = await db.SessionNotes
+        .AsNoTracking()
+        .Where(n => n.ClientId == id)
+        .OrderByDescending(n => n.CreatedAt)
+        .ToListAsync();
+
+    var upcomingSession = sessions
+        .Where(s => s.Date >= DateTimeOffset.UtcNow)
+        .OrderBy(s => s.Date)
+        .FirstOrDefault();
+
+    var packageBoundaries = packages
+        .Select((pkg, index) => new
+        {
+            Package = pkg,
+            Start = pkg.PurchasedAt,
+            End = index + 1 < packages.Count ? packages[index + 1].PurchasedAt : DateTimeOffset.MaxValue
+        })
+        .ToList();
+
+    var engagementGroups = packageBoundaries
+        .Select(boundary =>
+        {
+            var packageSessions = sessions
+                .Where(s => s.Date >= boundary.Start && s.Date < boundary.End)
+                .ToList();
+
+            var completed = Math.Max(0, boundary.Package.Package.SessionCount - boundary.Package.RemainingSessions);
+            var start = packageSessions.MinBy(s => s.Date)?.Date ?? boundary.Package.PurchasedAt;
+            var end = packageSessions.MaxBy(s => s.Date)?.Date;
+
+            return new
+            {
+                id = $"package-{boundary.Package.Id}",
+                packageId = (int?)boundary.Package.PackageId,
+                clientPackageId = (int?)boundary.Package.Id,
+                name = boundary.Package.Package.Name,
+                startDate = start,
+                endDate = end,
+                price = boundary.Package.Package.Price,
+                totalSessions = boundary.Package.Package.SessionCount,
+                usedSessions = completed,
+                status = boundary.Package.RemainingSessions <= 0 ? "completed" : "active",
+                sessions = packageSessions.Select(s => MapSessionDto(s, client.Name)).ToList()
+            };
+        })
+        .ToList();
+
+    var assignedSessionIds = engagementGroups
+         .SelectMany(group => group.sessions.Select(s => s.id))
+        .ToHashSet();
+
+    var singleSessions = sessions
+        .Where(s => !assignedSessionIds.Contains(s.Id))
+        .ToList();
+
+    if (singleSessions.Count > 0)
+    {
+        engagementGroups.Add(new
+        {
+            id = "single-sessions",
+            packageId = (int?)null,
+            clientPackageId = (int?)null,
+            name = "Single Sessions",
+            startDate = singleSessions.MinBy(s => s.Date)?.Date,
+            endDate = singleSessions.MaxBy(s => s.Date)?.Date,
+            price = (decimal?)null,
+            totalSessions = singleSessions.Count,
+            usedSessions = singleSessions.Count(s => s.Status == SessionStatus.Completed),
+            status = "active",
+            sessions = singleSessions.Select(s => MapSessionDto(s, client.Name)).ToList()
+        });
+    }
+
+    var timeline = sessions.Select(session => new
+    {
+        id = $"session-{session.Id}",
+        entryType = "session",
+        category = session.Status.ToString().ToLowerInvariant(),
+        sessionId = (int?)session.Id,
+        createdAt = session.Date,
+        content = session.Focus,
+        session = (ApiSessionItem?)MapSessionDto(session, client.Name)
+    }).Concat(notes.Where(n => n.Source != "session-details").Select(note => new
+    {
+        id = $"note-{note.Id}",
+        entryType = "note",
+        category = string.IsNullOrWhiteSpace(note.NoteType) ? "general" : note.NoteType,
+        sessionId = note.SessionId,
+        createdAt = note.CreatedAt,
+        content = note.Content,
+        session = (ApiSessionItem?)null
+    }))
+    .OrderByDescending(entry => entry.createdAt)
+    .ToList();
+
+    return Results.Ok(new
+    {
+        nextStep = upcomingSession is null ? null : new
+        {
+            sessionId = upcomingSession.Id,
+            date = upcomingSession.Date,
+            sessionType = upcomingSession.SessionType,
+            location = upcomingSession.Location.ToString().ToLowerInvariant()
+        },
+        engagements = engagementGroups,
+        timeline,
+        clientNotes = notes
+            .Where(n => n.SessionId is null)
+            .Select(n => new
+            {
+                id = n.Id,
+                type = n.NoteType,
+                content = n.Content,
+                createdAt = n.CreatedAt,
+                source = n.Source
+            })
+            .OrderByDescending(n => n.createdAt)
+            .ToList()
+    });
+});
+
 api.MapGet("/sessions", async (int? clientId, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
@@ -393,6 +538,130 @@ api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, Lu
     if (request.Notes is not null) session.Notes = request.Notes;
     await db.SaveChangesAsync();
     return Results.Ok();
+});
+
+api.MapGet("/sessions/{id:int}/note", async (int id, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var session = await db.Sessions
+        .AsNoTracking()
+        .FirstOrDefaultAsync(s => s.Id == id && s.PracticeId == scope.Value.practiceId);
+    if (session is null) return Results.NotFound();
+
+    var note = await db.SessionNotes
+        .AsNoTracking()
+        .FirstOrDefaultAsync(n => n.SessionId == id && n.Source == "session-details");
+
+    return note is null
+        ? Results.Ok(new { note = (object?)null })
+        : Results.Ok(new
+        {
+            note = new
+            {
+                id = note.Id,
+                sessionId = note.SessionId,
+                clientId = note.ClientId,
+                templateId = note.TemplateId,
+                noteType = note.NoteType,
+                source = note.Source,
+                content = note.Content,
+                createdAt = note.CreatedAt,
+                updatedAt = note.UpdatedAt
+            }
+        });
+});
+
+api.MapPut("/sessions/{id:int}/note", async (int id, SessionStructuredNoteRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var session = await db.Sessions
+        .FirstOrDefaultAsync(s => s.Id == id && s.PracticeId == scope.Value.practiceId);
+    if (session is null) return Results.NotFound();
+
+    var note = await db.SessionNotes
+        .FirstOrDefaultAsync(n => n.SessionId == id && n.Source == "session-details");
+
+    if (note is null)
+    {
+        note = new SessionNote
+        {
+            ClientId = session.ClientId,
+            SessionId = session.Id,
+            CreatedAt = DateTimeOffset.UtcNow,
+            Source = "session-details"
+        };
+        db.SessionNotes.Add(note);
+    }
+
+    note.TemplateId = request.TemplateId;
+    note.NoteType = string.IsNullOrWhiteSpace(request.NoteType) ? "general" : request.NoteType.Trim().ToLowerInvariant();
+    note.Content = request.Content;
+    note.UpdatedAt = DateTimeOffset.UtcNow;
+
+    session.Notes = request.LegacyNotes;
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok();
+});
+
+api.MapGet("/clients/{id:int}/notes", async (int id, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == id && c.PracticeId == scope.Value.practiceId);
+    if (!clientExists) return Results.NotFound();
+
+    var notes = await db.SessionNotes
+        .AsNoTracking()
+        .Where(n => n.ClientId == id && n.SessionId == null)
+        .OrderByDescending(n => n.CreatedAt)
+        .Select(n => new
+        {
+            id = n.Id,
+            clientId = n.ClientId,
+            sessionId = n.SessionId,
+            type = n.NoteType,
+            content = n.Content,
+            source = n.Source,
+            createdAt = n.CreatedAt,
+            updatedAt = n.UpdatedAt
+        })
+        .ToListAsync();
+
+    return Results.Ok(notes);
+});
+
+api.MapPost("/clients/{id:int}/notes", async (int id, ClientNoteCreateRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == id && c.PracticeId == scope.Value.practiceId);
+    if (!clientExists) return Results.NotFound();
+    if (string.IsNullOrWhiteSpace(request.Content)) return Results.BadRequest(new { message = "Content is required." });
+
+    var now = DateTimeOffset.UtcNow;
+    var note = new SessionNote
+    {
+        ClientId = id,
+        SessionId = null,
+        NoteType = string.IsNullOrWhiteSpace(request.Type) ? "general" : request.Type.Trim().ToLowerInvariant(),
+        Source = string.IsNullOrWhiteSpace(request.Source) ? "client-detail" : request.Source.Trim(),
+        Content = request.Content.Trim(),
+        CreatedAt = now,
+        UpdatedAt = now
+    };
+
+    db.SessionNotes.Add(note);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { id = note.Id });
 });
 
 api.MapGet("/billing/summary", async (LuminaDbContext db, HttpContext context) =>
@@ -663,6 +932,22 @@ api.MapPut("/templates/{templateId:int}", async (int templateId, TemplateUpdateR
     return Results.Ok(MapTemplateResponse(updatedTemplate));
 });
 
+api.MapDelete("/templates/{templateId:int}", async (int templateId, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var template = await db.Templates
+        .FirstOrDefaultAsync(t => t.Id == templateId && t.PracticeId == scope.Value.practiceId);
+
+    if (template is null) return Results.NotFound();
+    if (template.SourcePresetId.HasValue) return Results.BadRequest(new { message = "Seeded templates cannot be deleted." });
+
+    db.Templates.Remove(template);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
 api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
@@ -733,6 +1018,25 @@ static TemplateResponse MapTemplateResponse(Template template)
         true);
 }
 
+static ApiSessionItem MapSessionDto(Session session, string clientName)
+{
+    return new ApiSessionItem(
+        session.Id,
+        session.ClientId,
+        clientName,
+        session.SessionType,
+        session.Date,
+        session.Duration,
+        session.Location.ToString().ToLowerInvariant(),
+        session.Status.ToString().ToLowerInvariant(),
+        "paid",
+        "paid",
+        "pay-per-session",
+        null,
+        session.Focus,
+        session.Notes);
+}
+
 app.Run();
 
 static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpContext context, LuminaDbContext db)
@@ -750,5 +1054,8 @@ public record ClientUpsertRequest(string Name, string Email, string Phone, strin
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
 public record TemplateUpdateRequest(int PracticeId, string Name, string? Description, IReadOnlyList<TemplateUpdateFieldRequest> Fields);
 public record TemplateUpdateFieldRequest(int Id, string Label, int SortOrder, string? FieldType);
+public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes);
+public record SessionStructuredNoteRequest(int? TemplateId, string Content, string LegacyNotes, string? NoteType = null);
+public record ClientNoteCreateRequest(string Content, string? Type = null, string? Source = null);
 public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
 public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);

@@ -27,6 +27,7 @@ export function NotesTemplateSettings() {
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateFields, setNewTemplateFields] = useState<string[]>(['']);
   const [newTemplateFieldDetails, setNewTemplateFieldDetails] = useState<TemplateField[]>([{ id: 0, label: '', sortOrder: 1 }]);
+  const [mutationState, setMutationState] = useState<{ loading: boolean; error?: string }>({ loading: false });
 
   const handleAddField = () => {
     setNewTemplateFields([...newTemplateFields, '']);
@@ -65,6 +66,7 @@ export function NotesTemplateSettings() {
 
     if (editingTemplateId) {
       try {
+        setMutationState({ loading: true });
         const payloadFields = newTemplateFieldDetails
           .map((field, index) => ({
             ...field,
@@ -83,7 +85,10 @@ export function NotesTemplateSettings() {
         resetEditor();
         toast.success('Template saved');
       } catch {
+        setMutationState({ loading: false, error: 'Failed to save template' });
         toast.error('Failed to save template');
+      } finally {
+        setMutationState({ loading: false });
       }
 
       return;
@@ -95,17 +100,26 @@ export function NotesTemplateSettings() {
   const handleDuplicateTemplate = async (template: Template) => {
     if (!user?.practiceId) return;
 
-    const createdTemplate = await apiClient.duplicateTemplateFromPreset({
-      practiceId: user.practiceId,
-      sourcePresetId: template.id,
-    });
+    try {
+      setMutationState({ loading: true });
+      const createdTemplate = await apiClient.duplicateTemplateFromPreset({
+        practiceId: user.practiceId,
+        sourcePresetId: template.id,
+      });
 
-    setCustomTemplates(prev => {
-      if (prev.some(existing => existing.id === createdTemplate.id)) return prev;
-      return [...prev, createdTemplate];
-    });
+      setCustomTemplates(prev => {
+        if (prev.some(existing => existing.id === createdTemplate.id)) return prev;
+        return [...prev, createdTemplate];
+      });
 
-    await refreshTemplates();
+      await refreshTemplates();
+      toast.success('Template duplicated');
+    } catch {
+      setMutationState({ loading: false, error: "Failed to duplicate template" });
+      toast.error('Failed to duplicate template');
+    } finally {
+      setMutationState({ loading: false });
+    }
   };
 
   const handleEditCustomTemplate = (template: Template) => {
@@ -116,10 +130,20 @@ export function NotesTemplateSettings() {
     setIsCreatingTemplate(true);
   };
 
-  const handleDeleteCustomTemplate = (templateId: string) => {
-    setCustomTemplates(customTemplates.filter(t => t.id !== templateId));
-    if (selectedTemplate?.kind === 'custom' && selectedTemplate.id === templateId) {
-      setSelectedTemplate(null);
+  const handleDeleteCustomTemplate = async (templateId: string) => {
+    try {
+      setMutationState({ loading: true });
+      await apiClient.deleteTemplate(templateId);
+      setCustomTemplates(customTemplates.filter(t => t.id !== templateId));
+      if (selectedTemplate?.kind === 'custom' && selectedTemplate.id === templateId) {
+        setSelectedTemplate(null);
+      }
+      toast.success('Template deleted');
+    } catch {
+      setMutationState({ loading: false, error: "Failed to delete template" });
+      toast.error('Failed to delete template');
+    } finally {
+      setMutationState({ loading: false });
     }
   };
 
@@ -129,6 +153,10 @@ export function NotesTemplateSettings() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      {mutationState.error && (
+        <Typography sx={{ color: "error.main", fontSize: "13px" }}>{mutationState.error}</Typography>
+      )}
+
       {/* Template Mode Selection */}
       <Box>
         <Typography sx={{ 
@@ -266,7 +294,7 @@ export function NotesTemplateSettings() {
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDuplicateTemplate(preset);
+                            handleDuplicateTemplate(preset).catch(() => undefined);
                           }}
                           sx={{
                             opacity: 0,
@@ -435,6 +463,7 @@ export function NotesTemplateSettings() {
                   <Button
                     variant="contained"
                     onClick={handleSaveCustomTemplate}
+                    disabled={mutationState.loading}
                     disabled={!newTemplateName.trim() || !newTemplateFields.some(f => f.trim())}
                     sx={saveButtonStyles}
                   >
@@ -540,7 +569,7 @@ export function NotesTemplateSettings() {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (window.confirm(`Delete template "${template.name}"?`)) {
-                                handleDeleteCustomTemplate(template.id);
+                                handleDeleteCustomTemplate(template.id).catch(() => undefined);
                               }
                             }}
                             sx={{
