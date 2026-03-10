@@ -26,6 +26,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EmailIcon from '@mui/icons-material/Email';
 import PhoneIcon from '@mui/icons-material/Phone';
 import NotesIcon from '@mui/icons-material/Notes';
+import EventIcon from '@mui/icons-material/Event';
+import PlaceIcon from '@mui/icons-material/Place';
+import PaidIcon from '@mui/icons-material/Paid';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { format } from 'date-fns';
 import { NewSessionModal } from '../components/NewSessionModal';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
@@ -44,6 +48,18 @@ const locationLabelMap: Record<string, string> = {
   zoom: 'Zoom',
   phone: 'Phone',
   office: 'Office',
+};
+
+const clientStatusMap: Record<ClientDto['status'], string> = {
+  active: 'Active',
+  paused: 'Paused',
+  completed: 'Completed',
+};
+
+const statusChipColorMap: Record<ClientDto['status'], 'success' | 'warning' | 'default'> = {
+  active: 'success',
+  paused: 'warning',
+  completed: 'default',
 };
 
 export function ClientDetailPage() {
@@ -141,14 +157,33 @@ export function ClientDetailPage() {
         Back to Clients
       </Button>
 
-      <Card variant="outlined" sx={{ mb: 2.5 }}>
+      <Card variant="outlined" sx={{ mb: 2.5, borderRadius: 3 }}>
         <CardContent>
-          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ md: 'center' }} spacing={2}>
-            <Box>
-              <Typography variant="h4">{client.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                Client since {format(new Date(client.startDate), 'MMMM d, yyyy')} • {detailView?.engagements.length ?? 0} engagements
-              </Typography>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ md: 'center' }} spacing={2.5}>
+            <Box sx={{ minWidth: 0 }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+                <Typography variant="h4" sx={{ fontWeight: 700 }}>{client.name}</Typography>
+                <Chip
+                  size="small"
+                  color={statusChipColorMap[client.status]}
+                  label={clientStatusMap[client.status] ?? client.status}
+                  sx={{ fontWeight: 600 }}
+                />
+              </Stack>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.75, sm: 1.5 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Client since {format(new Date(client.startDate), 'MMMM d, yyyy')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {detailView?.engagements.length ?? 0} engagements
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {client.totalSessions > 0 ? `${client.sessionsCompleted}/${client.totalSessions} sessions completed` : 'No session package assigned'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Lifetime value {sessions.some((session) => session.packagePrice) ? sessions.find((session) => session.packagePrice)?.packagePrice : 'N/A'}
+                </Typography>
+              </Stack>
             </Box>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsNewSessionModalOpen(true)}>
               New Session
@@ -157,17 +192,24 @@ export function ClientDetailPage() {
         </CardContent>
       </Card>
 
-      <Card variant="outlined" sx={{ mb: 3 }}>
+      <Card variant="outlined" sx={{ mb: 3, borderRadius: 3 }}>
         <CardContent>
-          <Typography variant="overline" color="text.secondary">Next Step</Typography>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Box>
+          <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 1, fontWeight: 700 }}>Next Step</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5}>
+            <Box sx={{ pt: 0.5 }}>
               {upcomingSession ? (
                 <>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{upcomingSession.sessionType}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {format(new Date(upcomingSession.date), 'MMM d, yyyy • h:mm a')} • {locationLabelMap[upcomingSession.location] ?? upcomingSession.location}
-                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>{upcomingSession.sessionType}</Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.5, sm: 1.5 }}>
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <EventIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      <Typography variant="body2" color="text.secondary">{format(new Date(upcomingSession.date), 'MMM d, yyyy • h:mm a')}</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={0.75} alignItems="center">
+                      <PlaceIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      <Typography variant="body2" color="text.secondary">{locationLabelMap[upcomingSession.location] ?? upcomingSession.location}</Typography>
+                    </Stack>
+                  </Stack>
                 </>
               ) : (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>No upcoming sessions scheduled</Typography>
@@ -184,33 +226,46 @@ export function ClientDetailPage() {
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, alignItems: 'start' }}>
         <Box ref={sessionsSectionRef}>
-          <Typography variant="h6" sx={{ mb: 1.5 }}>Engagements</Typography>
-          <Stack spacing={1.5}>
+          <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>Engagements</Typography>
+          <Stack spacing={1.75}>
             {(detailView?.engagements ?? []).map((engagement) => {
               const progressPercent = engagement.totalSessions > 0
                 ? Math.round((engagement.usedSessions / engagement.totalSessions) * 100)
                 : 0;
 
               return (
-                <Accordion key={engagement.id} defaultExpanded disableGutters>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Accordion key={engagement.id} defaultExpanded disableGutters sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, '&:before': { display: 'none' }, overflow: 'hidden' }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2, py: 1 }}>
                     <Box sx={{ width: '100%' }}>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
-                        <Typography variant="subtitle1">{engagement.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">{engagement.price ? `$${engagement.price.toLocaleString()}` : ''}</Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} alignItems={{ sm: 'center' }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{engagement.name}</Typography>
+                        {engagement.price ? (
+                          <Stack direction="row" spacing={0.75} alignItems="center">
+                            <PaidIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{`$${engagement.price.toLocaleString()}`}</Typography>
+                          </Stack>
+                        ) : null}
                       </Stack>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        {engagement.startDate && <Typography variant="caption" color="text.secondary">{format(new Date(engagement.startDate), 'MMM d, yyyy')}</Typography>}
-                        {engagement.endDate && <Typography variant="caption" color="text.secondary">- {format(new Date(engagement.endDate), 'MMM d, yyyy')}</Typography>}
-                        <Chip size="small" label={engagement.status} />
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25, mb: 1 }}>
+                        {(engagement.startDate || engagement.endDate) && (
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                            {engagement.startDate ? format(new Date(engagement.startDate), 'MMM d, yyyy') : 'Unknown'}
+                            {' — '}
+                            {engagement.endDate ? format(new Date(engagement.endDate), 'MMM d, yyyy') : 'Ongoing'}
+                          </Typography>
+                        )}
+                        <Chip size="small" label={engagement.status} sx={{ textTransform: 'capitalize' }} />
                       </Stack>
-                      <Box sx={{ mt: 1 }}>
-                        <Typography variant="caption" color="text.secondary">{engagement.usedSessions}/{engagement.totalSessions} sessions used</Typography>
-                        <LinearProgress variant="determinate" value={progressPercent} sx={{ mt: 0.5 }} />
+                      <Box>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">{engagement.usedSessions}/{engagement.totalSessions} sessions used</Typography>
+                          <Typography variant="caption" color="text.secondary">{progressPercent}%</Typography>
+                        </Stack>
+                        <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 7, borderRadius: 3 }} />
                       </Box>
                     </Box>
                   </AccordionSummary>
-                  <AccordionDetails>
+                  <AccordionDetails sx={{ px: 2, pt: 0.5, pb: 1.5 }}>
                     <List disablePadding>
                       {[...(engagement.sessions ?? []), ...(detailView?.timeline.filter((entry) => entry.entryType === 'note' && entry.sessionId === undefined) ?? [])]
                         .slice(0, 20)
@@ -218,24 +273,27 @@ export function ClientDetailPage() {
                           if ('sessionType' in entry) {
                             const session = entry as SessionDto;
                             return (
-                              <ListItemButton key={session.id} onClick={() => handleOpenSessionDetails(session.id)}>
+                              <ListItemButton key={session.id} onClick={() => handleOpenSessionDetails(session.id)} sx={{ borderRadius: 1.5, mb: 0.5, alignItems: 'flex-start' }}>
+                                <Box sx={{ width: 6, borderRadius: 3, bgcolor: 'primary.light', alignSelf: 'stretch', mr: 1.25 }} />
                                 <ListItemText
-                                  primary={session.sessionType}
+                                  primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>{session.sessionType}</Typography>}
                                   secondary={`${format(new Date(session.date), 'MMM d, yyyy • h:mm a')} • ${session.duration} min • ${locationLabelMap[session.location] ?? session.location}`}
                                 />
-                                <Chip label={statusLabelMap[session.status] ?? session.status} size="small" />
+                                <Chip label={statusLabelMap[session.status] ?? session.status} size="small" sx={{ mt: 0.5 }} />
                               </ListItemButton>
                             );
                           }
 
                           return (
-                            <ListItemButton key={entry.id} disabled>
-                              <NotesIcon sx={{ mr: 1, color: 'text.secondary' }} fontSize="small" />
-                              <ListItemText
-                                primary={entry.content}
-                                secondary={format(new Date(entry.createdAt), 'MMM d, yyyy')}
-                              />
-                            </ListItemButton>
+                            <Box key={entry.id} sx={{ borderRadius: 1.5, bgcolor: 'grey.50', border: '1px dashed', borderColor: 'divider', px: 1.25, py: 1, mb: 0.75 }}>
+                              <Stack direction="row" spacing={1} alignItems="flex-start">
+                                <NotesIcon sx={{ color: 'text.secondary', mt: 0.2 }} fontSize="small" />
+                                <Box>
+                                  <Typography variant="body2" sx={{ mb: 0.25 }}>{entry.content}</Typography>
+                                  <Typography variant="caption" color="text.secondary">{format(new Date(entry.createdAt), 'MMM d, yyyy • h:mm a')}</Typography>
+                                </Box>
+                              </Stack>
+                            </Box>
                           );
                         })}
                     </List>
@@ -247,20 +305,20 @@ export function ClientDetailPage() {
         </Box>
 
         <Stack spacing={2}>
-          <Card variant="outlined">
+          <Card variant="outlined" sx={{ borderRadius: 3 }}>
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-                <Typography variant="h6">Contact Information</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>Contact Information</Typography>
                 <IconButton size="small" disabled>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Stack>
-              <Stack spacing={1}>
-                <Stack direction="row" spacing={1} alignItems="center">
+              <Stack spacing={1.5}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, px: 1.25, py: 0.9 }}>
                   <EmailIcon fontSize="small" color="action" />
                   <Typography variant="body2">{client.email}</Typography>
                 </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, px: 1.25, py: 0.9 }}>
                   <PhoneIcon fontSize="small" color="action" />
                   <Typography variant="body2">{client.phone}</Typography>
                 </Stack>
@@ -268,25 +326,28 @@ export function ClientDetailPage() {
             </CardContent>
           </Card>
 
-          <Card variant="outlined">
+          <Card variant="outlined" sx={{ borderRadius: 3 }}>
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.25 }}>
-                <Typography variant="h6">Client Notes</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>Client Notes</Typography>
               </Stack>
 
               <Stack spacing={1} sx={{ mb: 1.5 }}>
                 {(detailView?.clientNotes ?? []).length > 0 ? (
                   detailView!.clientNotes.map((note) => (
-                    <Box key={note.id} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25 }}>
+                    <Box key={note.id} sx={{ border: '1px solid', borderColor: 'divider', backgroundColor: 'grey.50', borderRadius: 2, p: 1.25 }}>
                       <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                        <Chip size="small" label={note.type} />
+                        <Chip size="small" label={note.type} sx={{ textTransform: 'capitalize' }} />
                         <Typography variant="caption" color="text.secondary">{format(new Date(note.createdAt), 'MMM d, yyyy h:mm a')}</Typography>
                       </Stack>
                       <Typography variant="body2">{note.content}</Typography>
                     </Box>
                   ))
                 ) : (
-                  <Typography variant="body2" color="text.secondary">No notes yet.</Typography>
+                  <Box sx={{ textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2, px: 2, py: 2.5 }}>
+                    <CheckCircleOutlineIcon color="action" sx={{ mb: 0.5 }} />
+                    <Typography variant="body2" color="text.secondary">No notes yet. Add one below.</Typography>
+                  </Box>
                 )}
               </Stack>
 
