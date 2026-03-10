@@ -357,7 +357,7 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
                 packageId = (int?)boundary.Package.PackageId,
                 clientPackageId = (int?)boundary.Package.Id,
                 name = boundary.Package.Package.Name,
-                startDate = start,
+                startDate = (DateTimeOffset?)start,
                 endDate = end,
                 price = boundary.Package.Package.Price,
                 totalSessions = boundary.Package.Package.SessionCount,
