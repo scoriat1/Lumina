@@ -41,7 +41,7 @@ const NotesTemplateContext = createContext<NotesTemplateContextType | undefined>
 
 export function NotesTemplateProvider({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
-  const [templateMode, setTemplateMode] = useState<'default' | 'template'>('default');
+  const [templateMode, setTemplateMode] = useState<'default' | 'template'>(() => (localStorage.getItem('templateMode') as 'default' | 'template') || 'default');
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateSelection | null>(null);
   const [customTemplates, setCustomTemplates] = useState<Template[]>([]);
   const [presetTemplates, setPresetTemplates] = useState<Template[]>([]);
@@ -63,6 +63,8 @@ export function NotesTemplateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.practiceId) return;
 
+    localStorage.setItem('templateMode', templateMode);
+
     if (!selectedTemplate) {
       localStorage.removeItem('selectedTemplateKind');
       localStorage.removeItem('selectedTemplateId');
@@ -71,7 +73,7 @@ export function NotesTemplateProvider({ children }: { children: ReactNode }) {
 
     localStorage.setItem('selectedTemplateKind', selectedTemplate.kind);
     localStorage.setItem('selectedTemplateId', selectedTemplate.id);
-  }, [selectedTemplate, user?.practiceId]);
+  }, [selectedTemplate, templateMode, user?.practiceId]);
 
   const refreshTemplates = useCallback(async () => {
     if (!user?.practiceId) return;

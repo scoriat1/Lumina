@@ -41,32 +41,54 @@ const locationLabelMap: Record<string, string> = { zoom: 'Zoom', phone: 'Phone',
 
 export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpdateSession, onSaved }: SessionDetailsDrawerProps) {
   const navigate = useNavigate();
-  const { selectedTemplate, getActiveTemplate } = useNotesTemplate();
+  const { templateMode, selectedTemplate, getActiveTemplate } = useNotesTemplate();
   const [sessionDetail, setSessionDetail] = useState<SessionDto | null>(null);
-  const [noteDrafts, setNoteDrafts] = useState<string[]>([]);
+  const [freeNoteDraft, setFreeNoteDraft] = useState('');
+  const [templateFieldDraft, setTemplateFieldDraft] = useState<Record<string, string>>({});
   const [noteMode, setNoteMode] = useState<'free' | 'template' | 'missing'>('free');
   const [saving, setSaving] = useState(false);
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [savedVisible, setSavedVisible] = useState(false);
 
-  const selectedTemplateLabel = useMemo(() => {
-    const template = getActiveTemplate();
-    return template ? `${template.name} Template` : null;
-  }, [getActiveTemplate, selectedTemplate]);
+  const activeTemplate = getActiveTemplate();
+  const selectedTemplateLabel = activeTemplate ? `${activeTemplate.name} Template` : null;
 
   useEffect(() => {
     if (!open || !sessionId) return;
 
-    apiClient.getSession(sessionId)
-      .then((detail) => {
+    setLoadingNote(true);
+    setError(null);
+
+    Promise.all([apiClient.getSession(sessionId), apiClient.getSessionStructuredNote(sessionId)])
+      .then(([detail, structuredNote]) => {
         setSessionDetail(detail);
-        const notes = detail.notes?.split('\n\n').filter(Boolean) ?? [];
-        setNoteDrafts(notes.length ? notes : ['']);
+        setFreeNoteDraft(detail.notes ?? '');
+
+        const defaultMode = templateMode === 'template' && activeTemplate ? 'template' : 'free';
+
+        if (structuredNote?.templateId && activeTemplate && structuredNote.templateId === Number(activeTemplate.id)) {
+          try {
+            const parsed = JSON.parse(structuredNote.content) as Record<string, string>;
+            setTemplateFieldDraft(parsed);
+            setNoteMode('template');
+          } catch {
+            setTemplateFieldDraft({});
+            setNoteMode(defaultMode);
+          }
+        } else {
+          setTemplateFieldDraft({});
+          setNoteMode(defaultMode);
+        }
       })
       .catch(() => {
         setSessionDetail(null);
-        setNoteDrafts(['']);
-      });
-  }, [open, sessionId]);
+        setFreeNoteDraft('');
+        setTemplateFieldDraft({});
+        setError('Failed to load session notes.');
+      })
+      .finally(() => setLoadingNote(false));
+  }, [open, sessionId, templateMode, activeTemplate]);
 
   const previousSession = useMemo(() => {
     if (!sessionDetail) return null;
@@ -80,28 +102,35 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
 
   if (!sessionDetail) return null;
 
-  const handleNoteChange = (index: number, value: string) => {
-    setNoteDrafts((prev) => prev.map((item, idx) => (idx === index ? value : item)));
-  };
-
-  const handleAddNote = () => {
-    setNoteDrafts((prev) => [...prev, '']);
-  };
-
   const handleSaveNotes = async () => {
     if (!sessionId) return;
     setSaving(true);
-    const cleanedNotes = noteDrafts.map((note) => note.trim()).filter(Boolean);
-    const joined = cleanedNotes.join('\n\n');
+    setError(null);
+
+    const templateContent = JSON.stringify(templateFieldDraft);
+    const legacyNotes = noteMode === 'template'
+      ? Object.entries(templateFieldDraft)
+        .filter(([, value]) => value?.trim())
+        .map(([field, value]) => `${field}: ${value.trim()}`)
+        .join('\n')
+      : freeNoteDraft.trim();
 
     try {
-      await apiClient.updateSession(sessionId, { notes: joined });
+      await apiClient.saveSessionStructuredNote(sessionId, {
+        templateId: noteMode === 'template' && activeTemplate ? Number(activeTemplate.id) : undefined,
+        noteType: noteMode,
+        content: noteMode === 'template' ? templateContent : JSON.stringify({ freeform: freeNoteDraft }),
+        legacyNotes,
+      });
+
       const refreshed = await apiClient.getSession(sessionId);
       setSessionDetail(refreshed);
-      setNoteDrafts(cleanedNotes.length ? cleanedNotes : ['']);
-      onUpdateSession?.(sessionId, { notes: joined });
+      setFreeNoteDraft(refreshed.notes ?? '');
+      onUpdateSession?.(sessionId, { notes: refreshed.notes });
       await onSaved?.();
       setSavedVisible(true);
+    } catch {
+      setError('Failed to save notes.');
     } finally {
       setSaving(false);
     }
@@ -142,23 +171,34 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
                 )}
               </Select>
 
-              <Stack spacing={1}>
-                {noteDrafts.map((note, index) => (
-                  <TextField
-                    key={`note-${index}`}
-                    multiline
-                    minRows={3}
-                    value={note}
-                    onChange={(e) => handleNoteChange(index, e.target.value)}
-                    placeholder={`Note ${index + 1}`}
-                  />
-                ))}
-              </Stack>
+              {noteMode === 'template' && activeTemplate ? (
+                <Stack spacing={1}>
+                  {activeTemplate.fields.map((field) => (
+                    <TextField
+                      key={field}
+                      multiline
+                      minRows={2}
+                      label={field}
+                      value={templateFieldDraft[field] ?? ''}
+                      onChange={(e) => setTemplateFieldDraft((prev) => ({ ...prev, [field]: e.target.value }))}
+                    />
+                  ))}
+                </Stack>
+              ) : (
+                <TextField
+                  multiline
+                  minRows={5}
+                  fullWidth
+                  value={freeNoteDraft}
+                  onChange={(e) => setFreeNoteDraft(e.target.value)}
+                  placeholder="Session notes"
+                />
+              )}
 
               <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
-                <Button size="small" onClick={handleAddNote}>Add another note</Button>
-                <Button size="small" variant="contained" onClick={handleSaveNotes} disabled={saving}>Save</Button>
+                <Button size="small" variant="contained" onClick={handleSaveNotes} disabled={saving || loadingNote}>Save</Button>
               </Stack>
+              {error && <Typography color="error" variant="caption">{error}</Typography>}
             </Box>
 
             <Accordion disableGutters>

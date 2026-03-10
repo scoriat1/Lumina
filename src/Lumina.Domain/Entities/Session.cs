@@ -18,4 +18,5 @@ public class Session
     public string SessionType { get; set; } = string.Empty;
     public string Focus { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public ICollection<SessionNote> SessionNotes { get; set; } = new List<SessionNote>();
 }

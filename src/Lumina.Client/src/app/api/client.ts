@@ -1,11 +1,14 @@
 import type {
   AuthMeDto,
   BillingSummaryDto,
+  ClientDetailViewDto,
   ClientDto,
+  ClientNoteDto,
   DashboardDto,
   InvoiceDto,
   ProviderDto,
   SessionDto,
+  SessionStructuredNoteDto,
   TemplateDto,
   TemplateFieldDto,
 } from './types';
@@ -77,6 +80,21 @@ const mapInvoiceDto = (invoice: InvoiceApiDto): InvoiceDto => ({
 const mapProviderDto = (provider: ProviderApiDto): ProviderDto => ({
   ...provider,
   initials: provider.initials ?? computeInitials(provider.name),
+});
+
+
+const mapClientNoteDto = (note: ClientNoteDto): ClientNoteDto => ({
+  ...note,
+  id: String(note.id),
+  clientId: String(note.clientId),
+  sessionId: note.sessionId ? String(note.sessionId) : undefined,
+});
+
+const mapSessionStructuredNoteDto = (note: SessionStructuredNoteDto): SessionStructuredNoteDto => ({
+  ...note,
+  id: String(note.id),
+  clientId: String(note.clientId),
+  sessionId: note.sessionId ? String(note.sessionId) : undefined,
 });
 
 const mapTemplateDto = (template: TemplateDto): TemplateDto => {
@@ -204,5 +222,48 @@ export const apiClient = {
 
     return mapTemplateDto(template);
   },
+
+  deleteTemplate: (templateId: string | number) => request<void>(`/api/templates/${templateId}`, { method: 'DELETE' }),
+  getClientDetailView: async (id: string) => {
+    const detail = await request<ClientDetailViewDto>(`/api/clients/${id}/detail-view`);
+    return {
+      ...detail,
+      engagements: detail.engagements.map((engagement) => ({
+        ...engagement,
+        id: String(engagement.id),
+        packageId: engagement.packageId ? String(engagement.packageId) : undefined,
+        clientPackageId: engagement.clientPackageId ? String(engagement.clientPackageId) : undefined,
+        sessions: engagement.sessions.map(mapSessionDto),
+      })),
+      timeline: detail.timeline.map((entry) => ({
+        ...entry,
+        sessionId: entry.sessionId ? String(entry.sessionId) : undefined,
+        session: entry.session ? mapSessionDto(entry.session) : undefined,
+      })),
+      clientNotes: detail.clientNotes.map(mapClientNoteDto),
+      nextStep: detail.nextStep ? { ...detail.nextStep, sessionId: String(detail.nextStep.sessionId) } : null,
+    };
+  },
+  getClientNotes: async (clientId: string) => {
+    const notes = await request<ClientNoteDto[]>(`/api/clients/${clientId}/notes`);
+    return notes.map(mapClientNoteDto);
+  },
+  createClientNote: (clientId: string, payload: { content: string; type?: string; source?: string }) => request<{ id: string }>(`/api/clients/${clientId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  getSessionStructuredNote: async (sessionId: string) => {
+    const response = await request<{ note: SessionStructuredNoteDto | null }>(`/api/sessions/${sessionId}/note`);
+    return response.note ? mapSessionStructuredNoteDto(response.note) : null;
+  },
+  saveSessionStructuredNote: (sessionId: string, payload: {
+    templateId?: number;
+    noteType?: string;
+    content: string;
+    legacyNotes: string;
+  }) => request<void>(`/api/sessions/${sessionId}/note`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
   googleLoginUrl: `${API_BASE_URL}/api/auth/google/login`,
 };

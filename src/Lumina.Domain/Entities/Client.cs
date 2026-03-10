@@ -17,4 +17,5 @@ public class Client
     public string? ExternalSource { get; set; }
     public string? ExternalId { get; set; }
     public ICollection<Session> Sessions { get; set; } = new List<Session>();
+    public ICollection<SessionNote> SessionNotes { get; set; } = new List<SessionNote>();
 }
