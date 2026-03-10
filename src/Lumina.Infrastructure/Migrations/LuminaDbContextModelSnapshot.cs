@@ -248,6 +248,7 @@ namespace Lumina.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal?>("Price")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("SessionCount")
@@ -381,6 +382,9 @@ namespace Lumina.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("ClientId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -388,8 +392,19 @@ namespace Lumina.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<int>("SessionId")
+                    b.Property<string>("NoteType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasDefaultValue("general");
+
+
+                    b.Property<int?>("SessionId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("TemplateId")
                         .HasColumnType("int");
@@ -398,6 +413,8 @@ namespace Lumina.Infrastructure.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
 
                     b.HasIndex("SessionId");
 
@@ -782,15 +799,23 @@ namespace Lumina.Infrastructure.Migrations
 
             modelBuilder.Entity("Lumina.Domain.Entities.SessionNote", b =>
                 {
-                    b.HasOne("Lumina.Domain.Entities.Session", "Session")
-                        .WithMany()
-                        .HasForeignKey("SessionId")
+                    b.HasOne("Lumina.Domain.Entities.Client", "Client")
+                        .WithMany("SessionNotes")
+                        .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Lumina.Domain.Entities.Session", "Session")
+                        .WithMany("SessionNotes")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Lumina.Domain.Entities.Template", "Template")
                         .WithMany()
-                        .HasForeignKey("TemplateId");
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Client");
 
                     b.Navigation("Session");
 
