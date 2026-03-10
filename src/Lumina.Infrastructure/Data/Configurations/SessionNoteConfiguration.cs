@@ -29,6 +29,6 @@ public class SessionNoteConfiguration : IEntityTypeConfiguration<SessionNote>
         builder.HasOne(x => x.Template)
             .WithMany()
             .HasForeignKey(x => x.TemplateId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }
