@@ -44,10 +44,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+    try {
+      const errorBody = await response.json() as {
+        message?: string;
+        title?: string;
+        errors?: Record<string, string[]>;
+      };
+
+      if (errorBody.message) {
+        errorMessage = errorBody.message;
+      } else if (errorBody.title) {
+        errorMessage = errorBody.title;
+      } else if (errorBody.errors) {
+        const firstError = Object.values(errorBody.errors).flat().find(Boolean);
+        if (firstError) {
+          errorMessage = firstError;
+        }
+      }
+    } catch {
+      // Ignore JSON parsing failures and fall back to status-based message.
+    }
+
+    throw new Error(errorMessage);
   }
 
-  return response.json() as Promise<T>;
+  const responseText = await response.text();
+  if (!responseText) {
+    return {} as T;
+  }
+
+  return JSON.parse(responseText) as T;
 }
 
 type ClientApiDto = Omit<ClientDto, 'initials'> & { initials?: string };
