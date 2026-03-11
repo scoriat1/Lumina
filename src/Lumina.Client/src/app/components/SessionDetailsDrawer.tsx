@@ -19,9 +19,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import EditIcon from '@mui/icons-material/Edit';
 import { format } from 'date-fns';
-import { useNavigate } from 'react-router';
 import { apiClient } from '../api/client';
 import type { SessionDto } from '../api/types';
 import { useNotesTemplate } from '../contexts/NotesTemplateContext';
@@ -38,9 +36,9 @@ interface SessionDetailsDrawerProps {
 }
 
 export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpdateSession, onSaved }: SessionDetailsDrawerProps) {
-  const navigate = useNavigate();
   const { templateMode, getActiveTemplate } = useNotesTemplate();
   const [sessionDetail, setSessionDetail] = useState<SessionDto | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [sessionForm, setSessionForm] = useState({
     sessionType: '',
     date: '',
@@ -65,6 +63,7 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
 
     setLoadingNote(true);
     setError(null);
+    setIsEditMode(false);
 
     Promise.all([apiClient.getSession(sessionId), apiClient.getSessionStructuredNote(sessionId)])
       .then(([detail, structuredNote]) => {
@@ -116,8 +115,6 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
       .sort((a, b) => b.date.getTime() - a.date.getTime())[0] ?? null;
   }, [sessions, sessionDetail]);
 
-  if (!sessionDetail) return null;
-
   const handleSave = async () => {
     if (!sessionId || !sessionDetail) return;
 
@@ -166,6 +163,7 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
         notes: refreshed.notes,
       });
       await onSaved?.();
+      setIsEditMode(false);
       setSavedVisible(true);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save session details.');
@@ -173,6 +171,8 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
       setSaving(false);
     }
   };
+
+  if (!sessionDetail) return null;
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 460 } } }}>
@@ -191,53 +191,139 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
         <Divider sx={{ my: 2 }} />
 
         <Box sx={{ overflow: 'auto', flex: 1 }}>
+          {loadingNote ? <Typography variant="body2" color="text.secondary">Loading…</Typography> : null}
           <Stack spacing={2.5}>
-            <Box>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>Session Notes</Typography>
-              <Select
-                size="small"
-                fullWidth
-                value={noteMode}
-                onChange={(e) => setNoteMode(e.target.value as 'free' | 'template' | 'missing')}
-                sx={{ mb: 1.25 }}
-              >
-                <MenuItem value="free">Free Notes</MenuItem>
-                {selectedTemplateLabel ? (
-                  <MenuItem value="template">{selectedTemplateLabel}</MenuItem>
-                ) : (
-                  <MenuItem value="missing" disabled>Choose Template from Settings</MenuItem>
-                )}
-              </Select>
+            {!isEditMode ? (
+              <>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1 }}>Session Details</Typography>
+                  <Stack spacing={0.75}>
+                    <Typography variant="body2"><strong>Type:</strong> {sessionDetail.sessionType}</Typography>
+                    <Typography variant="body2"><strong>Date:</strong> {format(new Date(sessionDetail.date), 'MMM d, yyyy • h:mm a')}</Typography>
+                    <Typography variant="body2"><strong>Duration:</strong> {sessionDetail.duration} min</Typography>
+                    <Typography variant="body2"><strong>Location:</strong> {sessionDetail.location}</Typography>
+                    <Typography variant="body2"><strong>Focus:</strong> {sessionDetail.focus || 'N/A'}</Typography>
+                    <Typography variant="body2"><strong>Billing/Payment:</strong> {sessionDetail.paymentStatus ?? 'N/A'}</Typography>
+                    <Chip label={sessionDetail.status} size="small" sx={{ width: 'fit-content', textTransform: 'capitalize' }} />
+                  </Stack>
+                </Box>
 
-              {noteMode === 'template' && activeTemplate ? (
-                <Stack spacing={1}>
-                  {activeTemplate.fields.map((field) => (
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 0.75 }}>Session Notes</Typography>
+                  {sessionDetail.notes ? (
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{sessionDetail.notes}</Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">No notes yet.</Typography>
+                  )}
+                </Box>
+              </>
+            ) : (
+              <>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1 }}>Session Notes</Typography>
+                  <Select
+                    size="small"
+                    fullWidth
+                    value={noteMode}
+                    onChange={(e) => setNoteMode(e.target.value as 'free' | 'template' | 'missing')}
+                    sx={{ mb: 1.25 }}
+                  >
+                    <MenuItem value="free">Free Notes</MenuItem>
+                    {selectedTemplateLabel ? (
+                      <MenuItem value="template">{selectedTemplateLabel}</MenuItem>
+                    ) : (
+                      <MenuItem value="missing" disabled>Choose Template from Settings</MenuItem>
+                    )}
+                  </Select>
+
+                  {noteMode === 'template' && activeTemplate ? (
+                    <Stack spacing={1}>
+                      {activeTemplate.fields.map((field) => (
+                        <TextField
+                          key={field}
+                          multiline
+                          minRows={2}
+                          label={field}
+                          value={templateFieldDraft[field] ?? ''}
+                          onChange={(e) => setTemplateFieldDraft((prev) => ({ ...prev, [field]: e.target.value }))}
+                        />
+                      ))}
+                    </Stack>
+                  ) : (
                     <TextField
-                      key={field}
+                      multiline
+                      minRows={5}
+                      fullWidth
+                      value={freeNoteDraft}
+                      onChange={(e) => setFreeNoteDraft(e.target.value)}
+                      placeholder="Session notes"
+                    />
+                  )}
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1 }}>Details</Typography>
+                  <Stack spacing={1.25}>
+                    <TextField
+                      size="small"
+                      label="Session Type"
+                      value={sessionForm.sessionType}
+                      onChange={(e) => setSessionForm((prev) => ({ ...prev, sessionType: e.target.value }))}
+                    />
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        size="small"
+                        type="date"
+                        label="Date"
+                        InputLabelProps={{ shrink: true }}
+                        value={sessionForm.date}
+                        onChange={(e) => setSessionForm((prev) => ({ ...prev, date: e.target.value }))}
+                        fullWidth
+                      />
+                      <TextField
+                        size="small"
+                        type="time"
+                        label="Time"
+                        InputLabelProps={{ shrink: true }}
+                        value={sessionForm.time}
+                        onChange={(e) => setSessionForm((prev) => ({ ...prev, time: e.target.value }))}
+                        fullWidth
+                      />
+                    </Stack>
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        label="Duration (min)"
+                        value={sessionForm.duration}
+                        onChange={(e) => setSessionForm((prev) => ({ ...prev, duration: Number(e.target.value) || 0 }))}
+                        fullWidth
+                      />
+                      <TextField
+                        select
+                        size="small"
+                        label="Location"
+                        value={sessionForm.location}
+                        onChange={(e) => setSessionForm((prev) => ({ ...prev, location: e.target.value as SessionDto['location'] }))}
+                        fullWidth
+                      >
+                        <MenuItem value="zoom">Zoom</MenuItem>
+                        <MenuItem value="phone">Phone</MenuItem>
+                        <MenuItem value="office">Office</MenuItem>
+                      </TextField>
+                    </Stack>
+                    <TextField
+                      size="small"
+                      label="Focus"
+                      value={sessionForm.focus}
+                      onChange={(e) => setSessionForm((prev) => ({ ...prev, focus: e.target.value }))}
                       multiline
                       minRows={2}
-                      label={field}
-                      value={templateFieldDraft[field] ?? ''}
-                      onChange={(e) => setTemplateFieldDraft((prev) => ({ ...prev, [field]: e.target.value }))}
                     />
-                  ))}
-                </Stack>
-              ) : (
-                <TextField
-                  multiline
-                  minRows={5}
-                  fullWidth
-                  value={freeNoteDraft}
-                  onChange={(e) => setFreeNoteDraft(e.target.value)}
-                  placeholder="Session notes"
-                />
-              )}
-
-              <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
-                <Button size="small" variant="contained" onClick={handleSave} disabled={saving || loadingNote}>Save Changes</Button>
-              </Stack>
-              {error && <Typography color="error" variant="caption">{error}</Typography>}
-            </Box>
+                  </Stack>
+                </Box>
+              </>
+            )}
 
             <Accordion disableGutters>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -260,75 +346,19 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
               </AccordionDetails>
             </Accordion>
 
-            <Box>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>Details</Typography>
-              <Stack spacing={1.25}>
-                <TextField
-                  size="small"
-                  label="Session Type"
-                  value={sessionForm.sessionType}
-                  onChange={(e) => setSessionForm((prev) => ({ ...prev, sessionType: e.target.value }))}
-                />
-                <Stack direction="row" spacing={1}>
-                  <TextField
-                    size="small"
-                    type="date"
-                    label="Date"
-                    InputLabelProps={{ shrink: true }}
-                    value={sessionForm.date}
-                    onChange={(e) => setSessionForm((prev) => ({ ...prev, date: e.target.value }))}
-                    fullWidth
-                  />
-                  <TextField
-                    size="small"
-                    type="time"
-                    label="Time"
-                    InputLabelProps={{ shrink: true }}
-                    value={sessionForm.time}
-                    onChange={(e) => setSessionForm((prev) => ({ ...prev, time: e.target.value }))}
-                    fullWidth
-                  />
-                </Stack>
-                <Stack direction="row" spacing={1}>
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Duration (min)"
-                    value={sessionForm.duration}
-                    onChange={(e) => setSessionForm((prev) => ({ ...prev, duration: Number(e.target.value) || 0 }))}
-                    fullWidth
-                  />
-                  <TextField
-                    select
-                    size="small"
-                    label="Location"
-                    value={sessionForm.location}
-                    onChange={(e) => setSessionForm((prev) => ({ ...prev, location: e.target.value as SessionDto['location'] }))}
-                    fullWidth
-                  >
-                    <MenuItem value="zoom">Zoom</MenuItem>
-                    <MenuItem value="phone">Phone</MenuItem>
-                    <MenuItem value="office">Office</MenuItem>
-                  </TextField>
-                </Stack>
-                <TextField
-                  size="small"
-                  label="Focus"
-                  value={sessionForm.focus}
-                  onChange={(e) => setSessionForm((prev) => ({ ...prev, focus: e.target.value }))}
-                  multiline
-                  minRows={2}
-                />
-                <Typography variant="body2">Billing/Payment: {sessionDetail.paymentStatus ?? 'N/A'}</Typography>
-                <Chip label={sessionDetail.status} size="small" sx={{ width: 'fit-content' }} />
-              </Stack>
-            </Box>
+            {error ? <Typography color="error" variant="caption">{error}</Typography> : null}
           </Stack>
         </Box>
 
         <Stack direction="row" spacing={1} sx={{ pt: 2 }}>
-          <Button variant="contained" onClick={() => navigate(`/sessions?focusSessionId=${sessionDetail.id}`)}>Open Session</Button>
-          <Button variant="outlined" startIcon={<EditIcon />} onClick={() => navigate(`/sessions?focusSessionId=${sessionDetail.id}`)}>Edit Session</Button>
+          {!isEditMode ? (
+            <Button variant="outlined" onClick={() => setIsEditMode(true)}>Edit Session</Button>
+          ) : (
+            <>
+              <Button variant="contained" onClick={handleSave} disabled={saving || loadingNote}>Save Changes</Button>
+              <Button onClick={() => setIsEditMode(false)} disabled={saving}>Cancel</Button>
+            </>
+          )}
         </Stack>
       </Box>
 
