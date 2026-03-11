@@ -84,6 +84,7 @@ export function ClientDetailPage() {
   const [contactDraft, setContactDraft] = useState({ email: '', phone: '' });
   const [savingContact, setSavingContact] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
+  const [contactFieldErrors, setContactFieldErrors] = useState<{ email?: string; phone?: string }>({});
   const sessionsSectionRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = async () => {
@@ -165,12 +166,14 @@ export function ClientDetailPage() {
     if (!client) return;
     setContactDraft({ email: client.email ?? '', phone: client.phone ?? '' });
     setContactError(null);
+    setContactFieldErrors({});
     setIsContactEditOpen(true);
   };
 
   const handleCancelContactEdit = () => {
     setIsContactEditOpen(false);
     setContactError(null);
+    setContactFieldErrors({});
     if (client) {
       setContactDraft({ email: client.email ?? '', phone: client.phone ?? '' });
     }
@@ -178,8 +181,29 @@ export function ClientDetailPage() {
 
   const handleSaveContactEdit = async () => {
     if (!id || !client) return;
+
+    const nextErrors: { email?: string; phone?: string } = {};
+    const email = contactDraft.email.trim();
+    const phone = contactDraft.phone.trim();
+
+    if (!email) {
+      nextErrors.email = 'Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      nextErrors.email = 'Enter a valid email address.';
+    }
+
+    if (!phone) {
+      nextErrors.phone = 'Phone is required.';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setContactFieldErrors(nextErrors);
+      return;
+    }
+
     setSavingContact(true);
     setContactError(null);
+    setContactFieldErrors({});
 
     try {
       await apiClient.updateClient(id, {
@@ -188,13 +212,13 @@ export function ClientDetailPage() {
         startDate: client.startDate,
         status: client.status,
         notes: client.notes?.trim() ? client.notes : null,
-        email: contactDraft.email.trim(),
-        phone: contactDraft.phone.trim(),
+        email,
+        phone,
       });
       setIsContactEditOpen(false);
       await loadData();
-    } catch {
-      setContactError('Unable to save contact information. Please try again.');
+    } catch (error) {
+      setContactError(error instanceof Error ? error.message : 'Unable to save contact information. Please try again.');
     } finally {
       setSavingContact(false);
     }
@@ -447,12 +471,16 @@ export function ClientDetailPage() {
               fullWidth
               value={contactDraft.email}
               onChange={(e) => setContactDraft((prev) => ({ ...prev, email: e.target.value }))}
+              error={Boolean(contactFieldErrors.email)}
+              helperText={contactFieldErrors.email}
             />
             <TextField
               label="Phone"
               fullWidth
               value={contactDraft.phone}
               onChange={(e) => setContactDraft((prev) => ({ ...prev, phone: e.target.value }))}
+              error={Boolean(contactFieldErrors.phone)}
+              helperText={contactFieldErrors.phone}
             />
           </Stack>
         </DialogContent>
@@ -461,7 +489,7 @@ export function ClientDetailPage() {
           <Button
             onClick={handleSaveContactEdit}
             variant="contained"
-            disabled={savingContact || !contactDraft.email.trim() || !contactDraft.phone.trim()}
+            disabled={savingContact}
           >
             Save
           </Button>

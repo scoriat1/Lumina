@@ -534,6 +534,9 @@ api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, Lu
 
     if (request.Date is not null) session.Date = request.Date.Value;
     if (!string.IsNullOrWhiteSpace(request.SessionType)) session.SessionType = request.SessionType;
+    if (request.Duration is not null) session.Duration = request.Duration.Value;
+    if (request.Location is not null) session.Location = request.Location.Value;
+    if (request.Status is not null) session.Status = request.Status.Value;
     if (!string.IsNullOrWhiteSpace(request.Focus)) session.Focus = request.Focus;
     if (request.Notes is not null) session.Notes = request.Notes;
     await db.SaveChangesAsync();
@@ -1048,7 +1051,7 @@ static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpConte
 }
 
 public record LoginRequest(string Email, string Password);
-public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, string? Focus, string? Notes);
+public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, int? Duration, SessionLocation? Location, SessionStatus? Status, string? Focus, string? Notes);
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);

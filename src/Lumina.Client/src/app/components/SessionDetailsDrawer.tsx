@@ -37,12 +37,18 @@ interface SessionDetailsDrawerProps {
   onSaved?: () => Promise<void> | void;
 }
 
-const locationLabelMap: Record<string, string> = { zoom: 'Zoom', phone: 'Phone', office: 'Office' };
-
 export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpdateSession, onSaved }: SessionDetailsDrawerProps) {
   const navigate = useNavigate();
-  const { templateMode, selectedTemplate, getActiveTemplate } = useNotesTemplate();
+  const { templateMode, getActiveTemplate } = useNotesTemplate();
   const [sessionDetail, setSessionDetail] = useState<SessionDto | null>(null);
+  const [sessionForm, setSessionForm] = useState({
+    sessionType: '',
+    date: '',
+    time: '',
+    duration: 60,
+    location: 'zoom' as SessionDto['location'],
+    focus: '',
+  });
   const [freeNoteDraft, setFreeNoteDraft] = useState('');
   const [templateFieldDraft, setTemplateFieldDraft] = useState<Record<string, string>>({});
   const [noteMode, setNoteMode] = useState<'free' | 'template' | 'missing'>('free');
@@ -64,6 +70,15 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
       .then(([detail, structuredNote]) => {
         setSessionDetail(detail);
         setFreeNoteDraft(detail.notes ?? '');
+        const parsedDate = new Date(detail.date);
+        setSessionForm({
+          sessionType: detail.sessionType ?? '',
+          date: format(parsedDate, 'yyyy-MM-dd'),
+          time: format(parsedDate, 'HH:mm'),
+          duration: detail.duration ?? 60,
+          location: detail.location ?? 'zoom',
+          focus: detail.focus ?? '',
+        });
 
         const defaultMode = templateMode === 'template' && activeTemplate ? 'template' : 'free';
 
@@ -85,6 +100,7 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
         setSessionDetail(null);
         setFreeNoteDraft('');
         setTemplateFieldDraft({});
+        setSessionForm({ sessionType: '', date: '', time: '', duration: 60, location: 'zoom', focus: '' });
         setError('Failed to load session notes.');
       })
       .finally(() => setLoadingNote(false));
@@ -102,8 +118,14 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
 
   if (!sessionDetail) return null;
 
-  const handleSaveNotes = async () => {
-    if (!sessionId) return;
+  const handleSave = async () => {
+    if (!sessionId || !sessionDetail) return;
+
+    if (!sessionForm.date || !sessionForm.time || !sessionForm.sessionType.trim()) {
+      setError('Session type, date, and time are required.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -116,6 +138,15 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
       : freeNoteDraft.trim();
 
     try {
+      const sessionDateTime = new Date(`${sessionForm.date}T${sessionForm.time}`);
+      await apiClient.updateSession(sessionId, {
+        sessionType: sessionForm.sessionType.trim(),
+        date: sessionDateTime.toISOString(),
+        duration: Number(sessionForm.duration),
+        location: sessionForm.location,
+        focus: sessionForm.focus.trim(),
+      });
+
       await apiClient.saveSessionStructuredNote(sessionId, {
         templateId: noteMode === 'template' && activeTemplate ? Number(activeTemplate.id) : undefined,
         noteType: noteMode,
@@ -126,11 +157,18 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
       const refreshed = await apiClient.getSession(sessionId);
       setSessionDetail(refreshed);
       setFreeNoteDraft(refreshed.notes ?? '');
-      onUpdateSession?.(sessionId, { notes: refreshed.notes });
+      onUpdateSession?.(sessionId, {
+        sessionType: refreshed.sessionType,
+        date: refreshed.date,
+        duration: refreshed.duration,
+        location: refreshed.location,
+        focus: refreshed.focus,
+        notes: refreshed.notes,
+      });
       await onSaved?.();
       setSavedVisible(true);
-    } catch {
-      setError('Failed to save notes.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save session details.');
     } finally {
       setSaving(false);
     }
@@ -196,7 +234,7 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
               )}
 
               <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
-                <Button size="small" variant="contained" onClick={handleSaveNotes} disabled={saving || loadingNote}>Save</Button>
+                <Button size="small" variant="contained" onClick={handleSave} disabled={saving || loadingNote}>Save Changes</Button>
               </Stack>
               {error && <Typography color="error" variant="caption">{error}</Typography>}
             </Box>
@@ -224,10 +262,63 @@ export function SessionDetailsDrawer({ open, onClose, sessionId, sessions, onUpd
 
             <Box>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>Details</Typography>
-              <Stack spacing={0.75}>
-                <Typography variant="body2">Date: {format(new Date(sessionDetail.date), 'MMM d, yyyy')}</Typography>
-                <Typography variant="body2">Duration: {sessionDetail.duration} min</Typography>
-                <Typography variant="body2">Method/Location: {locationLabelMap[sessionDetail.location] ?? sessionDetail.location}</Typography>
+              <Stack spacing={1.25}>
+                <TextField
+                  size="small"
+                  label="Session Type"
+                  value={sessionForm.sessionType}
+                  onChange={(e) => setSessionForm((prev) => ({ ...prev, sessionType: e.target.value }))}
+                />
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    size="small"
+                    type="date"
+                    label="Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={sessionForm.date}
+                    onChange={(e) => setSessionForm((prev) => ({ ...prev, date: e.target.value }))}
+                    fullWidth
+                  />
+                  <TextField
+                    size="small"
+                    type="time"
+                    label="Time"
+                    InputLabelProps={{ shrink: true }}
+                    value={sessionForm.time}
+                    onChange={(e) => setSessionForm((prev) => ({ ...prev, time: e.target.value }))}
+                    fullWidth
+                  />
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Duration (min)"
+                    value={sessionForm.duration}
+                    onChange={(e) => setSessionForm((prev) => ({ ...prev, duration: Number(e.target.value) || 0 }))}
+                    fullWidth
+                  />
+                  <TextField
+                    select
+                    size="small"
+                    label="Location"
+                    value={sessionForm.location}
+                    onChange={(e) => setSessionForm((prev) => ({ ...prev, location: e.target.value as SessionDto['location'] }))}
+                    fullWidth
+                  >
+                    <MenuItem value="zoom">Zoom</MenuItem>
+                    <MenuItem value="phone">Phone</MenuItem>
+                    <MenuItem value="office">Office</MenuItem>
+                  </TextField>
+                </Stack>
+                <TextField
+                  size="small"
+                  label="Focus"
+                  value={sessionForm.focus}
+                  onChange={(e) => setSessionForm((prev) => ({ ...prev, focus: e.target.value }))}
+                  multiline
+                  minRows={2}
+                />
                 <Typography variant="body2">Billing/Payment: {sessionDetail.paymentStatus ?? 'N/A'}</Typography>
                 <Chip label={sessionDetail.status} size="small" sx={{ width: 'fit-content' }} />
               </Stack>
