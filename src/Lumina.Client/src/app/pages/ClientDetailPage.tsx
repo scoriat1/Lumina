@@ -70,7 +70,7 @@ const statusChipColorMap: Record<ClientDto['status'], 'success' | 'warning' | 'd
 export function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [client, setClient] = useState<ClientDto | null>(null);
   const [sessions, setSessions] = useState<SessionDto[]>([]);
   const [detailView, setDetailView] = useState<ClientDetailViewDto | null>(null);
@@ -80,11 +80,24 @@ export function ClientDetailPage() {
   const [noteType, setNoteType] = useState<NoteType>('general');
   const [savingNote, setSavingNote] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
-  const [isContactEditOpen, setIsContactEditOpen] = useState(false);
-  const [contactDraft, setContactDraft] = useState({ email: '', phone: '' });
-  const [savingContact, setSavingContact] = useState(false);
-  const [contactError, setContactError] = useState<string | null>(null);
-  const [contactFieldErrors, setContactFieldErrors] = useState<{ email?: string; phone?: string }>({});
+  const [isClientEditOpen, setIsClientEditOpen] = useState(false);
+  const [clientDraft, setClientDraft] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    status: 'active' as ClientDto['status'],
+    startDate: '',
+    notes: '',
+  });
+  const [savingClient, setSavingClient] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [clientFieldErrors, setClientFieldErrors] = useState<{
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    startDate?: string;
+  }>({});
   const sessionsSectionRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = async () => {
@@ -118,33 +131,12 @@ export function ClientDetailPage() {
     }
   }, [searchParams, detailView?.engagements.length]);
 
-  useEffect(() => {
-    const sessionIdParam = searchParams.get('sessionId');
-
-    if (!sessionIdParam || !sessions.some((session) => session.id === sessionIdParam)) {
-      setSelectedSessionId(null);
-      return;
-    }
-
-    setSelectedSessionId(sessionIdParam);
-  }, [searchParams, sessions]);
-
   const handleOpenSessionDetails = (sessionId: string) => {
     setSelectedSessionId(sessionId);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('sessionId', sessionId);
-      return next;
-    });
   };
 
   const handleCloseSessionDetails = () => {
     setSelectedSessionId(null);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('sessionId');
-      return next;
-    }, { replace: true });
   };
 
   const handleAddClientNote = async () => {
@@ -162,29 +154,44 @@ export function ClientDetailPage() {
     }
   };
 
-  const handleOpenContactEdit = () => {
+  const handleOpenClientEdit = () => {
     if (!client) return;
-    setContactDraft({ email: client.email ?? '', phone: client.phone ?? '' });
-    setContactError(null);
-    setContactFieldErrors({});
-    setIsContactEditOpen(true);
+    const [firstName = '', ...rest] = client.name.split(' ');
+    setClientDraft({
+      firstName,
+      lastName: rest.join(' '),
+      email: client.email ?? '',
+      phone: client.phone ?? '',
+      status: client.status,
+      startDate: format(new Date(client.startDate), 'yyyy-MM-dd'),
+      notes: client.notes ?? '',
+    });
+    setClientError(null);
+    setClientFieldErrors({});
+    setIsClientEditOpen(true);
   };
 
-  const handleCancelContactEdit = () => {
-    setIsContactEditOpen(false);
-    setContactError(null);
-    setContactFieldErrors({});
-    if (client) {
-      setContactDraft({ email: client.email ?? '', phone: client.phone ?? '' });
-    }
+  const handleCancelClientEdit = () => {
+    setIsClientEditOpen(false);
+    setClientError(null);
+    setClientFieldErrors({});
   };
 
-  const handleSaveContactEdit = async () => {
+  const handleSaveClientEdit = async () => {
     if (!id || !client) return;
 
-    const nextErrors: { email?: string; phone?: string } = {};
-    const email = contactDraft.email.trim();
-    const phone = contactDraft.phone.trim();
+    const nextErrors: { firstName?: string; lastName?: string; email?: string; startDate?: string } = {};
+    const firstName = clientDraft.firstName.trim();
+    const lastName = clientDraft.lastName.trim();
+    const email = clientDraft.email.trim();
+
+    if (!firstName) {
+      nextErrors.firstName = 'First name is required.';
+    }
+
+    if (!lastName) {
+      nextErrors.lastName = 'Last name is required.';
+    }
 
     if (!email) {
       nextErrors.email = 'Email is required.';
@@ -192,35 +199,35 @@ export function ClientDetailPage() {
       nextErrors.email = 'Enter a valid email address.';
     }
 
-    if (!phone) {
-      nextErrors.phone = 'Phone is required.';
+    if (!clientDraft.startDate) {
+      nextErrors.startDate = 'Start date is required.';
     }
 
     if (Object.keys(nextErrors).length > 0) {
-      setContactFieldErrors(nextErrors);
+      setClientFieldErrors(nextErrors);
       return;
     }
 
-    setSavingContact(true);
-    setContactError(null);
-    setContactFieldErrors({});
+    setSavingClient(true);
+    setClientError(null);
+    setClientFieldErrors({});
 
     try {
       await apiClient.updateClient(id, {
-        name: client.name,
+        name: `${firstName} ${lastName}`,
         program: client.program,
-        startDate: client.startDate,
-        status: client.status,
-        notes: client.notes?.trim() ? client.notes : null,
+        startDate: new Date(clientDraft.startDate).toISOString(),
+        status: clientDraft.status,
+        notes: clientDraft.notes.trim() ? clientDraft.notes.trim() : null,
         email,
-        phone,
+        phone: clientDraft.phone.trim(),
       });
-      setIsContactEditOpen(false);
+      setIsClientEditOpen(false);
       await loadData();
     } catch (error) {
-      setContactError(error instanceof Error ? error.message : 'Unable to save contact information. Please try again.');
+      setClientError(error instanceof Error ? error.message : 'Unable to save client details. Please try again.');
     } finally {
-      setSavingContact(false);
+      setSavingClient(false);
     }
   };
 
@@ -385,7 +392,7 @@ export function ClientDetailPage() {
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>Contact Information</Typography>
-                <IconButton size="small" onClick={handleOpenContactEdit}>
+                <IconButton size="small" onClick={handleOpenClientEdit}>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Stack>
@@ -460,36 +467,81 @@ export function ClientDetailPage() {
         </Stack>
       </Box>
 
-      <Dialog open={isContactEditOpen} onClose={savingContact ? undefined : handleCancelContactEdit} fullWidth maxWidth="xs">
-        <DialogTitle>Edit Contact Information</DialogTitle>
+      <Dialog open={isClientEditOpen} onClose={savingClient ? undefined : handleCancelClientEdit} fullWidth maxWidth="sm">
+        <DialogTitle>Edit Client Details</DialogTitle>
         <DialogContent>
           <Stack spacing={1.25} sx={{ pt: 0.5 }}>
-            {contactError ? <Alert severity="error">{contactError}</Alert> : null}
+            {clientError ? <Alert severity="error">{clientError}</Alert> : null}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+              <TextField
+                label="First Name"
+                fullWidth
+                value={clientDraft.firstName}
+                onChange={(e) => setClientDraft((prev) => ({ ...prev, firstName: e.target.value }))}
+                error={Boolean(clientFieldErrors.firstName)}
+                helperText={clientFieldErrors.firstName}
+              />
+              <TextField
+                label="Last Name"
+                fullWidth
+                value={clientDraft.lastName}
+                onChange={(e) => setClientDraft((prev) => ({ ...prev, lastName: e.target.value }))}
+                error={Boolean(clientFieldErrors.lastName)}
+                helperText={clientFieldErrors.lastName}
+              />
+            </Stack>
             <TextField
               label="Email"
               type="email"
               fullWidth
-              value={contactDraft.email}
-              onChange={(e) => setContactDraft((prev) => ({ ...prev, email: e.target.value }))}
-              error={Boolean(contactFieldErrors.email)}
-              helperText={contactFieldErrors.email}
+              value={clientDraft.email}
+              onChange={(e) => setClientDraft((prev) => ({ ...prev, email: e.target.value }))}
+              error={Boolean(clientFieldErrors.email)}
+              helperText={clientFieldErrors.email}
             />
             <TextField
               label="Phone"
               fullWidth
-              value={contactDraft.phone}
-              onChange={(e) => setContactDraft((prev) => ({ ...prev, phone: e.target.value }))}
-              error={Boolean(contactFieldErrors.phone)}
-              helperText={contactFieldErrors.phone}
+              value={clientDraft.phone}
+              onChange={(e) => setClientDraft((prev) => ({ ...prev, phone: e.target.value }))}
+            />
+            <TextField
+              label="Status"
+              select
+              fullWidth
+              value={clientDraft.status}
+              onChange={(e) => setClientDraft((prev) => ({ ...prev, status: e.target.value as ClientDto['status'] }))}
+            >
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="paused">Paused</MenuItem>
+              <MenuItem value="completed">Completed</MenuItem>
+            </TextField>
+            <TextField
+              label="Start Date"
+              type="date"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={clientDraft.startDate}
+              onChange={(e) => setClientDraft((prev) => ({ ...prev, startDate: e.target.value }))}
+              error={Boolean(clientFieldErrors.startDate)}
+              helperText={clientFieldErrors.startDate}
+            />
+            <TextField
+              label="Notes"
+              multiline
+              minRows={3}
+              fullWidth
+              value={clientDraft.notes}
+              onChange={(e) => setClientDraft((prev) => ({ ...prev, notes: e.target.value }))}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelContactEdit} disabled={savingContact}>Cancel</Button>
+          <Button onClick={handleCancelClientEdit} disabled={savingClient}>Cancel</Button>
           <Button
-            onClick={handleSaveContactEdit}
+            onClick={handleSaveClientEdit}
             variant="contained"
-            disabled={savingContact}
+            disabled={savingClient}
           >
             Save
           </Button>
