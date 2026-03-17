@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "Lumina Full Stack",
+    "Projects": [
+      {
+        "Path": "src\\Lumina.Api\\Lumina.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "src\\Lumina.Client\\Lumina.Client.esproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
