@@ -15,6 +15,6 @@
   </ItemGroup>
 
   <Target Name="DescribeFrontendWorkspace" AfterTargets="Build">
-    <Message Importance="high" Text="Lumina.Client is a frontend workspace wrapper. Run 'npm install' and 'npm run dev' from src\\Lumina.Client, or start Lumina.Api to launch the SPA proxy." />
+    <Message Importance="high" Text="Lumina.Client is a frontend workspace wrapper. Run 'npm install' and 'npm run dev' from src\\Lumina.Client when you need the frontend locally." />
   </Target>
 </Project>
