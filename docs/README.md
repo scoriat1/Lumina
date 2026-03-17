@@ -5,6 +5,10 @@
 - Local SQL Server database name: `Lumina`
 - Run API:
   - `dotnet run --project src/Lumina.Api`
+- Visual Studio:
+  - Open `Lumina.sln`
+  - Start `Lumina.Api` or the shared `Lumina Full Stack` launch profile
+  - Starting the API also launches `npm run dev` from `src/Lumina.Client` through ASP.NET Core SPA proxy
 
 ## EF Core Migrations
 - Create migration:
@@ -23,3 +27,4 @@
   - `cd src/Lumina.Client && npm install`
 - Run client:
   - `cd src/Lumina.Client && npm run dev`
+- `Lumina.Client` is included in the solution as a lightweight wrapper project so Visual Studio can load it reliably without the JavaScript `.esproj` dependency.
