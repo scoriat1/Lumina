@@ -34,7 +34,6 @@ import NotesIcon from '@mui/icons-material/Notes';
 import PaidIcon from '@mui/icons-material/Paid';
 import PhoneIcon from '@mui/icons-material/Phone';
 import PlaceIcon from '@mui/icons-material/Place';
-import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import { format } from 'date-fns';
 import { NewSessionModal } from '../components/NewSessionModal';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
@@ -67,18 +66,6 @@ const locationLabelMap: Record<string, string> = {
   office: 'Office',
 };
 
-const clientStatusMap: Record<ClientDto['status'], string> = {
-  active: 'Active',
-  paused: 'Paused',
-  completed: 'Completed',
-};
-
-const clientStatusToneMap: Record<ClientDto['status'], ChipTone> = {
-  active: 'brand',
-  paused: 'warning',
-  completed: 'neutral',
-};
-
 const noteTypeLabelMap: Record<NoteType, string> = {
   general: 'General',
   admin: 'Admin',
@@ -92,27 +79,18 @@ const noteToneMap: Record<NoteType, ChipTone> = {
 };
 
 const cardContentSx = {
-  p: { xs: 2, sm: 2.25 },
+  p: { xs: 1.9, sm: 2.1 },
   '&:last-child': {
-    pb: { xs: 2, sm: 2.25 },
+    pb: { xs: 1.9, sm: 2.1 },
   },
 };
 
 const surfaceCardSx = {
   borderRadius: 3.5,
   bgcolor: 'common.white',
-  borderColor: (theme: any) => alpha(theme.palette.text.primary, 0.08),
-  boxShadow: (theme: any) => `0 16px 36px ${alpha(theme.palette.common.black, 0.04)}`,
-};
-
-const summaryTagSx = {
-  px: 1.25,
-  py: 0.9,
-  borderRadius: 2.5,
   border: '1px solid',
-  borderColor: (theme: any) => alpha(theme.palette.text.primary, 0.07),
-  bgcolor: (theme: any) => alpha(theme.palette.background.default, 0.7),
-  minWidth: 116,
+  borderColor: '#E7E2F1',
+  boxShadow: '0 6px 24px rgba(26, 18, 38, 0.04)',
 };
 
 const compactFieldSx = {
@@ -146,6 +124,10 @@ function formatDateTime(value: string) {
 
 function formatDateOnly(value: string) {
   return format(new Date(value), 'MMM d, yyyy');
+}
+
+function formatLongDate(value: string) {
+  return format(new Date(value), 'MMMM d, yyyy');
 }
 
 function formatDateRange(startDate?: string, endDate?: string) {
@@ -255,17 +237,17 @@ function SoftChip({ label, tone }: { label: string; tone: ChipTone }) {
       size="small"
       label={label}
       sx={{
-        height: 24,
+        height: 21,
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: 700,
-        letterSpacing: 0.2,
+        letterSpacing: 0.15,
         bgcolor: styles.bg,
         color: styles.color,
         border: '1px solid',
         borderColor: styles.border,
         '& .MuiChip-label': {
-          px: 1.15,
+          px: 0.95,
         },
       }}
     />
@@ -284,34 +266,33 @@ function ContactInfoRow({
   return (
     <Box
       sx={{
-        border: '1px solid',
-        borderColor: (theme) => alpha(theme.palette.text.primary, 0.07),
-        borderRadius: 2.75,
-        px: 1.5,
-        py: 1.25,
-        bgcolor: (theme) => alpha(theme.palette.background.default, 0.58),
+        py: 0.35,
       }}
     >
       <Stack direction="row" spacing={1.1} alignItems="flex-start">
         <Box
           sx={{
-            width: 32,
-            height: 32,
+            width: 28,
+            height: 28,
             borderRadius: 2,
             display: 'grid',
             placeItems: 'center',
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-            color: 'text.secondary',
+            bgcolor: '#F4EFFB',
+            color: '#8B76B4',
             flexShrink: 0,
           }}
         >
           {icon}
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.25 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', fontWeight: 600, letterSpacing: 0.15, fontSize: 10.5 }}
+          >
             {label}
           </Typography>
-          <Typography variant="body2" sx={{ mt: 0.35, fontWeight: 600, color: 'text.primary', wordBreak: 'break-word' }}>
+          <Typography variant="body2" sx={{ mt: 0.2, fontWeight: 500, color: 'text.primary', wordBreak: 'break-word' }}>
             {value}
           </Typography>
         </Box>
@@ -327,21 +308,20 @@ function ClientNoteCard({ note }: { note: ClientNoteDto }) {
     <Box
       sx={{
         border: '1px solid',
-        borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
-        borderRadius: 2.75,
-        px: 1.5,
-        py: 1.35,
-        bgcolor: 'common.white',
-        boxShadow: (theme) => `0 10px 24px ${alpha(theme.palette.common.black, 0.03)}`,
+        borderColor: '#EEE7F6',
+        borderRadius: 2.6,
+        px: 1.2,
+        py: 1.1,
+        bgcolor: '#FAF9FD',
       }}
     >
       <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 0.85 }}>
         <SoftChip label={noteTypeLabelMap[normalizedType]} tone={noteToneMap[normalizedType]} />
-        <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontSize: 10.5 }}>
           {formatDateTime(note.createdAt)}
         </Typography>
       </Stack>
-      <Typography variant="body2" sx={{ color: 'text.primary', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+      <Typography variant="body2" sx={{ color: 'text.primary', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
         {note.content}
       </Typography>
     </Box>
@@ -362,22 +342,22 @@ function EngagementActivityCard({
       <Box
         sx={{
           border: '1px solid',
-          borderColor: '#E9D9C4',
-          borderRadius: 2.75,
-          px: 1.5,
-          py: 1.35,
-          bgcolor: '#F8F1E7',
+          borderColor: '#F0DFCA',
+          borderRadius: 2.6,
+          px: 1.3,
+          py: 1.15,
+          bgcolor: '#FCF5EC',
         }}
       >
         <Stack direction="row" spacing={1.1} alignItems="flex-start">
           <Box
             sx={{
-              width: 30,
-              height: 30,
+              width: 28,
+              height: 28,
               borderRadius: 2,
               display: 'grid',
               placeItems: 'center',
-              bgcolor: '#F0E0C8',
+              bgcolor: '#F5E5D0',
               color: '#8A6B45',
               flexShrink: 0,
             }}
@@ -407,18 +387,18 @@ function EngagementActivityCard({
       onClick={() => onOpenSession(session.id)}
       sx={{
         border: '1px solid',
-        borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
-        borderRadius: 2.75,
-        px: 1.5,
-        py: 1.35,
+        borderColor: '#ECE7F4',
+        borderRadius: 2.6,
+        px: 1.35,
+        py: 1.15,
         bgcolor: 'common.white',
         cursor: 'pointer',
         transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
-        boxShadow: (theme) => `0 10px 24px ${alpha(theme.palette.common.black, 0.03)}`,
+        boxShadow: '0 2px 8px rgba(26, 18, 38, 0.02)',
         '&:hover': {
           transform: 'translateY(-1px)',
-          borderColor: (theme) => alpha(theme.palette.primary.main, 0.24),
-          boxShadow: (theme) => `0 16px 28px ${alpha(theme.palette.common.black, 0.06)}`,
+          borderColor: '#DACCF0',
+          boxShadow: '0 8px 18px rgba(26, 18, 38, 0.05)',
         },
       }}
     >
@@ -441,8 +421,8 @@ function EngagementActivityCard({
 
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
-        spacing={{ xs: 0.75, sm: 1.5 }}
-        sx={{ mt: 1.15, color: 'text.secondary' }}
+        spacing={{ xs: 0.65, sm: 1.2 }}
+        sx={{ mt: 0.95, color: 'text.secondary' }}
       >
         <Stack direction="row" spacing={0.65} alignItems="center">
           <EventIcon sx={{ fontSize: 16 }} />
@@ -689,15 +669,29 @@ export function ClientDetailPage() {
 
   const upcomingSessionId =
     upcomingSession && 'sessionId' in upcomingSession ? upcomingSession.sessionId : upcomingSession?.id;
+  const summaryMetadata = [
+    `Client since ${formatLongDate(client.startDate)}`,
+    `${orderedEngagements.length} ${orderedEngagements.length === 1 ? 'engagement' : 'engagements'}`,
+    `${formatCurrency(lifetimeValue) ?? 'No recorded'} lifetime`,
+  ];
 
   return (
-    <Box>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: 1160,
+        mx: 'auto',
+        px: { xs: 1.5, sm: 3, xl: 4 },
+        pt: { xs: 1.25, sm: 2.25 },
+        pb: { xs: 4, lg: 5 },
+      }}
+    >
       <Button
         startIcon={<ArrowBackIcon />}
         onClick={() => navigate('/clients')}
         sx={{
           textTransform: 'none',
-          mb: 2,
+          mb: 1.5,
           px: 1,
           color: 'text.secondary',
           '&:hover': {
@@ -709,126 +703,92 @@ export function ClientDetailPage() {
         Back to Clients
       </Button>
 
-      <Card variant="outlined" sx={{ ...surfaceCardSx, mb: 2.25 }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ md: 'center' }}
+        spacing={{ xs: 2, md: 3 }}
+        sx={{ mb: 2.1 }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: -0.45, lineHeight: 1.08 }}>
+            {client.name}
+          </Typography>
+          <Stack
+            direction="row"
+            useFlexGap
+            flexWrap="wrap"
+            spacing={0}
+            sx={{ mt: 1, color: 'text.secondary', rowGap: 0.5, columnGap: 0.8 }}
+          >
+            {summaryMetadata.map((item, index) => (
+              <Stack key={item} direction="row" spacing={0.8} alignItems="center">
+                <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary' }}>
+                  {item}
+                </Typography>
+                {index < summaryMetadata.length - 1 ? (
+                  <Box
+                    sx={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: '50%',
+                      bgcolor: (theme) => alpha(theme.palette.text.primary, 0.18),
+                    }}
+                  />
+                ) : null}
+              </Stack>
+            ))}
+          </Stack>
+        </Box>
+
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setIsNewSessionModalOpen(true)}
+          sx={{
+            textTransform: 'none',
+            borderRadius: 2.5,
+            px: 2.5,
+            py: 1.1,
+            minWidth: 160,
+            alignSelf: { xs: 'stretch', sm: 'flex-start', md: 'center' },
+            fontWeight: 700,
+            boxShadow: '0 10px 22px rgba(130, 88, 255, 0.22)',
+          }}
+        >
+          New Session
+        </Button>
+      </Stack>
+
+      <Card
+        variant="outlined"
+        sx={{
+          ...surfaceCardSx,
+          mb: 3,
+          borderColor: '#E8E2F4',
+          bgcolor: '#FAF9FD',
+          boxShadow: 'none',
+        }}
+      >
         <CardContent sx={cardContentSx}>
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             justifyContent="space-between"
             alignItems={{ md: 'center' }}
-            spacing={2.5}
+            spacing={1.5}
           >
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 0.8, fontWeight: 700 }}>
-                Client Profile
-              </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} sx={{ mt: 0.4 }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: -0.2 }}>
-                  {client.name}
-                </Typography>
-                <SoftChip
-                  label={clientStatusMap[client.status] ?? formatLabel(client.status)}
-                  tone={clientStatusToneMap[client.status]}
-                />
-              </Stack>
-
-              <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1.6 }}>
-                <Box sx={summaryTagSx}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                    Program
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.25, fontWeight: 600 }}>
-                    {client.program}
-                  </Typography>
-                </Box>
-                <Box sx={summaryTagSx}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                    Since
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.25, fontWeight: 600 }}>
-                    {formatDateOnly(client.startDate)}
-                  </Typography>
-                </Box>
-                <Box sx={summaryTagSx}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                    Engagements
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.25, fontWeight: 600 }}>
-                    {orderedEngagements.length}
-                  </Typography>
-                </Box>
-                <Box sx={summaryTagSx}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                    Progress
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.25, fontWeight: 600 }}>
-                    {client.totalSessions > 0
-                      ? `${client.sessionsCompleted} of ${client.totalSessions}`
-                      : 'No sessions'}
-                  </Typography>
-                </Box>
-                <Box sx={summaryTagSx}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                    Lifetime Value
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 0.25, fontWeight: 600 }}>
-                    {formatCurrency(lifetimeValue) ?? 'Unavailable'}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setIsNewSessionModalOpen(true)}
-              sx={{
-                textTransform: 'none',
-                borderRadius: 999,
-                px: 2,
-                minWidth: 144,
-                boxShadow: 'none',
-              }}
-            >
-              New Session
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Card variant="outlined" sx={{ ...surfaceCardSx, mb: 3 }}>
-        <CardContent sx={cardContentSx}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            justifyContent="space-between"
-            alignItems={{ sm: 'center' }}
-            spacing={2}
-          >
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 0.8, fontWeight: 700 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 0.75, fontWeight: 700, fontSize: 10.5 }}>
                 Next Step
               </Typography>
               {upcomingSession ? (
                 <>
-                  <Typography variant="h6" sx={{ mt: 0.45, fontWeight: 700 }}>
-                    {upcomingSession.sessionType}
+                  <Typography variant="body2" sx={{ mt: 0.55, fontWeight: 600, color: 'text.primary' }}>
+                    {`Next session scheduled ${format(new Date(upcomingSession.date), 'MMM d')} at ${format(new Date(upcomingSession.date), 'h:mm a')}`}
                   </Typography>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.6, sm: 1.5 }} sx={{ mt: 0.85 }}>
-                    <Stack direction="row" spacing={0.65} alignItems="center">
-                      <EventIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {formatDateTime(upcomingSession.date)}
-                      </Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={0.65} alignItems="center">
-                      <PlaceIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {locationLabelMap[upcomingSession.location] ?? formatLabel(upcomingSession.location)}
-                      </Typography>
-                    </Stack>
-                  </Stack>
                 </>
               ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.65 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.55 }}>
                   No upcoming sessions scheduled.
                 </Typography>
               )}
@@ -839,16 +799,34 @@ export function ClientDetailPage() {
                 onClick={() => {
                   if (upcomingSessionId) handleOpenSessionDetails(upcomingSessionId);
                 }}
-                sx={{ textTransform: 'none', borderRadius: 999, px: 1.6 }}
+                variant="outlined"
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 999,
+                  px: 1.5,
+                  minWidth: 0,
+                  borderColor: '#E3DCF0',
+                  bgcolor: 'common.white',
+                  color: 'text.secondary',
+                }}
               >
-                Open session
+                Open
               </Button>
             ) : (
               <Button
                 onClick={() => setIsNewSessionModalOpen(true)}
-                sx={{ textTransform: 'none', borderRadius: 999, px: 1.6 }}
+                variant="outlined"
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 999,
+                  px: 1.5,
+                  minWidth: 0,
+                  borderColor: '#E3DCF0',
+                  bgcolor: 'common.white',
+                  color: 'text.secondary',
+                }}
               >
-                Schedule session
+                Schedule
               </Button>
             )}
           </Stack>
@@ -857,22 +835,21 @@ export function ClientDetailPage() {
 
       <Box
         sx={{
+          borderTop: '1px solid',
+          borderColor: (theme) => alpha(theme.palette.text.primary, 0.07),
+          mb: 3,
+        }}
+      />
+
+      <Box
+        sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 1.75fr) minmax(320px, 360px)' },
-          gap: 2.5,
+          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.78fr) minmax(260px, 0.72fr)' },
+          gap: { xs: 2, lg: 2.2 },
           alignItems: 'start',
         }}
       >
         <Box ref={sessionsSectionRef}>
-          <Box sx={{ mb: 1.5 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Engagements
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
-              Package progress, upcoming work, and recent session history.
-            </Typography>
-          </Box>
-
           {orderedEngagements.length > 0 ? (
             <Stack spacing={1.5}>
               {orderedEngagements.map((engagement, index) => {
@@ -891,10 +868,12 @@ export function ClientDetailPage() {
                     disableGutters
                     sx={{
                       border: '1px solid',
-                      borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
-                      borderRadius: 3,
+                      borderColor: engagement.status === 'active' ? '#E5DAF6' : '#EEE9F4',
+                      borderRadius: 3.5,
                       bgcolor: 'common.white',
-                      boxShadow: (theme) => `0 14px 32px ${alpha(theme.palette.common.black, 0.04)}`,
+                      boxShadow: engagement.status === 'active'
+                        ? '0 8px 26px rgba(26, 18, 38, 0.05)'
+                        : '0 2px 10px rgba(26, 18, 38, 0.02)',
                       overflow: 'hidden',
                       '&:before': { display: 'none' },
                     }}
@@ -902,8 +881,8 @@ export function ClientDetailPage() {
                     <AccordionSummary
                       expandIcon={<ExpandMoreIcon sx={{ color: 'text.secondary' }} />}
                       sx={{
-                        px: { xs: 1.75, sm: 2.1 },
-                        py: 1.5,
+                        px: { xs: 1.9, sm: 2.25 },
+                        py: 1.7,
                         '& .MuiAccordionSummary-content': {
                           my: 0,
                         },
@@ -917,8 +896,12 @@ export function ClientDetailPage() {
                         sx={{ width: '100%', minWidth: 0 }}
                       >
                         <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 0.6 }}>
-                            {engagement.status === 'active' ? 'Current Package' : 'Engagement History'}
+                          <Typography
+                            variant="caption"
+                            color={engagement.status === 'active' ? 'primary.main' : 'text.secondary'}
+                            sx={{ fontWeight: 700, letterSpacing: 0.6, fontSize: 10.5 }}
+                          >
+                            {engagement.status === 'active' ? 'CURRENT PHASE' : 'PACKAGE HISTORY'}
                           </Typography>
                           <Stack
                             direction={{ xs: 'column', sm: 'row' }}
@@ -926,19 +909,21 @@ export function ClientDetailPage() {
                             alignItems={{ sm: 'center' }}
                             sx={{ mt: 0.35 }}
                           >
-                            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', fontSize: '1.05rem' }}>
                               {engagement.name}
                             </Typography>
+                          </Stack>
+                          <Stack
+                            direction="row"
+                            useFlexGap
+                            flexWrap="wrap"
+                            spacing={0}
+                            sx={{ mt: 0.95, color: 'text.secondary', rowGap: 0.5, columnGap: 1 }}
+                          >
                             <SoftChip
                               label={formatLabel(engagement.status)}
                               tone={getEngagementStatusTone(engagement.status)}
                             />
-                          </Stack>
-                          <Stack
-                            direction={{ xs: 'column', sm: 'row' }}
-                            spacing={{ xs: 0.7, sm: 1.35 }}
-                            sx={{ mt: 1, color: 'text.secondary' }}
-                          >
                             <Stack direction="row" spacing={0.65} alignItems="center">
                               <CalendarTodayOutlinedIcon sx={{ fontSize: 15 }} />
                               <Typography variant="caption">{formatDateRange(engagement.startDate, engagement.endDate)}</Typography>
@@ -956,47 +941,38 @@ export function ClientDetailPage() {
 
                         <Box
                           sx={{
-                            minWidth: { md: 190 },
-                            maxWidth: { md: 220 },
+                            minWidth: { md: 120 },
+                            maxWidth: { md: 142 },
                             width: { xs: '100%', md: 'auto' },
                           }}
                         >
-                          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.6 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                              Progress
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {`${engagement.usedSessions}/${engagement.totalSessions} sessions`}
-                            </Typography>
-                          </Stack>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: { md: 'right' } }}>
+                            {`${engagement.usedSessions} of ${engagement.totalSessions} sessions`}
+                          </Typography>
                           <LinearProgress
                             variant="determinate"
                             value={progressPercent}
                             sx={{
-                              height: 6,
+                              mt: 0.7,
+                              height: 4,
                               borderRadius: 999,
-                              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                              bgcolor: '#EFE8FB',
                               '& .MuiLinearProgress-bar': {
                                 borderRadius: 999,
+                                backgroundColor: '#8E63F8',
                               },
                             }}
                           />
-                          <Stack direction="row" spacing={0.65} alignItems="center" sx={{ mt: 0.65 }}>
-                            <RadioButtonUncheckedRoundedIcon sx={{ fontSize: 10, color: 'text.secondary' }} />
-                            <Typography variant="caption" color="text.secondary">
-                              {`${progressPercent}% complete`}
-                            </Typography>
-                          </Stack>
                         </Box>
                       </Stack>
                     </AccordionSummary>
 
-                    <AccordionDetails sx={{ px: { xs: 1.75, sm: 2.1 }, pt: 0, pb: 1.85 }}>
+                    <AccordionDetails sx={{ px: { xs: 1.9, sm: 2.25 }, pt: 0, pb: 1.9 }}>
                       <Box
                         sx={{
-                          pt: 1.45,
+                          pt: 1.5,
                           borderTop: '1px solid',
-                          borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
+                          borderColor: '#F0EBF6',
                         }}
                       >
                         {activities.length > 0 ? (
@@ -1013,11 +989,11 @@ export function ClientDetailPage() {
                           <Box
                             sx={{
                               border: '1px solid',
-                              borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
+                              borderColor: '#ECE7F4',
                               borderRadius: 2.75,
                               px: 1.6,
                               py: 1.9,
-                              bgcolor: (theme) => alpha(theme.palette.background.default, 0.58),
+                              bgcolor: '#FAF9FD',
                             }}
                           >
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -1051,25 +1027,24 @@ export function ClientDetailPage() {
           )}
         </Box>
 
-        <Stack spacing={2}>
+        <Stack spacing={1.6}>
           <Card variant="outlined" sx={surfaceCardSx}>
             <CardContent sx={cardContentSx}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.4 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.05 }}>
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                     Contact Information
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
-                    Primary contact details and client record settings.
                   </Typography>
                 </Box>
                 <IconButton
                   size="small"
                   onClick={isClientEditOpen ? handleCancelClientEdit : handleOpenClientEdit}
                   sx={{
-                    border: '1px solid',
-                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
-                    bgcolor: (theme) => alpha(theme.palette.background.default, 0.5),
+                    color: 'primary.main',
+                    bgcolor: '#F6F0FF',
+                    '&:hover': {
+                      bgcolor: '#F0E8FF',
+                    },
                   }}
                 >
                   {isClientEditOpen ? <CloseRoundedIcon fontSize="small" /> : <EditIcon fontSize="small" />}
@@ -1077,7 +1052,7 @@ export function ClientDetailPage() {
               </Stack>
 
               <Collapse in={!isClientEditOpen} unmountOnExit>
-                <Stack spacing={1.1}>
+                <Stack spacing={1.2}>
                   <ContactInfoRow
                     icon={<EmailIcon sx={{ fontSize: 17 }} />}
                     label="Email"
@@ -1087,16 +1062,6 @@ export function ClientDetailPage() {
                     icon={<PhoneIcon sx={{ fontSize: 17 }} />}
                     label="Phone"
                     value={client.phone || 'Not provided'}
-                  />
-                  <ContactInfoRow
-                    icon={<CheckCircleOutlineIcon sx={{ fontSize: 17 }} />}
-                    label="Status"
-                    value={clientStatusMap[client.status] ?? formatLabel(client.status)}
-                  />
-                  <ContactInfoRow
-                    icon={<CalendarTodayOutlinedIcon sx={{ fontSize: 17 }} />}
-                    label="Client Since"
-                    value={formatDateOnly(client.startDate)}
                   />
                 </Stack>
               </Collapse>
@@ -1212,13 +1177,10 @@ export function ClientDetailPage() {
 
           <Card variant="outlined" sx={surfaceCardSx}>
             <CardContent sx={cardContentSx}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.35 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.1 }}>
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                     Client Notes
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
-                    Shared context, admin details, and internal notes.
                   </Typography>
                 </Box>
                 {isNoteComposerOpen ? (
@@ -1232,14 +1194,15 @@ export function ClientDetailPage() {
                 ) : (
                   <Button
                     size="small"
-                    variant="outlined"
+                    variant="text"
                     startIcon={<AddIcon />}
                     onClick={handleOpenNoteComposer}
                     sx={{
                       textTransform: 'none',
                       borderRadius: 999,
-                      borderColor: (theme) => alpha(theme.palette.text.primary, 0.1),
-                      boxShadow: 'none',
+                      px: 0.5,
+                      minWidth: 0,
+                      color: 'primary.main',
                     }}
                   >
                     Add note
@@ -1254,11 +1217,11 @@ export function ClientDetailPage() {
                   <Box
                     sx={{
                       border: '1px solid',
-                      borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
+                      borderColor: '#EEE7F6',
                       borderRadius: 2.75,
                       px: 1.6,
                       py: 1.8,
-                      bgcolor: (theme) => alpha(theme.palette.background.default, 0.55),
+                      bgcolor: '#FAF9FD',
                     }}
                   >
                     <Stack spacing={0.8}>
@@ -1269,8 +1232,8 @@ export function ClientDetailPage() {
                           borderRadius: 2.2,
                           display: 'grid',
                           placeItems: 'center',
-                          bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-                          color: 'text.secondary',
+                          bgcolor: '#F4EFFB',
+                          color: 'primary.main',
                         }}
                       >
                         <NotesIcon sx={{ fontSize: 18 }} />
@@ -1292,7 +1255,7 @@ export function ClientDetailPage() {
                     mt: 1.5,
                     pt: 1.5,
                     borderTop: '1px solid',
-                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
+                    borderColor: '#F0EBF6',
                   }}
                 >
                   <Stack spacing={1.1}>
@@ -1352,6 +1315,7 @@ export function ClientDetailPage() {
         sessionId={selectedSessionId}
         sessions={sessions}
         onSaved={loadData}
+        surfaceVariant="client-detail"
       />
 
       <NewSessionModal
