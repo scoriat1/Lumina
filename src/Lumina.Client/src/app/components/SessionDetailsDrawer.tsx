@@ -1,970 +1,1797 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  Divider,
-  Drawer,
-  IconButton,
-  MenuItem,
-  Select,
-  Snackbar,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import AccessTimeRoundedIcon from '@mui/icons-material/AccessTimeRounded';
-import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
-import CloseIcon from '@mui/icons-material/Close';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
-import { format } from 'date-fns';
-import { apiClient } from '../api/client';
-import type { SessionDto } from '../api/types';
-import { useNotesTemplate } from '../contexts/NotesTemplateContext';
+    Drawer,
+    Box,
+    Typography,
+    IconButton,
+    Stack,
+    Avatar,
+    Chip,
+    Button,
+    Divider,
+    TextField,
+    MenuItem,
+    Autocomplete,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogContentText,
+    DialogActions,
+} from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
+import VideocamIcon from "@mui/icons-material/Videocam";
+import PhoneIcon from "@mui/icons-material/Phone";
+import BusinessIcon from "@mui/icons-material/Business";
+import PaymentIcon from "@mui/icons-material/Payment";
+import RepeatIcon from "@mui/icons-material/Repeat";
+import EventAvailableIcon from "@mui/icons-material/EventAvailable";
+import DeleteIcon from "@mui/icons-material/Delete";
+import CloseIcon from "@mui/icons-material/Close";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import TimerIcon from "@mui/icons-material/Timer";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import PersonIcon from "@mui/icons-material/Person";
+import { format } from "date-fns";
+import toast from "react-hot-toast";
+import { apiClient } from "../api/client";
+import type {
+    SessionDto,
+    SessionStructuredNoteDto,
+} from "../api/types";
+import { useNotesTemplate } from "../contexts/NotesTemplateContext";
+import { SessionNotes, SessionNote } from "./SessionNotes";
+import { PreviousSessionPreview } from "./PreviousSessionPreview";
 
-type SessionLike = Omit<SessionDto, 'date'> & { date: string | Date };
+const sessionTypes = [
+    "Initial Consultation",
+    "Weekly Check-in",
+    "Progress Check-in",
+    "Follow-up Session",
+    "Values Alignment",
+    "Leadership Growth",
+    "Career Strategy",
+    "Confidence Building",
+    "Work-Life Balance",
+];
 
-interface SessionDetailsDrawerProps {
-  open: boolean;
-  onClose: () => void;
-  sessionId: string | null;
-  sessions: SessionLike[];
-  onUpdateSession?: (sessionId: string, updates: Partial<SessionLike>) => void;
-  onSaved?: () => Promise<void> | void;
-  surfaceVariant?: 'default' | 'client-detail';
-}
+const durations = [
+    { value: 30, label: "30 min" },
+    { value: 45, label: "45 min" },
+    { value: 60, label: "60 min" },
+    { value: 90, label: "90 min" },
+];
 
-const locationLabelMap: Record<string, string> = {
-  zoom: 'Zoom',
-  phone: 'Phone',
-  office: 'Office',
+const statusOptions = [
+    { value: "upcoming", label: "Upcoming" },
+    { value: "completed", label: "Completed" },
+    { value: "cancelled", label: "Cancelled" },
+];
+
+type SessionLike = Omit<SessionDto, "date"> & {
+    date: Date;
+    sessionNotes?: SessionNote[];
 };
 
-function formatLabel(value?: string | null) {
-  if (!value) return 'N/A';
+type SessionNotesPayload = {
+    version: 1;
+    notes: SessionNote[];
+};
 
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
-    .join(' ');
+type SessionInput = Omit<SessionDto, "date"> & {
+    date: string | Date;
+    sessionNotes?: SessionNote[];
+};
+
+interface SessionDetailsDrawerProps {
+    open: boolean;
+    onClose: () => void;
+    sessionId: string | null;
+    sessions: SessionInput[];
+    onUpdateSession?: (
+        sessionId: string,
+        updates: Partial<SessionLike>,
+    ) => void;
+    onSaved?: () => Promise<void> | void;
+    surfaceVariant?: "default" | "client-detail";
 }
 
-function formatSessionDate(value: string | Date) {
-  return format(new Date(value), 'MMM d, yyyy, h:mm a');
-}
+const normalizeSession = (session: SessionInput): SessionLike => ({
+    ...session,
+    date:
+        session.date instanceof Date
+            ? session.date
+            : new Date(session.date),
+});
 
-function getStatusChipSx(status?: string) {
-  switch (status) {
-    case 'completed':
-      return {
-        bgcolor: '#EAF6EC',
-        borderColor: '#CFE6D5',
-        color: '#2F7A42',
-      };
-    case 'cancelled':
-      return {
-        bgcolor: '#F5F1ED',
-        borderColor: '#E4DBD2',
-        color: '#655B52',
-      };
-    default:
-      return {
-        bgcolor: '#F1ECF8',
-        borderColor: '#E0D4F0',
-        color: '#6E5E82',
-      };
-  }
-}
+const createEditFormData = (session: SessionLike) => ({
+    sessionType: session.sessionType || "",
+    date: format(session.date, "yyyy-MM-dd"),
+    time: format(session.date, "HH:mm"),
+    duration: session.duration || 60,
+    method: session.location || ("zoom" as const),
+    status: session.status || ("upcoming" as const),
+});
 
-export function SessionDetailsDrawer({
-  open,
-  onClose,
-  sessionId,
-  sessions,
-  onUpdateSession,
-  onSaved,
-  surfaceVariant = 'default',
-}: SessionDetailsDrawerProps) {
-  const { templateMode, getActiveTemplate } = useNotesTemplate();
-  const [sessionDetail, setSessionDetail] = useState<SessionDto | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [sessionForm, setSessionForm] = useState({
-    sessionType: '',
-    date: '',
-    time: '',
-    duration: 60,
-    location: 'zoom' as SessionDto['location'],
-    focus: '',
-  });
-  const [freeNoteDraft, setFreeNoteDraft] = useState('');
-  const [templateFieldDraft, setTemplateFieldDraft] = useState<Record<string, string>>({});
-  const [noteMode, setNoteMode] = useState<'free' | 'template' | 'missing'>('free');
-  const [saving, setSaving] = useState(false);
-  const [loadingNote, setLoadingNote] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [savedVisible, setSavedVisible] = useState(false);
+const createLegacyNote = (
+    content: string,
+    timestamp: string,
+): SessionNote => ({
+    id: "legacy-note",
+    content,
+    timestamp,
+    isTemplate: false,
+});
 
-  const activeTemplate = getActiveTemplate();
-  const selectedTemplateLabel = activeTemplate ? `${activeTemplate.name} Template` : null;
-
-  useEffect(() => {
-    if (!open || !sessionId) return;
-
-    setLoadingNote(true);
-    setError(null);
-    setIsEditMode(false);
-
-    Promise.all([apiClient.getSession(sessionId), apiClient.getSessionStructuredNote(sessionId)])
-      .then(([detail, structuredNote]) => {
-        setSessionDetail(detail);
-        setFreeNoteDraft(detail.notes ?? '');
-        const parsedDate = new Date(detail.date);
-        setSessionForm({
-          sessionType: detail.sessionType ?? '',
-          date: format(parsedDate, 'yyyy-MM-dd'),
-          time: format(parsedDate, 'HH:mm'),
-          duration: detail.duration ?? 60,
-          location: detail.location ?? 'zoom',
-          focus: detail.focus ?? '',
-        });
-
-        const defaultMode = templateMode === 'template' && activeTemplate ? 'template' : 'free';
-
-        if (structuredNote?.templateId && activeTemplate && structuredNote.templateId === Number(activeTemplate.id)) {
-          try {
-            const parsed = JSON.parse(structuredNote.content) as Record<string, string>;
-            setTemplateFieldDraft(parsed);
-            setNoteMode('template');
-          } catch {
-            setTemplateFieldDraft({});
-            setNoteMode(defaultMode);
-          }
-        } else {
-          setTemplateFieldDraft({});
-          setNoteMode(defaultMode);
-        }
-      })
-      .catch(() => {
-        setSessionDetail(null);
-        setFreeNoteDraft('');
-        setTemplateFieldDraft({});
-        setSessionForm({ sessionType: '', date: '', time: '', duration: 60, location: 'zoom', focus: '' });
-        setError('Failed to load session notes.');
-      })
-      .finally(() => setLoadingNote(false));
-  }, [open, sessionId, templateMode, activeTemplate]);
-
-  const previousSession = useMemo(() => {
-    if (!sessionDetail) return null;
-    const currentDate = new Date(sessionDetail.date).getTime();
-    return [...sessions]
-      .filter((s) => s.clientId === sessionDetail.clientId && s.id !== sessionDetail.id)
-      .map((s) => ({ ...s, date: new Date(s.date) }))
-      .filter((s) => s.date.getTime() < currentDate)
-      .sort((a, b) => b.date.getTime() - a.date.getTime())[0] ?? null;
-  }, [sessions, sessionDetail]);
-
-  const handleSave = async () => {
-    if (!sessionId || !sessionDetail) return;
-
-    if (!sessionForm.date || !sessionForm.time || !sessionForm.sessionType.trim()) {
-      setError('Session type, date, and time are required.');
-      return;
+const getFallbackSessionNotes = (session: SessionLike | null) => {
+    if (!session) {
+        return [];
     }
 
-    setSaving(true);
-    setError(null);
+    if (
+        session.sessionNotes &&
+        Array.isArray(session.sessionNotes)
+    ) {
+        return session.sessionNotes;
+    }
 
-    const templateContent = JSON.stringify(templateFieldDraft);
-    const legacyNotes = noteMode === 'template'
-      ? Object.entries(templateFieldDraft)
-        .filter(([, value]) => value?.trim())
-        .map(([field, value]) => `${field}: ${value.trim()}`)
-        .join('\n')
-      : freeNoteDraft.trim();
+    if (session.notes?.trim()) {
+        return [
+            createLegacyNote(
+                session.notes.trim(),
+                format(session.date, "MMM d, yyyy h:mm a"),
+            ),
+        ];
+    }
+
+    return [];
+};
+
+const normalizePersistedNotes = (
+    notes: SessionNote[],
+    resolveTemplateName: (
+        templateId?: string | number,
+    ) => string | undefined,
+) =>
+    notes.map((note, index) => ({
+        ...note,
+        id: note.id || `note-${index + 1}`,
+        timestamp:
+            note.timestamp ||
+            format(new Date(), "MMM d, yyyy h:mm a"),
+        isTemplate: note.isTemplate ?? Boolean(note.templateId),
+        templateId: note.templateId
+            ? String(note.templateId)
+            : undefined,
+        templateName:
+            note.templateName ||
+            resolveTemplateName(note.templateId),
+    }));
+
+const deserializeSessionNotes = (
+    structuredNote: SessionStructuredNoteDto | null,
+    fallbackLegacyNotes: string | null | undefined,
+    resolveTemplateName: (
+        templateId?: string | number,
+    ) => string | undefined,
+) => {
+    const fallbackTimestamp = structuredNote
+        ? format(
+              new Date(
+                  structuredNote.updatedAt ||
+                      structuredNote.createdAt,
+              ),
+              "MMM d, yyyy h:mm a",
+          )
+        : format(new Date(), "MMM d, yyyy h:mm a");
+
+    if (!structuredNote?.content?.trim()) {
+        return fallbackLegacyNotes?.trim()
+            ? [
+                  createLegacyNote(
+                      fallbackLegacyNotes.trim(),
+                      fallbackTimestamp,
+                  ),
+              ]
+            : [];
+    }
 
     try {
-      const sessionDateTime = new Date(`${sessionForm.date}T${sessionForm.time}`);
-      await apiClient.updateSession(sessionId, {
-        sessionType: sessionForm.sessionType.trim(),
-        date: sessionDateTime.toISOString(),
-        duration: Number(sessionForm.duration),
-        location: sessionForm.location,
-        focus: sessionForm.focus.trim(),
-      });
+        const parsed = JSON.parse(structuredNote.content) as
+            | SessionNotesPayload
+            | SessionNote[]
+            | Record<string, string>
+            | { freeform?: string };
 
-      await apiClient.saveSessionStructuredNote(sessionId, {
-        templateId: noteMode === 'template' && activeTemplate ? Number(activeTemplate.id) : undefined,
-        noteType: noteMode,
-        content: noteMode === 'template' ? templateContent : JSON.stringify({ freeform: freeNoteDraft }),
-        legacyNotes,
-      });
+        if (Array.isArray(parsed)) {
+            return normalizePersistedNotes(
+                parsed,
+                resolveTemplateName,
+            );
+        }
 
-      const refreshed = await apiClient.getSession(sessionId);
-      setSessionDetail(refreshed);
-      setFreeNoteDraft(refreshed.notes ?? '');
-      onUpdateSession?.(sessionId, {
-        sessionType: refreshed.sessionType,
-        date: refreshed.date,
-        duration: refreshed.duration,
-        location: refreshed.location,
-        focus: refreshed.focus,
-        notes: refreshed.notes,
-      });
-      await onSaved?.();
-      setIsEditMode(false);
-      setSavedVisible(true);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save session details.');
-    } finally {
-      setSaving(false);
+        if (
+            parsed &&
+            typeof parsed === "object" &&
+            "notes" in parsed &&
+            Array.isArray(parsed.notes)
+        ) {
+            return normalizePersistedNotes(
+                parsed.notes,
+                resolveTemplateName,
+            );
+        }
+
+        if (
+            parsed &&
+            typeof parsed === "object" &&
+            "freeform" in parsed &&
+            typeof parsed.freeform === "string" &&
+            parsed.freeform.trim()
+        ) {
+            return [
+                {
+                    id: structuredNote.id,
+                    content: parsed.freeform.trim(),
+                    timestamp: fallbackTimestamp,
+                    isTemplate: false,
+                },
+            ];
+        }
+
+        if (structuredNote.templateId) {
+            return [
+                {
+                    id: structuredNote.id,
+                    content: structuredNote.content,
+                    timestamp: fallbackTimestamp,
+                    isTemplate: true,
+                    templateId: String(structuredNote.templateId),
+                    templateName: resolveTemplateName(
+                        structuredNote.templateId,
+                    ),
+                },
+            ];
+        }
+    } catch {
+        // Fall through to plain-text handling.
     }
-  };
 
-  if (!sessionDetail) return null;
+    return structuredNote.content.trim()
+        ? [
+              {
+                  id: structuredNote.id,
+                  content: structuredNote.content.trim(),
+                  timestamp: fallbackTimestamp,
+                  isTemplate: Boolean(structuredNote.templateId),
+                  templateId: structuredNote.templateId
+                      ? String(structuredNote.templateId)
+                      : undefined,
+                  templateName: resolveTemplateName(
+                      structuredNote.templateId,
+                  ),
+              },
+          ]
+        : [];
+};
 
-  const isClientDetailVariant = surfaceVariant === 'client-detail';
-  const statusChipSx = getStatusChipSx(sessionDetail.status);
-  const drawerCardSx = {
-    border: '1px solid',
-    borderColor: (theme: any) => alpha(theme.palette.text.primary, 0.07),
-    borderRadius: 3,
-    bgcolor: 'common.white',
-    boxShadow: (theme: any) => `0 10px 26px ${alpha(theme.palette.common.black, 0.04)}`,
-  };
-  const drawerFieldSx = {
-    '& .MuiInputLabel-root': {
-      fontSize: 13,
-      fontWeight: 600,
-    },
-    '& .MuiOutlinedInput-root': {
-      borderRadius: 2.5,
-      bgcolor: (theme: any) => alpha(theme.palette.background.default, 0.72),
-      transition: 'border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
-      '& fieldset': {
-        borderColor: (theme: any) => alpha(theme.palette.text.primary, 0.08),
-      },
-      '&:hover fieldset': {
-        borderColor: (theme: any) => alpha(theme.palette.primary.main, 0.26),
-      },
-      '&.Mui-focused': {
-        bgcolor: 'common.white',
-        boxShadow: (theme: any) => `0 0 0 3px ${alpha(theme.palette.primary.main, 0.08)}`,
-      },
-      '&.Mui-focused fieldset': {
-        borderColor: (theme: any) => alpha(theme.palette.primary.main, 0.34),
-      },
-    },
-  };
+const serializeSessionNotes = (notes: SessionNote[]) =>
+    JSON.stringify({
+        version: 1,
+        notes,
+    } satisfies SessionNotesPayload);
 
-  if (!isClientDetailVariant) {
-    return (
-      <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 460 } } }}>
-        <Box sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={1.25} alignItems="center">
-              <Avatar sx={{ bgcolor: sessionDetail.avatarColor }}>{sessionDetail.initials}</Avatar>
-              <Box>
-                <Typography variant="subtitle1">{sessionDetail.client}</Typography>
-                <Typography variant="body2" color="text.secondary">{sessionDetail.sessionType}</Typography>
-              </Box>
-            </Stack>
-            <IconButton onClick={onClose}><CloseIcon /></IconButton>
-          </Stack>
+const buildLegacyNotes = (notes: SessionNote[]) =>
+    notes
+        .map((note) => {
+            if (!note.isTemplate || !note.templateId) {
+                return note.content.trim();
+            }
 
-          <Divider sx={{ my: 2 }} />
+            try {
+                const parsed = JSON.parse(note.content) as Record<
+                    string,
+                    string
+                >;
+                const fields = Object.entries(parsed)
+                    .map(([field, value]) => [
+                        field,
+                        value?.trim() || "",
+                    ] as const)
+                    .filter(([, value]) => value);
 
-          <Box sx={{ overflow: 'auto', flex: 1 }}>
-            {loadingNote ? <Typography variant="body2" color="text.secondary">Loading...</Typography> : null}
-            <Stack spacing={2.5}>
-              {!isEditMode ? (
-                <>
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Session Details</Typography>
-                    <Stack spacing={0.75}>
-                      <Typography variant="body2"><strong>Type:</strong> {sessionDetail.sessionType}</Typography>
-                      <Typography variant="body2"><strong>Date:</strong> {formatSessionDate(sessionDetail.date)}</Typography>
-                      <Typography variant="body2"><strong>Duration:</strong> {sessionDetail.duration} min</Typography>
-                      <Typography variant="body2"><strong>Location:</strong> {locationLabelMap[sessionDetail.location] ?? formatLabel(sessionDetail.location)}</Typography>
-                      <Typography variant="body2"><strong>Focus:</strong> {sessionDetail.focus || 'N/A'}</Typography>
-                      <Typography variant="body2"><strong>Billing/Payment:</strong> {sessionDetail.paymentStatus ?? 'N/A'}</Typography>
-                      <Chip label={formatLabel(sessionDetail.status)} size="small" sx={{ width: 'fit-content', textTransform: 'capitalize' }} />
-                    </Stack>
-                  </Box>
+                if (fields.length === 0) {
+                    return note.templateName || "Template note";
+                }
 
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ mb: 0.75 }}>Session Notes</Typography>
-                    {sessionDetail.notes ? (
-                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{sessionDetail.notes}</Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">No notes yet.</Typography>
-                    )}
-                  </Box>
-                </>
-              ) : (
-                <>
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Session Notes</Typography>
-                    <Select
-                      size="small"
-                      fullWidth
-                      value={noteMode}
-                      onChange={(e) => setNoteMode(e.target.value as 'free' | 'template' | 'missing')}
-                      sx={{ mb: 1.25 }}
-                    >
-                      <MenuItem value="free">Free Notes</MenuItem>
-                      {selectedTemplateLabel ? (
-                        <MenuItem value="template">{selectedTemplateLabel}</MenuItem>
-                      ) : (
-                        <MenuItem value="missing" disabled>Choose Template from Settings</MenuItem>
-                      )}
-                    </Select>
+                const lines = fields
+                    .map(([field, value]) => `${field}: ${value}`)
+                    .join("\n");
 
-                    {noteMode === 'template' && activeTemplate ? (
-                      <Stack spacing={1}>
-                        {activeTemplate.fields.map((field) => (
-                          <TextField
-                            key={field}
-                            multiline
-                            minRows={2}
-                            label={field}
-                            value={templateFieldDraft[field] ?? ''}
-                            onChange={(e) => setTemplateFieldDraft((prev) => ({ ...prev, [field]: e.target.value }))}
-                          />
-                        ))}
-                      </Stack>
-                    ) : (
-                      <TextField
-                        multiline
-                        minRows={5}
-                        fullWidth
-                        value={freeNoteDraft}
-                        onChange={(e) => setFreeNoteDraft(e.target.value)}
-                        placeholder="Session notes"
-                      />
-                    )}
-                  </Box>
+                return note.templateName
+                    ? `${note.templateName}\n${lines}`
+                    : lines;
+            } catch {
+                return note.content.trim();
+            }
+        })
+        .filter(Boolean)
+        .join("\n\n");
 
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Details</Typography>
-                    <Stack spacing={1.25}>
-                      <TextField
-                        size="small"
-                        label="Session Type"
-                        value={sessionForm.sessionType}
-                        onChange={(e) => setSessionForm((prev) => ({ ...prev, sessionType: e.target.value }))}
-                      />
-                      <Stack direction="row" spacing={1}>
-                        <TextField
-                          size="small"
-                          type="date"
-                          label="Date"
-                          InputLabelProps={{ shrink: true }}
-                          value={sessionForm.date}
-                          onChange={(e) => setSessionForm((prev) => ({ ...prev, date: e.target.value }))}
-                          fullWidth
-                        />
-                        <TextField
-                          size="small"
-                          type="time"
-                          label="Time"
-                          InputLabelProps={{ shrink: true }}
-                          value={sessionForm.time}
-                          onChange={(e) => setSessionForm((prev) => ({ ...prev, time: e.target.value }))}
-                          fullWidth
-                        />
-                      </Stack>
-                      <Stack direction="row" spacing={1}>
-                        <TextField
-                          size="small"
-                          type="number"
-                          label="Duration (min)"
-                          value={sessionForm.duration}
-                          onChange={(e) => setSessionForm((prev) => ({ ...prev, duration: Number(e.target.value) || 0 }))}
-                          fullWidth
-                        />
-                        <TextField
-                          select
-                          size="small"
-                          label="Location"
-                          value={sessionForm.location}
-                          onChange={(e) => setSessionForm((prev) => ({ ...prev, location: e.target.value as SessionDto['location'] }))}
-                          fullWidth
-                        >
-                          <MenuItem value="zoom">Zoom</MenuItem>
-                          <MenuItem value="phone">Phone</MenuItem>
-                          <MenuItem value="office">Office</MenuItem>
-                        </TextField>
-                      </Stack>
-                      <TextField
-                        size="small"
-                        label="Focus"
-                        value={sessionForm.focus}
-                        onChange={(e) => setSessionForm((prev) => ({ ...prev, focus: e.target.value }))}
-                        multiline
-                        minRows={2}
-                      />
-                    </Stack>
-                  </Box>
-                </>
-              )}
-
-              <Accordion disableGutters>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1">Previous Session Preview</Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  {previousSession ? (
-                    <>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{previousSession.sessionType}</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {format(new Date(previousSession.date), 'MMM d, yyyy')}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {previousSession.notes?.slice(0, 140) ?? 'No previous notes.'}
-                      </Typography>
-                    </>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">No previous session available.</Typography>
-                  )}
-                </AccordionDetails>
-              </Accordion>
-
-              {error ? <Typography color="error" variant="caption">{error}</Typography> : null}
-            </Stack>
-          </Box>
-
-          <Stack direction="row" spacing={1} sx={{ pt: 2 }}>
-            {!isEditMode ? (
-              <Button variant="outlined" onClick={() => setIsEditMode(true)}>Edit Session</Button>
-            ) : (
-              <>
-                <Button variant="contained" onClick={handleSave} disabled={saving || loadingNote}>Save Changes</Button>
-                <Button onClick={() => setIsEditMode(false)} disabled={saving}>Cancel</Button>
-              </>
-            )}
-          </Stack>
-        </Box>
-
-        <Snackbar
-          open={savedVisible}
-          autoHideDuration={2000}
-          onClose={() => setSavedVisible(false)}
-          message="Saved"
-        />
-      </Drawer>
+const getPersistedTemplateId = (notes: SessionNote[]) => {
+    const templateNote = notes.find(
+        (note) => note.isTemplate && note.templateId,
     );
-  }
 
-  return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      PaperProps={{
-        sx: {
-          width: { xs: '100%', sm: 520 },
-          borderLeft: '1px solid',
-          borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
-          bgcolor: '#FAF8F5',
-          backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,244,239,0.98) 100%)',
-        },
-      }}
-    >
-      <Box sx={{ p: { xs: 1.5, sm: 2 }, height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ ...drawerCardSx, px: { xs: 1.75, sm: 2 }, py: { xs: 1.6, sm: 1.85 }, mb: 1.5 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
-            <Stack direction="row" spacing={1.35} alignItems="center" sx={{ minWidth: 0 }}>
-              <Avatar
-                sx={{
-                  width: 46,
-                  height: 46,
-                  bgcolor: sessionDetail.avatarColor,
-                  boxShadow: (theme) => `0 0 0 6px ${alpha(theme.palette.primary.main, 0.08)}`,
-                }}
-              >
-                {sessionDetail.initials}
-              </Avatar>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.8 }}>
-                  Session Record
-                </Typography>
-                <Typography variant="h6" sx={{ mt: 0.3, fontWeight: 700, letterSpacing: -0.2 }}>
-                  {sessionDetail.client}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-                  {sessionDetail.sessionType}
-                </Typography>
-              </Box>
-            </Stack>
-            <IconButton
-              onClick={onClose}
-              sx={{
-                border: '1px solid',
-                borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
-                bgcolor: (theme) => alpha(theme.palette.background.default, 0.72),
-              }}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Stack>
+    if (!templateNote?.templateId) {
+        return undefined;
+    }
 
-          <Stack
-            direction="row"
-            useFlexGap
-            flexWrap="wrap"
-            spacing={0}
-            sx={{ mt: 1.5, rowGap: 0.8, columnGap: 0.85 }}
-          >
-            <Stack
-              direction="row"
-              spacing={0.7}
-              alignItems="center"
-              sx={{
-                px: 1.1,
-                py: 0.7,
-                borderRadius: 999,
-                bgcolor: (theme) => alpha(theme.palette.background.default, 0.72),
-              }}
-            >
-              <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
-                {formatSessionDate(sessionDetail.date)}
-              </Typography>
-            </Stack>
-            <Stack
-              direction="row"
-              spacing={0.7}
-              alignItems="center"
-              sx={{
-                px: 1.1,
-                py: 0.7,
-                borderRadius: 999,
-                bgcolor: (theme) => alpha(theme.palette.background.default, 0.72),
-              }}
-            >
-              <AccessTimeRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
-                {`${sessionDetail.duration} min`}
-              </Typography>
-            </Stack>
-            <Stack
-              direction="row"
-              spacing={0.7}
-              alignItems="center"
-              sx={{
-                px: 1.1,
-                py: 0.7,
-                borderRadius: 999,
-                bgcolor: (theme) => alpha(theme.palette.background.default, 0.72),
-              }}
-            >
-              <PlaceOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-              <Typography variant="body2" color="text.secondary">
-                {locationLabelMap[sessionDetail.location] ?? formatLabel(sessionDetail.location)}
-              </Typography>
-            </Stack>
-            <Chip
-              size="small"
-              label={formatLabel(sessionDetail.status)}
-              sx={{
-                height: 28,
-                borderRadius: 999,
-                border: '1px solid',
-                fontWeight: 700,
-                letterSpacing: 0.2,
-                ...statusChipSx,
-              }}
-            />
-          </Stack>
-        </Box>
+    const parsedTemplateId = Number(templateNote.templateId);
+    return Number.isNaN(parsedTemplateId)
+        ? undefined
+        : parsedTemplateId;
+};
 
-        <Box sx={{ overflow: 'auto', flex: 1, pr: 0.25, pb: 0.4 }}>
-          {loadingNote ? (
-            <Box
-              sx={{
-                ...drawerCardSx,
-                px: 1.7,
-                py: 1.15,
-                mb: 1.5,
-                bgcolor: (theme) => alpha(theme.palette.background.default, 0.62),
-                boxShadow: 'none',
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">Loading session details...</Typography>
-            </Box>
-          ) : null}
+const getPersistedNoteType = (notes: SessionNote[]) => {
+    if (notes.length === 0) {
+        return "general";
+    }
 
-          <Stack spacing={1.5}>
-            {!isEditMode ? (
-              <>
-                <Box sx={{ ...drawerCardSx, px: { xs: 1.6, sm: 1.85 }, py: { xs: 1.5, sm: 1.7 } }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.8 }}>
-                    Session Details
-                  </Typography>
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                      gap: 1,
-                      mt: 1.25,
-                    }}
-                  >
-                    {[
-                      { label: 'Type', value: sessionDetail.sessionType || 'N/A' },
-                      { label: 'Date', value: formatSessionDate(sessionDetail.date) },
-                      { label: 'Duration', value: `${sessionDetail.duration} min` },
-                      { label: 'Location', value: locationLabelMap[sessionDetail.location] ?? formatLabel(sessionDetail.location) },
-                      { label: 'Billing/Payment', value: sessionDetail.paymentStatus ?? 'N/A' },
-                    ].map((item) => (
-                      <Box
-                        key={item.label}
-                        sx={{
-                          border: '1px solid',
-                          borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
-                          borderRadius: 2.5,
-                          px: 1.3,
-                          py: 1.15,
-                          bgcolor: (theme) => alpha(theme.palette.background.default, 0.48),
-                        }}
-                      >
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                          {item.label}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mt: 0.35, fontWeight: 600, lineHeight: 1.5 }}>
-                          {item.value}
-                        </Typography>
-                      </Box>
-                    ))}
-                    <Box
-                      sx={{
-                        border: '1px solid',
-                        borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
-                        borderRadius: 2.5,
-                        px: 1.3,
-                        py: 1.15,
-                        bgcolor: (theme) => alpha(theme.palette.background.default, 0.48),
-                      }}
-                    >
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                        Status
-                      </Typography>
-                      <Chip
-                        size="small"
-                        label={formatLabel(sessionDetail.status)}
-                        sx={{
-                          mt: 0.55,
-                          height: 26,
-                          borderRadius: 999,
-                          border: '1px solid',
-                          fontWeight: 700,
-                          ...statusChipSx,
-                        }}
-                      />
-                    </Box>
-                  </Box>
+    const hasTemplateNotes = notes.some((note) => note.isTemplate);
+    const hasFreeNotes = notes.some((note) => !note.isTemplate);
 
-                  <Box
-                    sx={{
-                      mt: 1,
-                      border: '1px solid',
-                      borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
-                      borderRadius: 2.5,
-                      px: 1.3,
-                      py: 1.15,
-                      bgcolor: (theme) => alpha(theme.palette.background.default, 0.48),
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>
-                      Focus
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 0.4, fontWeight: 500, lineHeight: 1.65 }}>
-                      {sessionDetail.focus || 'No focus set for this session.'}
-                    </Typography>
-                  </Box>
-                </Box>
+    if (hasTemplateNotes && hasFreeNotes) {
+        return "mixed";
+    }
 
-                <Box sx={{ ...drawerCardSx, px: { xs: 1.6, sm: 1.85 }, py: { xs: 1.5, sm: 1.7 } }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.8 }}>
-                    Session Notes
-                  </Typography>
-                  {sessionDetail.notes ? (
-                    <Typography variant="body2" sx={{ mt: 1.1, whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
-                      {sessionDetail.notes}
-                    </Typography>
-                  ) : (
-                    <Box
-                      sx={{
-                        mt: 1.15,
-                        border: '1px solid',
-                        borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
-                        borderRadius: 2.5,
-                        px: 1.35,
-                        py: 1.3,
-                        bgcolor: (theme) => alpha(theme.palette.background.default, 0.46),
-                      }}
-                    >
-                      <Typography variant="body2" color="text.secondary">
-                        No notes yet.
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-              </>
-            ) : (
-              <>
-                <Box sx={{ ...drawerCardSx, px: { xs: 1.6, sm: 1.85 }, py: { xs: 1.5, sm: 1.7 } }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.8 }}>
-                    Session Notes
-                  </Typography>
-                  <Select
-                    size="small"
-                    fullWidth
-                    value={noteMode}
-                    onChange={(e) => setNoteMode(e.target.value as 'free' | 'template' | 'missing')}
-                    sx={{ ...drawerFieldSx, mt: 1.2, mb: 1.2 }}
-                  >
-                    <MenuItem value="free">Free Notes</MenuItem>
-                    {selectedTemplateLabel ? (
-                      <MenuItem value="template">{selectedTemplateLabel}</MenuItem>
-                    ) : (
-                      <MenuItem value="missing" disabled>Choose Template from Settings</MenuItem>
-                    )}
-                  </Select>
+    return hasTemplateNotes ? "template" : "free";
+};
 
-                  {noteMode === 'template' && activeTemplate ? (
-                    <Stack spacing={1}>
-                      {activeTemplate.fields.map((field) => (
-                        <TextField
-                          key={field}
-                          multiline
-                          minRows={2}
-                          label={field}
-                          value={templateFieldDraft[field] ?? ''}
-                          onChange={(e) => setTemplateFieldDraft((prev) => ({ ...prev, [field]: e.target.value }))}
-                          sx={drawerFieldSx}
-                        />
-                      ))}
-                    </Stack>
-                  ) : (
-                    <TextField
-                      multiline
-                      minRows={5}
-                      fullWidth
-                      value={freeNoteDraft}
-                      onChange={(e) => setFreeNoteDraft(e.target.value)}
-                      placeholder="Session notes"
-                      sx={drawerFieldSx}
+export function SessionDetailsDrawer({
+    open,
+    onClose,
+    sessionId,
+    sessions,
+    onUpdateSession,
+    onSaved,
+}: SessionDetailsDrawerProps) {
+    const { customTemplates, presetTemplates } = useNotesTemplate();
+    const [isCancelDialogOpen, setIsCancelDialogOpen] =
+        useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [sessionDetail, setSessionDetail] =
+        useState<SessionLike | null>(null);
+    const [sessionNotes, setSessionNotes] = useState<
+        SessionNote[]
+    >([]);
+    const [previousSessionNotes, setPreviousSessionNotes] =
+        useState<SessionNote[]>([]);
+
+    const session = useMemo(() => {
+        if (sessionDetail) {
+            return sessionDetail;
+        }
+
+        if (!sessionId) {
+            return null;
+        }
+
+        const matchingSession = sessions.find(
+            (candidate) => candidate.id === sessionId,
+        );
+
+        return matchingSession
+            ? normalizeSession(matchingSession)
+            : null;
+    }, [sessionDetail, sessionId, sessions]);
+
+    const templateNameLookup = useMemo(() => {
+        const lookup = new Map<string, string>();
+
+        [...presetTemplates, ...customTemplates].forEach(
+            (template) => {
+                lookup.set(template.id, template.name);
+            },
+        );
+
+        return lookup;
+    }, [customTemplates, presetTemplates]);
+
+    // Edit form state
+    const [editFormData, setEditFormData] = useState<
+        ReturnType<typeof createEditFormData>
+    >({
+        sessionType: "",
+        date: "",
+        time: "",
+        duration: 60,
+        method: "zoom" as "zoom" | "phone" | "office",
+        status: "upcoming" as SessionLike["status"],
+    });
+
+    useEffect(() => {
+        if (!open || !sessionId) {
+            setSessionDetail(null);
+            setSessionNotes([]);
+            setPreviousSessionNotes([]);
+            setIsEditMode(false);
+            return;
+        }
+
+        let isActive = true;
+        const fallbackSession = sessions.find(
+            (candidate) => candidate.id === sessionId,
+        );
+        const normalizedFallback = fallbackSession
+            ? normalizeSession(fallbackSession)
+            : null;
+
+        setSessionDetail(normalizedFallback);
+        setSessionNotes(
+            getFallbackSessionNotes(normalizedFallback),
+        );
+
+        if (normalizedFallback) {
+            setEditFormData(createEditFormData(normalizedFallback));
+        }
+
+        setIsEditMode(false);
+
+        void Promise.all([
+            apiClient.getSession(sessionId),
+            apiClient.getSessionStructuredNote(sessionId),
+        ])
+            .then(([detail, structuredNote]) => {
+                if (!isActive) {
+                    return;
+                }
+
+                const normalizedDetail = normalizeSession({
+                    ...detail,
+                    date: detail.date,
+                });
+
+                setSessionDetail(normalizedDetail);
+                setSessionNotes(
+                    deserializeSessionNotes(
+                        structuredNote,
+                        detail.notes,
+                        (templateId) =>
+                            templateId
+                                ? templateNameLookup.get(
+                                      String(templateId),
+                                  )
+                                : undefined,
+                    ),
+                );
+                setEditFormData(
+                    createEditFormData(normalizedDetail),
+                );
+            })
+            .catch((error) => {
+                if (!isActive) {
+                    return;
+                }
+
+                if (!normalizedFallback) {
+                    setSessionDetail(null);
+                    setSessionNotes([]);
+                }
+
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to load session details.",
+                );
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [open, sessionId, sessions, templateNameLookup]);
+
+    const previousSession = useMemo(() => {
+        if (!session) {
+            return null;
+        }
+
+        return sessions
+            .filter(
+                (candidate) =>
+                    candidate.clientId === session.clientId &&
+                    candidate.id !== session.id,
+            )
+            .map(normalizeSession)
+            .sort(
+                (left, right) =>
+                    right.date.getTime() - left.date.getTime(),
+            )
+            .find(
+                (candidate) =>
+                    candidate.date.getTime() < session.date.getTime(),
+            );
+    }, [session, sessions]);
+
+    useEffect(() => {
+        if (!open || !previousSession) {
+            setPreviousSessionNotes([]);
+            return;
+        }
+
+        let isActive = true;
+        setPreviousSessionNotes(
+            getFallbackSessionNotes(previousSession),
+        );
+
+        void apiClient
+            .getSessionStructuredNote(previousSession.id)
+            .then((structuredNote) => {
+                if (!isActive) {
+                    return;
+                }
+
+                setPreviousSessionNotes(
+                    deserializeSessionNotes(
+                        structuredNote,
+                        previousSession.notes,
+                        (templateId) =>
+                            templateId
+                                ? templateNameLookup.get(
+                                      String(templateId),
+                                  )
+                                : undefined,
+                    ),
+                );
+            })
+            .catch(() => undefined);
+
+        return () => {
+            isActive = false;
+        };
+    }, [open, previousSession, templateNameLookup]);
+
+    if (!session) return null;
+
+    const handleEditChange = <
+        TField extends keyof ReturnType<typeof createEditFormData>,
+    >(
+        field: TField,
+        value: ReturnType<typeof createEditFormData>[TField],
+    ) => {
+        setEditFormData((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const persistSessionUpdates = async (
+        updates: Partial<SessionLike>,
+    ) => {
+        if (onUpdateSession) {
+            onUpdateSession(session.id, updates);
+            setSessionDetail((current) =>
+                current ? { ...current, ...updates } : current,
+            );
+            return;
+        }
+
+        await apiClient.updateSession(session.id, {
+            sessionType: updates.sessionType,
+            date: updates.date?.toISOString(),
+            duration: updates.duration,
+            location: updates.location,
+            status: updates.status,
+            focus: updates.focus,
+            notes: updates.notes,
+        });
+
+        setSessionDetail((current) =>
+            current ? { ...current, ...updates } : current,
+        );
+        await onSaved?.();
+    };
+
+    const handleSaveEdit = async () => {
+        const updatedDateTime = new Date(
+            `${editFormData.date}T${editFormData.time}`,
+        );
+
+        try {
+            await persistSessionUpdates({
+                sessionType: editFormData.sessionType,
+                date: updatedDateTime,
+                duration: editFormData.duration,
+                location: editFormData.method,
+                status: editFormData.status,
+            });
+
+            setEditFormData(
+                createEditFormData({
+                    ...session,
+                    sessionType: editFormData.sessionType,
+                    date: updatedDateTime,
+                    duration: editFormData.duration,
+                    location: editFormData.method,
+                    status: editFormData.status,
+                }),
+            );
+            setIsEditMode(false);
+            toast.success("Session updated");
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to update session.",
+            );
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setEditFormData(createEditFormData(session));
+        setIsEditMode(false);
+    };
+
+    const handleNotesChange = (updatedNotes: SessionNote[]) => {
+        const previousNotes = sessionNotes;
+        const legacyNotes = buildLegacyNotes(updatedNotes);
+
+        setSessionNotes(updatedNotes);
+
+        void apiClient
+            .saveSessionStructuredNote(session.id, {
+                templateId: getPersistedTemplateId(updatedNotes),
+                noteType: getPersistedNoteType(updatedNotes),
+                content: serializeSessionNotes(updatedNotes),
+                legacyNotes,
+            })
+            .then(async () => {
+                setSessionDetail((current) =>
+                    current
+                        ? {
+                              ...current,
+                              notes: legacyNotes,
+                              sessionNotes: updatedNotes,
+                          }
+                        : current,
+                );
+
+                if (onUpdateSession) {
+                    onUpdateSession(session.id, {
+                        notes: legacyNotes,
+                        sessionNotes: updatedNotes,
+                    });
+                } else {
+                    await onSaved?.();
+                }
+            })
+            .catch((error) => {
+                setSessionNotes(previousNotes);
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to save session notes.",
+                );
+            });
+    };
+
+    const handleStatusChange = async (
+        status: SessionLike["status"],
+    ) => {
+        try {
+            await persistSessionUpdates({ status });
+            setEditFormData((current) => ({
+                ...current,
+                status,
+            }));
+            return true;
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to update session status.",
+            );
+            return false;
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case "upcoming":
+                return {
+                    bgcolor: "rgba(168, 181, 160, 0.12)",
+                    color: "#5B7052",
+                    border: "1px solid rgba(168, 181, 160, 0.2)",
+                };
+            case "completed":
+                return {
+                    bgcolor: "rgba(157, 170, 181, 0.12)",
+                    color: "#4A5B6D",
+                    border: "1px solid rgba(157, 170, 181, 0.2)",
+                };
+            case "cancelled":
+                return {
+                    bgcolor: "rgba(139, 74, 74, 0.08)",
+                    color: "#8B4A4A",
+                    border: "1px solid rgba(139, 74, 74, 0.15)",
+                };
+            default:
+                return {
+                    bgcolor: "#F5F3F1",
+                    color: "#7A746F",
+                    border: "1px solid #E8E5E1",
+                };
+        }
+    };
+
+    const statusColors = getStatusColor(
+        isEditMode ? editFormData.status : session.status,
+    );
+
+    const getLocationIcon = (location: string) => {
+        switch (location) {
+            case "zoom":
+                return (
+                    <VideocamIcon
+                        sx={{ fontSize: 20, color: "#7A746F" }}
                     />
-                  )}
-                </Box>
-
-                <Box sx={{ ...drawerCardSx, px: { xs: 1.6, sm: 1.85 }, py: { xs: 1.5, sm: 1.7 } }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.8 }}>
-                    Details
-                  </Typography>
-                  <Stack spacing={1.1} sx={{ mt: 1.2 }}>
-                    <TextField
-                      size="small"
-                      label="Session Type"
-                      value={sessionForm.sessionType}
-                      onChange={(e) => setSessionForm((prev) => ({ ...prev, sessionType: e.target.value }))}
-                      fullWidth
-                      sx={drawerFieldSx}
+                );
+            case "phone":
+                return (
+                    <PhoneIcon sx={{ fontSize: 20, color: "#7A746F" }} />
+                );
+            case "office":
+                return (
+                    <BusinessIcon
+                        sx={{ fontSize: 20, color: "#7A746F" }}
                     />
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                      <TextField
-                        size="small"
-                        type="date"
-                        label="Date"
-                        InputLabelProps={{ shrink: true }}
-                        value={sessionForm.date}
-                        onChange={(e) => setSessionForm((prev) => ({ ...prev, date: e.target.value }))}
-                        fullWidth
-                        sx={drawerFieldSx}
-                      />
-                      <TextField
-                        size="small"
-                        type="time"
-                        label="Time"
-                        InputLabelProps={{ shrink: true }}
-                        value={sessionForm.time}
-                        onChange={(e) => setSessionForm((prev) => ({ ...prev, time: e.target.value }))}
-                        fullWidth
-                        sx={drawerFieldSx}
-                      />
-                    </Stack>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                      <TextField
-                        size="small"
-                        type="number"
-                        label="Duration (min)"
-                        value={sessionForm.duration}
-                        onChange={(e) => setSessionForm((prev) => ({ ...prev, duration: Number(e.target.value) || 0 }))}
-                        fullWidth
-                        sx={drawerFieldSx}
-                      />
-                      <TextField
-                        select
-                        size="small"
-                        label="Location"
-                        value={sessionForm.location}
-                        onChange={(e) => setSessionForm((prev) => ({ ...prev, location: e.target.value as SessionDto['location'] }))}
-                        fullWidth
-                        sx={drawerFieldSx}
-                      >
-                        <MenuItem value="zoom">Zoom</MenuItem>
-                        <MenuItem value="phone">Phone</MenuItem>
-                        <MenuItem value="office">Office</MenuItem>
-                      </TextField>
-                    </Stack>
-                    <TextField
-                      size="small"
-                      label="Focus"
-                      value={sessionForm.focus}
-                      onChange={(e) => setSessionForm((prev) => ({ ...prev, focus: e.target.value }))}
-                      multiline
-                      minRows={3}
-                      fullWidth
-                      sx={drawerFieldSx}
+                );
+            default:
+                return (
+                    <BusinessIcon
+                        sx={{ fontSize: 20, color: "#7A746F" }}
                     />
-                  </Stack>
-                </Box>
-              </>
-            )}
+                );
+        }
+    };
 
-            <Accordion
-              disableGutters
-              sx={{
-                ...drawerCardSx,
-                overflow: 'hidden',
-                '&:before': { display: 'none' },
-              }}
-            >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon sx={{ color: 'text.secondary' }} />}
-                sx={{
-                  px: { xs: 1.6, sm: 1.85 },
-                  py: 0.5,
-                  '& .MuiAccordionSummary-content': {
-                    my: 0.75,
-                  },
-                }}
-              >
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.8 }}>
-                    Context
-                  </Typography>
-                  <Typography variant="subtitle2" sx={{ mt: 0.25, fontWeight: 700 }}>
-                    Previous Session Preview
-                  </Typography>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails sx={{ px: { xs: 1.6, sm: 1.85 }, pt: 0, pb: 1.6 }}>
-                {previousSession ? (
-                  <Box
-                    sx={{
-                      border: '1px solid',
-                      borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
-                      borderRadius: 2.5,
-                      px: 1.35,
-                      py: 1.25,
-                      bgcolor: (theme) => alpha(theme.palette.background.default, 0.46),
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{previousSession.sessionType}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.45 }}>
-                      {format(new Date(previousSession.date), 'MMM d, yyyy')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.9, lineHeight: 1.65 }}>
-                      {previousSession.notes?.slice(0, 140) ?? 'No previous notes.'}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Box
-                    sx={{
-                      border: '1px solid',
-                      borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
-                      borderRadius: 2.5,
-                      px: 1.35,
-                      py: 1.25,
-                      bgcolor: (theme) => alpha(theme.palette.background.default, 0.46),
-                    }}
-                  >
-                    <Typography variant="body2" color="text.secondary">No previous session available.</Typography>
-                  </Box>
-                )}
-              </AccordionDetails>
-            </Accordion>
+    const getLocationLabel = (location: string) => {
+        switch (location) {
+            case "zoom":
+                return "Zoom";
+            case "phone":
+                return "Phone";
+            case "office":
+                return "In Person";
+            default:
+                return (
+                    location.charAt(0).toUpperCase() + location.slice(1)
+                );
+        }
+    };
 
-            {error ? <Alert severity="error" variant="outlined">{error}</Alert> : null}
-          </Stack>
-        </Box>
-
-        <Box
-          sx={{
-            pt: 1.5,
-            mt: 1.5,
-            borderTop: '1px solid',
-            borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
-          }}
+    return (
+        <Drawer
+            anchor="right"
+            open={open}
+            onClose={onClose}
+            PaperProps={{
+                sx: {
+                    width: { xs: "100%", sm: 500 },
+                    bgcolor: "#FDFCFB",
+                },
+            }}
         >
-          {!isEditMode ? (
-            <Button
-              variant="contained"
-              onClick={() => setIsEditMode(true)}
-              sx={{
-                textTransform: 'none',
-                borderRadius: 999,
-                px: 2,
-                fontWeight: 700,
-                boxShadow: (theme) => `0 10px 20px ${alpha(theme.palette.primary.main, 0.18)}`,
-              }}
-            >
-              Edit Session
-            </Button>
-          ) : (
-            <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1} justifyContent="flex-end">
-              <Button
-                onClick={() => setIsEditMode(false)}
-                disabled={saving}
-                sx={{ textTransform: 'none', borderRadius: 999, px: 1.8 }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleSave}
-                disabled={saving || loadingNote}
+            <Box
                 sx={{
-                  textTransform: 'none',
-                  borderRadius: 999,
-                  px: 2,
-                  fontWeight: 700,
-                  boxShadow: (theme) => `0 10px 20px ${alpha(theme.palette.primary.main, 0.18)}`,
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
                 }}
-              >
-                Save Changes
-              </Button>
-            </Stack>
-          )}
-        </Box>
-      </Box>
+            >
+                {/* Compact Header */}
+                <Box
+                    sx={{
+                        p: 2.5,
+                        bgcolor: "#FFFFFF",
+                        borderBottom: "1px solid #E8E5E1",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                    }}
+                >
+                    <Box
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 2,
+                        }}
+                    >
+                        <Avatar
+                            sx={{
+                                width: 48,
+                                height: 48,
+                                bgcolor: session.avatarColor,
+                                fontSize: "18px",
+                                fontWeight: 700,
+                            }}
+                        >
+                            {session.initials}
+                        </Avatar>
+                        <Box>
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    fontWeight: 600,
+                                    color: "#2C2825",
+                                    fontSize: "18px",
+                                    mb: 0.25,
+                                }}
+                            >
+                                {session.client}
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                sx={{ color: "#7A746F", fontSize: "13px" }}
+                            >
+                                {isEditMode && !editFormData.sessionType
+                                    ? "No title"
+                                    : isEditMode
+                                        ? editFormData.sessionType
+                                        : session.sessionType}
+                            </Typography>
+                        </Box>
+                    </Box>
 
-      <Snackbar
-        open={savedVisible}
-        autoHideDuration={2000}
-        onClose={() => setSavedVisible(false)}
-        message="Saved"
-      />
-    </Drawer>
-  );
+                    <IconButton
+                        onClick={onClose}
+                        sx={{
+                            color: "#C7C2BD",
+                            "&:hover": {
+                                bgcolor: "rgba(155, 139, 158, 0.06)",
+                                color: "#9A9490",
+                            },
+                        }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
+                </Box>
+
+                {/* Content - Scrollable */}
+                <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
+                    <Stack spacing={3}>
+                        {/* Session Notes - PROMINENT FIRST */}
+                        <SessionNotes
+                            notes={sessionNotes}
+                            onNotesChange={handleNotesChange}
+                        />
+
+                        {/* Previous Session Preview - Only show if exists */}
+                        {previousSession &&
+                            previousSessionNotes.length > 0 && (
+                                <PreviousSessionPreview
+                                    sessionType={
+                                        previousSession.sessionType
+                                    }
+                                    date={previousSession.date}
+                                    notes={previousSessionNotes}
+                                />
+                            )}
+
+                        <Divider sx={{ borderColor: "#E8E5E1" }} />
+
+                        {/* Session Details */}
+                        <Box>
+                            <Typography
+                                variant="subtitle2"
+                                sx={{
+                                    color: "#7A746F",
+                                    fontWeight: 700,
+                                    fontSize: "11px",
+                                    mb: 2.5,
+                                    display: "block",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.8px",
+                                }}
+                            >
+                                Details
+                            </Typography>
+                            <Stack spacing={2.5}>
+                                {/* Session Title - Edit Mode */}
+                                {isEditMode && (
+                                    <Box>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "#4A4542",
+                                                fontWeight: 600,
+                                                mb: 0.75,
+                                                display: "block",
+                                                fontSize: "11px",
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.8px",
+                                            }}
+                                        >
+                                            Session Title{" "}
+                                            <Box
+                                                component="span"
+                                                sx={{
+                                                    color: "#9A9490",
+                                                    fontStyle: "italic",
+                                                    fontWeight: 400,
+                                                }}
+                                            >
+                                                (optional)
+                                            </Box>
+                                        </Typography>
+                                        <Autocomplete
+                                            freeSolo
+                                            options={sessionTypes}
+                                            value={editFormData.sessionType}
+                                            onChange={(event, newValue) => {
+                                                handleEditChange(
+                                                    "sessionType",
+                                                    newValue || "",
+                                                );
+                                            }}
+                                            onInputChange={(event, newInputValue) => {
+                                                handleEditChange(
+                                                    "sessionType",
+                                                    newInputValue,
+                                                );
+                                            }}
+                                            renderInput={(params) => (
+                                                <TextField
+                                                    {...params}
+                                                    size="small"
+                                                    placeholder="No title"
+                                                    sx={{
+                                                        bgcolor: "#FFFFFF",
+                                                        "& .MuiOutlinedInput-root": {
+                                                            borderRadius: "8px",
+                                                            "& fieldset": {
+                                                                borderColor: "#E8E5E1",
+                                                                borderWidth: "1.5px",
+                                                            },
+                                                            "&:hover fieldset": {
+                                                                borderColor: "#9B8B9E",
+                                                            },
+                                                            "&.Mui-focused fieldset": {
+                                                                borderColor: "#9B8B9E",
+                                                                borderWidth: "2px",
+                                                            },
+                                                        },
+                                                    }}
+                                                />
+                                            )}
+                                        />
+                                    </Box>
+                                )}
+
+                                {/* Date */}
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        gap: 2,
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: "8px",
+                                            bgcolor: "#F9F8F7",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <CalendarTodayIcon
+                                            sx={{ fontSize: 18, color: "#7A746F" }}
+                                        />
+                                    </Box>
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "#9A9490",
+                                                fontSize: "11px",
+                                                mb: 0.5,
+                                                display: "block",
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.5px",
+                                            }}
+                                        >
+                                            Date
+                                        </Typography>
+                                        {isEditMode ? (
+                                            <TextField
+                                                type="date"
+                                                fullWidth
+                                                size="small"
+                                                value={editFormData.date}
+                                                onChange={(e) =>
+                                                    handleEditChange(
+                                                        "date",
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                sx={{
+                                                    bgcolor: "#FFFFFF",
+                                                    "& .MuiOutlinedInput-root": {
+                                                        borderRadius: "8px",
+                                                        "& fieldset": {
+                                                            borderColor: "#E8E5E1",
+                                                            borderWidth: "1.5px",
+                                                        },
+                                                        "&:hover fieldset": {
+                                                            borderColor: "#9B8B9E",
+                                                        },
+                                                        "&.Mui-focused fieldset": {
+                                                            borderColor: "#9B8B9E",
+                                                            borderWidth: "2px",
+                                                        },
+                                                    },
+                                                }}
+                                            />
+                                        ) : (
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: 600,
+                                                    color: "#4A4542",
+                                                    fontSize: "14px",
+                                                }}
+                                            >
+                                                {format(
+                                                    session.date,
+                                                    "EEEE, MMMM d, yyyy",
+                                                )}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Box>
+
+                                {/* Time & Duration */}
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        gap: 2,
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: "8px",
+                                            bgcolor: "#F9F8F7",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <AccessTimeIcon
+                                            sx={{ fontSize: 18, color: "#7A746F" }}
+                                        />
+                                    </Box>
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "#9A9490",
+                                                fontSize: "11px",
+                                                mb: 0.5,
+                                                display: "block",
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.5px",
+                                            }}
+                                        >
+                                            Time & Duration
+                                        </Typography>
+                                        {isEditMode ? (
+                                            <Box sx={{ display: "flex", gap: 1 }}>
+                                                <TextField
+                                                    type="time"
+                                                    size="small"
+                                                    value={editFormData.time}
+                                                    onChange={(e) =>
+                                                        handleEditChange(
+                                                            "time",
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    sx={{
+                                                        flex: 1,
+                                                        bgcolor: "#FFFFFF",
+                                                        "& .MuiOutlinedInput-root": {
+                                                            borderRadius: "8px",
+                                                            "& fieldset": {
+                                                                borderColor: "#E8E5E1",
+                                                                borderWidth: "1.5px",
+                                                            },
+                                                            "&:hover fieldset": {
+                                                                borderColor: "#9B8B9E",
+                                                            },
+                                                            "&.Mui-focused fieldset": {
+                                                                borderColor: "#9B8B9E",
+                                                                borderWidth: "2px",
+                                                            },
+                                                        },
+                                                    }}
+                                                />
+                                                <TextField
+                                                    select
+                                                    size="small"
+                                                    value={editFormData.duration}
+                                                    onChange={(e) =>
+                                                        handleEditChange(
+                                                            "duration",
+                                                            Number(
+                                                                e.target
+                                                                    .value,
+                                                            ),
+                                                        )
+                                                    }
+                                                    sx={{
+                                                        flex: 1,
+                                                        bgcolor: "#FFFFFF",
+                                                        "& .MuiOutlinedInput-root": {
+                                                            borderRadius: "8px",
+                                                            "& fieldset": {
+                                                                borderColor: "#E8E5E1",
+                                                                borderWidth: "1.5px",
+                                                            },
+                                                            "&:hover fieldset": {
+                                                                borderColor: "#9B8B9E",
+                                                            },
+                                                            "&.Mui-focused fieldset": {
+                                                                borderColor: "#9B8B9E",
+                                                                borderWidth: "2px",
+                                                            },
+                                                        },
+                                                    }}
+                                                >
+                                                    {durations.map((duration) => (
+                                                        <MenuItem
+                                                            key={duration.value}
+                                                            value={duration.value}
+                                                        >
+                                                            {duration.label}
+                                                        </MenuItem>
+                                                    ))}
+                                                </TextField>
+                                            </Box>
+                                        ) : (
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: 600,
+                                                    color: "#4A4542",
+                                                    fontSize: "14px",
+                                                }}
+                                            >
+                                                {format(session.date, "h:mm a")} {" - "}
+                                                {session.duration} minutes
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Box>
+
+                                {/* Method */}
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        gap: 2,
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: "8px",
+                                            bgcolor: "#F9F8F7",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        {getLocationIcon(
+                                            isEditMode
+                                                ? editFormData.method
+                                                : session.location,
+                                        )}
+                                    </Box>
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "#9A9490",
+                                                fontSize: "11px",
+                                                mb: 0.5,
+                                                display: "block",
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.5px",
+                                            }}
+                                        >
+                                            Method
+                                        </Typography>
+                                        {isEditMode ? (
+                                            <TextField
+                                                select
+                                                fullWidth
+                                                size="small"
+                                                value={editFormData.method}
+                                                onChange={(e) =>
+                                                    handleEditChange(
+                                                        "method",
+                                                        e.target.value as SessionLike["location"],
+                                                    )
+                                                }
+                                                sx={{
+                                                    bgcolor: "#FFFFFF",
+                                                    "& .MuiOutlinedInput-root": {
+                                                        borderRadius: "8px",
+                                                        "& fieldset": {
+                                                            borderColor: "#E8E5E1",
+                                                            borderWidth: "1.5px",
+                                                        },
+                                                        "&:hover fieldset": {
+                                                            borderColor: "#9B8B9E",
+                                                        },
+                                                        "&.Mui-focused fieldset": {
+                                                            borderColor: "#9B8B9E",
+                                                            borderWidth: "2px",
+                                                        },
+                                                    },
+                                                }}
+                                            >
+                                                <MenuItem value="zoom">
+                                                    <Box
+                                                        sx={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: 1,
+                                                        }}
+                                                    >
+                                                        <VideocamIcon
+                                                            sx={{
+                                                                fontSize: 16,
+                                                                color: "#9B8B9E",
+                                                            }}
+                                                        />
+                                                        <span>Zoom</span>
+                                                    </Box>
+                                                </MenuItem>
+                                                <MenuItem value="phone">
+                                                    <Box
+                                                        sx={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: 1,
+                                                        }}
+                                                    >
+                                                        <PhoneIcon
+                                                            sx={{
+                                                                fontSize: 16,
+                                                                color: "#9B8B9E",
+                                                            }}
+                                                        />
+                                                        <span>Phone</span>
+                                                    </Box>
+                                                </MenuItem>
+                                                <MenuItem value="office">
+                                                    <Box
+                                                        sx={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: 1,
+                                                        }}
+                                                    >
+                                                        <BusinessIcon
+                                                            sx={{
+                                                                fontSize: 16,
+                                                                color: "#9B8B9E",
+                                                            }}
+                                                        />
+                                                        <span>In Person</span>
+                                                    </Box>
+                                                </MenuItem>
+                                            </TextField>
+                                        ) : (
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: 600,
+                                                    color: "#4A4542",
+                                                    fontSize: "14px",
+                                                }}
+                                            >
+                                                {getLocationLabel(session.location)}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Box>
+
+                                {/* Billing & Payment - Read-only */}
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        gap: 2,
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: "8px",
+                                            bgcolor: "#F9F8F7",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <PaymentIcon
+                                            sx={{ fontSize: 18, color: "#7A746F" }}
+                                        />
+                                    </Box>
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "#9A9490",
+                                                fontSize: "11px",
+                                                mb: 0.75,
+                                                display: "block",
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.5px",
+                                            }}
+                                        >
+                                            Billing & Payment
+                                        </Typography>
+                                        <Box
+                                            sx={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 1,
+                                                flexWrap: "wrap",
+                                            }}
+                                        >
+                                            <Chip
+                                                label={
+                                                    session.billingSource ===
+                                                        "pay-per-session"
+                                                        ? "Pay per session"
+                                                        : session.billingSource ===
+                                                            "package" &&
+                                                            session.packageRemaining !==
+                                                            undefined
+                                                            ? `Package - ${session.packageRemaining} left`
+                                                            : "Included"
+                                                }
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: "rgba(122, 116, 111, 0.06)",
+                                                    color: "#7A746F",
+                                                    border:
+                                                        "1px solid rgba(122, 116, 111, 0.1)",
+                                                    fontWeight: 500,
+                                                    fontSize: "12px",
+                                                    height: 24,
+                                                }}
+                                            />
+                                            <Chip
+                                                label={
+                                                    session.paymentStatus
+                                                        ?.charAt(0)
+                                                        .toUpperCase() +
+                                                    session.paymentStatus?.slice(1) ||
+                                                    "Paid"
+                                                }
+                                                size="small"
+                                                sx={{
+                                                    ...(session.paymentStatus === "paid"
+                                                        ? {
+                                                            bgcolor:
+                                                                "rgba(168, 181, 160, 0.12)",
+                                                            color: "#5B7052",
+                                                            border:
+                                                                "1px solid rgba(168, 181, 160, 0.2)",
+                                                        }
+                                                        : session.paymentStatus === "unpaid"
+                                                            ? {
+                                                                bgcolor:
+                                                                    "rgba(212, 184, 138, 0.12)",
+                                                                color: "#8B7444",
+                                                                border:
+                                                                    "1px solid rgba(212, 184, 138, 0.2)",
+                                                            }
+                                                            : session.paymentStatus ===
+                                                                "invoiced"
+                                                                ? {
+                                                                    bgcolor:
+                                                                        "rgba(157, 170, 181, 0.12)",
+                                                                    color: "#4A5B6D",
+                                                                    border:
+                                                                        "1px solid rgba(157, 170, 181, 0.2)",
+                                                                }
+                                                                : {
+                                                                    bgcolor:
+                                                                        "rgba(155, 139, 158, 0.12)",
+                                                                    color: "#7A6B7D",
+                                                                    border:
+                                                                        "1px solid rgba(155, 139, 158, 0.2)",
+                                                                }),
+                                                    fontWeight: 600,
+                                                    fontSize: "11px",
+                                                    height: 24,
+                                                }}
+                                            />
+                                        </Box>
+                                    </Box>
+                                </Box>
+
+                                {/* Recurring - Read-only (if applicable) */}
+                                {session.isRecurring && (
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            alignItems: "flex-start",
+                                            gap: 2,
+                                        }}
+                                    >
+                                        <Box
+                                            sx={{
+                                                width: 36,
+                                                height: 36,
+                                                borderRadius: "8px",
+                                                bgcolor: "#F9F8F7",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <RepeatIcon
+                                                sx={{ fontSize: 18, color: "#7A746F" }}
+                                            />
+                                        </Box>
+                                        <Box sx={{ flex: 1 }}>
+                                            <Typography
+                                                variant="caption"
+                                                sx={{
+                                                    color: "#9A9490",
+                                                    fontSize: "11px",
+                                                    mb: 0.5,
+                                                    display: "block",
+                                                    textTransform: "uppercase",
+                                                    letterSpacing: "0.5px",
+                                                }}
+                                            >
+                                                Recurring
+                                            </Typography>
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: 600,
+                                                    color: "#4A4542",
+                                                    fontSize: "14px",
+                                                    textTransform: "capitalize",
+                                                }}
+                                            >
+                                                {session.recurringType}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                )}
+
+                                {/* Status */}
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        gap: 2,
+                                    }}
+                                >
+                                    <Box
+                                        sx={{
+                                            width: 36,
+                                            height: 36,
+                                            borderRadius: "8px",
+                                            bgcolor: "#F9F8F7",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <PersonIcon
+                                            sx={{ fontSize: 18, color: "#7A746F" }}
+                                        />
+                                    </Box>
+                                    <Box sx={{ flex: 1 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                color: "#9A9490",
+                                                fontSize: "11px",
+                                                mb: 0.75,
+                                                display: "block",
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.5px",
+                                            }}
+                                        >
+                                            Status
+                                        </Typography>
+                                        {isEditMode ? (
+                                            <TextField
+                                                select
+                                                fullWidth
+                                                size="small"
+                                                value={editFormData.status}
+                                                onChange={(e) =>
+                                                    handleEditChange(
+                                                        "status",
+                                                        e.target.value as SessionLike["status"],
+                                                    )
+                                                }
+                                                sx={{
+                                                    bgcolor: "#FFFFFF",
+                                                    "& .MuiOutlinedInput-root": {
+                                                        borderRadius: "8px",
+                                                        "& fieldset": {
+                                                            borderColor: "#E8E5E1",
+                                                            borderWidth: "1.5px",
+                                                        },
+                                                        "&:hover fieldset": {
+                                                            borderColor: "#9B8B9E",
+                                                        },
+                                                        "&.Mui-focused fieldset": {
+                                                            borderColor: "#9B8B9E",
+                                                            borderWidth: "2px",
+                                                        },
+                                                    },
+                                                }}
+                                            >
+                                                {statusOptions.map((option) => (
+                                                    <MenuItem
+                                                        key={option.value}
+                                                        value={option.value}
+                                                    >
+                                                        {option.label}
+                                                    </MenuItem>
+                                                ))}
+                                            </TextField>
+                                        ) : (
+                                            <Chip
+                                                label={
+                                                    session.status
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                    session.status.slice(1)
+                                                }
+                                                size="small"
+                                                sx={{
+                                                    ...statusColors,
+                                                    fontWeight: 600,
+                                                    fontSize: "12px",
+                                                    height: 26,
+                                                }}
+                                            />
+                                        )}
+                                    </Box>
+                                </Box>
+                            </Stack>
+                        </Box>
+                    </Stack>
+                </Box>
+
+                {/* Footer Actions */}
+                <Box
+                    sx={{
+                        p: 2.5,
+                        borderTop: "1.5px solid #E8E5E1",
+                        bgcolor: "#FFFFFF",
+                    }}
+                >
+                    {isEditMode ? (
+                        <Stack spacing={1.5}>
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                startIcon={<SaveIcon />}
+                                onClick={handleSaveEdit}
+                                sx={{
+                                    bgcolor: "#9B8B9E",
+                                    color: "#FFFFFF",
+                                    fontWeight: 600,
+                                    textTransform: "none",
+                                    py: 1.25,
+                                    "&:hover": {
+                                        bgcolor: "#8A7A8D",
+                                    },
+                                }}
+                            >
+                                Save Changes
+                            </Button>
+                            <Button
+                                fullWidth
+                                variant="outlined"
+                                onClick={handleCancelEdit}
+                                sx={{
+                                    borderColor: "#E8E5E1",
+                                    color: "#4A4542",
+                                    fontWeight: 600,
+                                    textTransform: "none",
+                                    py: 1.25,
+                                    "&:hover": {
+                                        borderColor: "#D0CCC7",
+                                        bgcolor: "#F9F8F7",
+                                    },
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                        </Stack>
+                    ) : (
+                        <Stack spacing={1.5}>
+                            <Button
+                                fullWidth
+                                variant="outlined"
+                                startIcon={<EditIcon />}
+                                onClick={() => setIsEditMode(true)}
+                                sx={{
+                                    borderColor: "#E8E5E1",
+                                    color: "#4A4542",
+                                    fontWeight: 600,
+                                    textTransform: "none",
+                                    py: 1.25,
+                                    "&:hover": {
+                                        borderColor: "#9B8B9E",
+                                        bgcolor: "rgba(155, 139, 158, 0.05)",
+                                    },
+                                }}
+                            >
+                                Edit Session
+                            </Button>
+
+                            {/* Show Cancel button only if not completed */}
+                            {session.status !== "completed" &&
+                                session.status !== "cancelled" && (
+                                    <Button
+                                        fullWidth
+                                        variant="outlined"
+                                        startIcon={<DeleteIcon />}
+                                        onClick={() => setIsCancelDialogOpen(true)}
+                                        sx={{
+                                            borderColor: "#F5E8E8",
+                                            color: "#8B4A4A",
+                                            fontWeight: 600,
+                                            textTransform: "none",
+                                            py: 1.25,
+                                            "&:hover": {
+                                                borderColor: "#8B4A4A",
+                                                bgcolor: "#F5E8E8",
+                                            },
+                                        }}
+                                    >
+                                        Cancel Session
+                                    </Button>
+                                )}
+
+                            {/* Show Re-schedule button if cancelled */}
+                            {session.status === "cancelled" && (
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    startIcon={<EventAvailableIcon />}
+                                    onClick={() => {
+                                        void handleStatusChange(
+                                            "upcoming",
+                                        ).then((didUpdate) => {
+                                            if (didUpdate) {
+                                                onClose();
+                                            }
+                                        });
+                                    }}
+                                    sx={{
+                                        borderColor: "#E8E5E1",
+                                        color: "#5B7052",
+                                        fontWeight: 600,
+                                        textTransform: "none",
+                                        py: 1.25,
+                                        "&:hover": {
+                                            borderColor: "#A8B5A0",
+                                            bgcolor: "rgba(168, 181, 160, 0.08)",
+                                        },
+                                    }}
+                                >
+                                    Re-schedule Session
+                                </Button>
+                            )}
+                        </Stack>
+                    )}
+                </Box>
+            </Box>
+
+            {/* Cancel Dialog */}
+            <Dialog
+                open={isCancelDialogOpen}
+                onClose={() => setIsCancelDialogOpen(false)}
+                PaperProps={{
+                    sx: {
+                        width: { xs: "100%", sm: 400 },
+                        bgcolor: "#FDFCFB",
+                    },
+                }}
+            >
+                <DialogTitle
+                    sx={{
+                        color: "#2C2825",
+                        fontSize: "18px",
+                        fontWeight: 600,
+                        p: 2.5,
+                    }}
+                >
+                    Cancel Session
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText
+                        sx={{
+                            color: "#7A746F",
+                            fontSize: "14px",
+                            lineHeight: 1.6,
+                        }}
+                    >
+                        Are you sure you want to cancel this session with{" "}
+                        {session.client}? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setIsCancelDialogOpen(false)}
+                        sx={{
+                            color: "#4A4542",
+                            fontWeight: 600,
+                            textTransform: "none",
+                            py: 1.25,
+                            "&:hover": {
+                                bgcolor: "rgba(155, 139, 158, 0.05)",
+                            },
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            void handleStatusChange(
+                                "cancelled",
+                            ).then((didUpdate) => {
+                                if (didUpdate) {
+                                    setIsCancelDialogOpen(false);
+                                    onClose();
+                                }
+                            });
+                        }}
+                        sx={{
+                            color: "#8B4A4A",
+                            fontWeight: 600,
+                            textTransform: "none",
+                            py: 1.25,
+                            "&:hover": {
+                                bgcolor: "#F5E8E8",
+                            },
+                        }}
+                    >
+                        Confirm Cancel
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Drawer>
+    );
 }
