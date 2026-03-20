@@ -233,6 +233,7 @@ api.MapPost("/clients", async (ClientUpsertRequest request, LuminaDbContext db, 
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    var normalizedNotes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
     var client = new Client
     {
         PracticeId = scope.Value.practiceId,
@@ -242,10 +243,28 @@ api.MapPost("/clients", async (ClientUpsertRequest request, LuminaDbContext db, 
         Program = request.Program,
         StartDate = request.StartDate,
         Status = request.Status,
-        Notes = request.Notes
+        Notes = normalizedNotes
     };
     db.Clients.Add(client);
     await db.SaveChangesAsync();
+
+    if (normalizedNotes is not null)
+    {
+        var now = DateTimeOffset.UtcNow;
+        db.SessionNotes.Add(new SessionNote
+        {
+            ClientId = client.Id,
+            SessionId = null,
+            NoteType = "general",
+            Source = "client-create",
+            Content = normalizedNotes,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+
+        await db.SaveChangesAsync();
+    }
+
     return Results.Ok(new { id = client.Id });
 });
 
@@ -432,9 +451,12 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
             .Select(n => new
             {
                 id = n.Id,
+                clientId = n.ClientId,
+                sessionId = n.SessionId,
                 type = n.NoteType,
                 content = n.Content,
                 createdAt = n.CreatedAt,
+                updatedAt = n.UpdatedAt,
                 source = n.Source
             })
             .OrderByDescending(n => n.createdAt)
