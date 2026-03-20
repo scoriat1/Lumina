@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from './AuthContext';
 
@@ -39,41 +39,50 @@ interface NotesTemplateContextType {
 
 const NotesTemplateContext = createContext<NotesTemplateContextType | undefined>(undefined);
 
+const getStoredTemplateMode = (): 'default' | 'template' =>
+  (localStorage.getItem('templateMode') as 'default' | 'template') || 'default';
+
+const getStoredSelectedTemplate = (): TemplateSelection | null => {
+  const selectedTemplateKind = localStorage.getItem('selectedTemplateKind');
+  const selectedTemplateId = localStorage.getItem('selectedTemplateId');
+
+  if ((selectedTemplateKind === 'preset' || selectedTemplateKind === 'custom') && selectedTemplateId) {
+    return { kind: selectedTemplateKind, id: selectedTemplateId };
+  }
+
+  return null;
+};
+
+const serializeSettings = (
+  templateMode: 'default' | 'template',
+  selectedTemplate: TemplateSelection | null,
+) =>
+  JSON.stringify({
+    templateMode,
+    selectedTemplateKind: selectedTemplate?.kind ?? null,
+    selectedTemplateId: selectedTemplate?.id ?? null,
+  });
+
 export function NotesTemplateProvider({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
-  const [templateMode, setTemplateMode] = useState<'default' | 'template'>(() => (localStorage.getItem('templateMode') as 'default' | 'template') || 'default');
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateSelection | null>(null);
+  const [templateMode, setTemplateMode] = useState<'default' | 'template'>(getStoredTemplateMode);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateSelection | null>(getStoredSelectedTemplate);
   const [customTemplates, setCustomTemplates] = useState<Template[]>([]);
   const [presetTemplates, setPresetTemplates] = useState<Template[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const lastPersistedSettingsRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user?.practiceId) return;
-
-    const selectedTemplateKind = localStorage.getItem('selectedTemplateKind');
-    const selectedTemplateId = localStorage.getItem('selectedTemplateId');
-
-    if ((selectedTemplateKind === 'preset' || selectedTemplateKind === 'custom') && selectedTemplateId) {
-      setSelectedTemplate({ kind: selectedTemplateKind, id: selectedTemplateId });
-      return;
-    }
-
-    setSelectedTemplate(null);
-  }, [user?.practiceId]);
-
-  useEffect(() => {
-    if (!user?.practiceId) return;
-
     localStorage.setItem('templateMode', templateMode);
 
-    if (!selectedTemplate) {
+    if (selectedTemplate) {
+      localStorage.setItem('selectedTemplateKind', selectedTemplate.kind);
+      localStorage.setItem('selectedTemplateId', selectedTemplate.id);
+    } else {
       localStorage.removeItem('selectedTemplateKind');
       localStorage.removeItem('selectedTemplateId');
-      return;
     }
-
-    localStorage.setItem('selectedTemplateKind', selectedTemplate.kind);
-    localStorage.setItem('selectedTemplateId', selectedTemplate.id);
-  }, [selectedTemplate, templateMode, user?.practiceId]);
+  }, [selectedTemplate, templateMode]);
 
   const refreshTemplates = useCallback(async () => {
     if (!user?.practiceId) return;
@@ -84,10 +93,121 @@ export function NotesTemplateProvider({ children }: { children: ReactNode }) {
   }, [user?.practiceId]);
 
   useEffect(() => {
-    if (loading || !user?.practiceId) return;
+    if (loading || !user?.practiceId) {
+      setIsHydrated(false);
+      return;
+    }
 
-    refreshTemplates().catch(() => undefined);
+    let isActive = true;
+
+    void Promise.all([
+      apiClient.getTemplatePresets(),
+      apiClient.getCustomTemplates(user.practiceId),
+      apiClient.getNotesTemplateSettings(),
+    ])
+      .then(([presets, custom, settings]) => {
+        if (!isActive) {
+          return;
+        }
+
+        setPresetTemplates(presets);
+        setCustomTemplates(custom);
+
+        const fallbackTemplateMode = getStoredTemplateMode();
+        const fallbackSelectedTemplate = getStoredSelectedTemplate();
+        const serverSelectedTemplate =
+          settings.selectedTemplateKind && settings.selectedTemplateId
+            ? {
+              kind: settings.selectedTemplateKind,
+              id: settings.selectedTemplateId,
+            } satisfies TemplateSelection
+            : null;
+
+        const nextTemplateMode =
+          settings.templateMode === 'template' || settings.templateMode === 'default'
+            ? settings.templateMode
+            : fallbackTemplateMode;
+        const nextSelectedTemplate =
+          serverSelectedTemplate ?? fallbackSelectedTemplate;
+
+        setTemplateMode(nextTemplateMode);
+        setSelectedTemplate(nextSelectedTemplate);
+        lastPersistedSettingsRef.current = serializeSettings(
+          settings.templateMode,
+          serverSelectedTemplate,
+        );
+        setIsHydrated(true);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        refreshTemplates().catch(() => undefined);
+        setTemplateMode(getStoredTemplateMode());
+        setSelectedTemplate(getStoredSelectedTemplate());
+        lastPersistedSettingsRef.current = serializeSettings(
+          getStoredTemplateMode(),
+          getStoredSelectedTemplate(),
+        );
+        setIsHydrated(true);
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, [loading, refreshTemplates, user?.practiceId]);
+
+  useEffect(() => {
+    if (!user?.practiceId || !isHydrated) {
+      return;
+    }
+
+    const serialized = serializeSettings(templateMode, selectedTemplate);
+    if (serialized === lastPersistedSettingsRef.current) {
+      return;
+    }
+
+    let isActive = true;
+
+    void apiClient
+      .updateNotesTemplateSettings({
+        templateMode,
+        selectedTemplateKind: selectedTemplate?.kind,
+        selectedTemplateId: selectedTemplate?.id,
+      })
+      .then((settings) => {
+        if (!isActive) {
+          return;
+        }
+
+        const persistedSelection =
+          settings.selectedTemplateKind && settings.selectedTemplateId
+            ? {
+              kind: settings.selectedTemplateKind,
+              id: settings.selectedTemplateId,
+            } satisfies TemplateSelection
+            : null;
+
+        lastPersistedSettingsRef.current = serializeSettings(
+          settings.templateMode,
+          persistedSelection,
+        );
+
+        if (
+          settings.templateMode !== templateMode ||
+          serializeSettings(settings.templateMode, persistedSelection) !== serialized
+        ) {
+          setTemplateMode(settings.templateMode);
+          setSelectedTemplate(persistedSelection);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isActive = false;
+    };
+  }, [isHydrated, selectedTemplate, templateMode, user?.practiceId]);
 
   const getActiveTemplate = (): Template | null => {
     if (templateMode === 'default' || !selectedTemplate) return null;

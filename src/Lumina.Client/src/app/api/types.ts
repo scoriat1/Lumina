@@ -165,3 +165,9 @@ export interface TemplateDto {
   fieldsDetail?: TemplateFieldDto[];
   custom?: boolean;
 }
+
+export interface NotesTemplateSettingsDto {
+  templateMode: 'default' | 'template';
+  selectedTemplateKind?: 'preset' | 'custom';
+  selectedTemplateId?: string;
+}

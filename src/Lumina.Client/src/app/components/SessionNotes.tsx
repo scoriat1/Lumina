@@ -5,6 +5,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import NotesIcon from '@mui/icons-material/Notes';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router';
 import { colors } from '../styles/colors';
 import { useNotesTemplate } from '../contexts/NotesTemplateContext';
 
@@ -26,6 +27,7 @@ export function SessionNotes({
   notes, 
   onNotesChange,
 }: SessionNotesProps) {
+  const navigate = useNavigate();
   const { templateMode, getActiveTemplate } = useNotesTemplate();
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -62,6 +64,8 @@ export function SessionNotes({
         initialValues[field] = '';
       });
       setTemplateFieldValues(initialValues);
+    } else if (value === 'template') {
+      navigate('/settings#notes');
     }
   };
 
@@ -558,7 +562,7 @@ export function SessionNotes({
               </MenuItem>
               
               {/* Option 2: Template name OR "Choose Template from Settings" */}
-              <MenuItem value="template" sx={{ fontSize: '12px' }} disabled={!hasTemplate}>
+              <MenuItem value="template" sx={{ fontSize: '12px' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ArticleOutlinedIcon sx={{ fontSize: 16, color: hasTemplate ? colors.primary.main : colors.text.secondary }} />
                   <Typography 
@@ -576,7 +580,7 @@ export function SessionNotes({
             </Select>
             {!hasTemplate && (
               <Typography sx={{ mt: 0.75, fontSize: '11px', color: colors.text.secondary }}>
-                To use templates, pick one in Settings → Notes.
+                To use templates, pick one in Settings / Notes.
               </Typography>
             )}
           </FormControl>

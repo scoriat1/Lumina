@@ -463,8 +463,7 @@ export function NotesTemplateSettings() {
                   <Button
                     variant="contained"
                     onClick={handleSaveCustomTemplate}
-                    disabled={mutationState.loading}
-                    disabled={!newTemplateName.trim() || !newTemplateFields.some(f => f.trim())}
+                    disabled={mutationState.loading || !newTemplateName.trim() || !newTemplateFields.some(f => f.trim())}
                     sx={saveButtonStyles}
                   >
                     {editingTemplateId ? 'Update Template' : 'Save Template'}

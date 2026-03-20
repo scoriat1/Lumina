@@ -319,9 +319,15 @@ const buildLegacyNotes = (notes: SessionNote[]) =>
         .filter(Boolean)
         .join("\n\n");
 
-const getPersistedTemplateId = (notes: SessionNote[]) => {
+const getPersistedTemplateId = (
+    notes: SessionNote[],
+    persistableTemplateIds: ReadonlySet<string>,
+) => {
     const templateNote = notes.find(
-        (note) => note.isTemplate && note.templateId,
+        (note) =>
+            note.isTemplate &&
+            note.templateId &&
+            persistableTemplateIds.has(note.templateId),
     );
 
     if (!templateNote?.templateId) {
@@ -398,6 +404,11 @@ export function SessionDetailsDrawer({
 
         return lookup;
     }, [customTemplates, presetTemplates]);
+
+    const persistableTemplateIds = useMemo(
+        () => new Set(customTemplates.map((template) => template.id)),
+        [customTemplates],
+    );
 
     // Edit form state
     const [editFormData, setEditFormData] = useState<
@@ -638,7 +649,10 @@ export function SessionDetailsDrawer({
 
         void apiClient
             .saveSessionStructuredNote(session.id, {
-                templateId: getPersistedTemplateId(updatedNotes),
+                templateId: getPersistedTemplateId(
+                    updatedNotes,
+                    persistableTemplateIds,
+                ),
                 noteType: getPersistedNoteType(updatedNotes),
                 content: serializeSessionNotes(updatedNotes),
                 legacyNotes,

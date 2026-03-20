@@ -600,7 +600,20 @@ api.MapPut("/sessions/{id:int}/note", async (int id, SessionStructuredNoteReques
         db.SessionNotes.Add(note);
     }
 
-    note.TemplateId = request.TemplateId;
+    int? persistedTemplateId = null;
+    if (request.TemplateId.HasValue)
+    {
+        var templateExists = await db.Templates.AnyAsync(t =>
+            t.Id == request.TemplateId.Value &&
+            t.PracticeId == scope.Value.practiceId);
+
+        if (templateExists)
+        {
+            persistedTemplateId = request.TemplateId.Value;
+        }
+    }
+
+    note.TemplateId = persistedTemplateId;
     note.NoteType = string.IsNullOrWhiteSpace(request.NoteType) ? "general" : request.NoteType.Trim().ToLowerInvariant();
     note.Content = request.Content;
     note.UpdatedAt = DateTimeOffset.UtcNow;
@@ -717,6 +730,75 @@ api.MapGet("/settings/providers", async (LuminaDbContext db, HttpContext context
     }).ToListAsync();
 
     return Results.Ok(providers);
+});
+
+api.MapGet("/settings/notes", async (LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var practice = await db.Practices
+        .AsNoTracking()
+        .FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+
+    if (practice is null) return Results.NotFound();
+
+    return Results.Ok(MapNotesTemplateSettingsResponse(practice));
+});
+
+api.MapPut("/settings/notes", async (NotesTemplateSettingsRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var practice = await db.Practices
+        .FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+
+    if (practice is null) return Results.NotFound();
+
+    var templateMode = string.IsNullOrWhiteSpace(request.TemplateMode)
+        ? "default"
+        : request.TemplateMode.Trim().ToLowerInvariant();
+
+    if (templateMode is not ("default" or "template"))
+    {
+        return Results.BadRequest(new { message = "Invalid templateMode." });
+    }
+
+    var selectedTemplateKind = string.IsNullOrWhiteSpace(request.SelectedTemplateKind)
+        ? null
+        : request.SelectedTemplateKind.Trim().ToLowerInvariant();
+    var selectedTemplateId = request.SelectedTemplateId;
+
+    if ((selectedTemplateKind is null) != (!selectedTemplateId.HasValue))
+    {
+        return Results.BadRequest(new { message = "selectedTemplateKind and selectedTemplateId must both be provided." });
+    }
+
+    if (selectedTemplateKind is not null)
+    {
+        if (selectedTemplateKind is not ("preset" or "custom"))
+        {
+            return Results.BadRequest(new { message = "Invalid selectedTemplateKind." });
+        }
+
+        var templateExists = selectedTemplateKind == "preset"
+            ? await db.TemplatePresets.AnyAsync(p => p.Id == selectedTemplateId && p.IsActive)
+            : await db.Templates.AnyAsync(t => t.Id == selectedTemplateId && t.PracticeId == scope.Value.practiceId);
+
+        if (!templateExists)
+        {
+            return Results.BadRequest(new { message = "Selected template was not found." });
+        }
+    }
+
+    practice.NotesTemplateMode = templateMode;
+    practice.NotesSelectedTemplateKind = selectedTemplateKind;
+    practice.NotesSelectedTemplateId = selectedTemplateId;
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(MapNotesTemplateSettingsResponse(practice));
 });
 
 api.MapGet("/templates/presets", async (LuminaDbContext db) =>
@@ -1021,6 +1103,16 @@ static TemplateResponse MapTemplateResponse(Template template)
         true);
 }
 
+static NotesTemplateSettingsResponse MapNotesTemplateSettingsResponse(Practice practice)
+{
+    return new NotesTemplateSettingsResponse(
+        string.IsNullOrWhiteSpace(practice.NotesTemplateMode)
+            ? "default"
+            : practice.NotesTemplateMode,
+        practice.NotesSelectedTemplateKind,
+        practice.NotesSelectedTemplateId);
+}
+
 static ApiSessionItem MapSessionDto(Session session, string clientName)
 {
     return new ApiSessionItem(
@@ -1053,6 +1145,7 @@ static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpConte
 public record LoginRequest(string Email, string Password);
 public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, int? Duration, SessionLocation? Location, SessionStatus? Status, string? Focus, string? Notes);
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
+public record NotesTemplateSettingsRequest(string TemplateMode, string? SelectedTemplateKind = null, int? SelectedTemplateId = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
 public record TemplateUpdateRequest(int PracticeId, string Name, string? Description, IReadOnlyList<TemplateUpdateFieldRequest> Fields);
@@ -1060,5 +1153,6 @@ public record TemplateUpdateFieldRequest(int Id, string Label, int SortOrder, st
 public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes);
 public record SessionStructuredNoteRequest(int? TemplateId, string Content, string LegacyNotes, string? NoteType = null);
 public record ClientNoteCreateRequest(string Content, string? Type = null, string? Source = null);
+public record NotesTemplateSettingsResponse(string TemplateMode, string? SelectedTemplateKind, int? SelectedTemplateId);
 public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
 public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);

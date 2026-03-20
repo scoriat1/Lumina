@@ -6,6 +6,7 @@ import type {
   ClientNoteDto,
   DashboardDto,
   InvoiceDto,
+  NotesTemplateSettingsDto,
   ProviderDto,
   SessionDto,
   SessionStructuredNoteDto,
@@ -81,6 +82,10 @@ type ClientApiDto = Omit<ClientDto, 'initials'> & { initials?: string };
 type SessionApiDto = Omit<SessionDto, 'initials'> & { initials?: string };
 type InvoiceApiDto = Omit<InvoiceDto, 'clientInitials'> & { clientInitials?: string };
 type ProviderApiDto = Omit<ProviderDto, 'initials'> & { initials?: string };
+type NotesTemplateSettingsApiDto = Omit<NotesTemplateSettingsDto, 'selectedTemplateId'> & {
+  selectedTemplateId?: number | null;
+  selectedTemplateKind?: 'preset' | 'custom' | null;
+};
 type DashboardApiDto = Omit<DashboardDto, 'upcomingSessions' | 'activeClientPreview'> & {
   upcomingSessions: SessionApiDto[];
   activeClientPreview: ClientApiDto[];
@@ -141,6 +146,17 @@ const mapTemplateDto = (template: TemplateDto): TemplateDto => {
     fields: normalizedFields.map((field) => field.label),
   };
 };
+
+const mapNotesTemplateSettingsDto = (
+  settings: NotesTemplateSettingsApiDto,
+): NotesTemplateSettingsDto => ({
+  templateMode: settings.templateMode,
+  selectedTemplateKind: settings.selectedTemplateKind ?? undefined,
+  selectedTemplateId:
+    settings.selectedTemplateId != null
+      ? String(settings.selectedTemplateId)
+      : undefined,
+});
 
 export const apiClient = {
   getHealth: () => request<{ status: string }>('/health'),
@@ -216,6 +232,29 @@ export const apiClient = {
   getProviders: async () => {
     const providers = await request<ProviderApiDto[]>('/api/settings/providers');
     return providers.map(mapProviderDto);
+  },
+  getNotesTemplateSettings: async () => {
+    const settings = await request<NotesTemplateSettingsApiDto>('/api/settings/notes');
+    return mapNotesTemplateSettingsDto(settings);
+  },
+  updateNotesTemplateSettings: async (payload: {
+    templateMode: 'default' | 'template';
+    selectedTemplateKind?: 'preset' | 'custom';
+    selectedTemplateId?: string | number;
+  }) => {
+    const settings = await request<NotesTemplateSettingsApiDto>('/api/settings/notes', {
+      method: 'PUT',
+      body: JSON.stringify({
+        templateMode: payload.templateMode,
+        selectedTemplateKind: payload.selectedTemplateKind ?? null,
+        selectedTemplateId:
+          payload.selectedTemplateId != null
+            ? Number(payload.selectedTemplateId)
+            : null,
+      }),
+    });
+
+    return mapNotesTemplateSettingsDto(settings);
   },
   getTemplatePresets: async () => {
     const templates = await request<TemplateDto[]>('/api/templates/presets');
