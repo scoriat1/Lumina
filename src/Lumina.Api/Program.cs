@@ -61,7 +61,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("client", policy =>
-        policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+        policy.WithOrigins("http://localhost:5175").AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 });
 
 builder.Services.Configure<JsonOptions>(options =>
@@ -126,7 +126,7 @@ app.MapGet("/api/auth/google/login", (HttpContext httpContext) =>
 app.MapGet("/api/auth/google/callback", async (HttpContext httpContext, SignInManager<AppUser> signInManager, UserManager<AppUser> userManager, LuminaDbContext db) =>
 {
     var externalLoginInfo = await signInManager.GetExternalLoginInfoAsync();
-    if (externalLoginInfo is null) return Results.Redirect("http://localhost:5173/login?error=google");
+    if (externalLoginInfo is null) return Results.Redirect("http://localhost:5175/login?error=google");
 
     var signInResult = await signInManager.ExternalLoginSignInAsync(externalLoginInfo.LoginProvider, externalLoginInfo.ProviderKey, true);
     if (!signInResult.Succeeded)
@@ -135,7 +135,7 @@ app.MapGet("/api/auth/google/callback", async (HttpContext httpContext, SignInMa
         var displayName = externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Name) ?? email;
         var user = new AppUser { UserName = email, Email = email, DisplayName = displayName, EmailConfirmed = true };
         var createResult = await userManager.CreateAsync(user);
-        if (!createResult.Succeeded) return Results.Redirect("http://localhost:5173/login?error=google");
+        if (!createResult.Succeeded) return Results.Redirect("http://localhost:5175/login?error=google");
 
         await userManager.AddLoginAsync(user, externalLoginInfo);
 
@@ -155,7 +155,7 @@ app.MapGet("/api/auth/google/callback", async (HttpContext httpContext, SignInMa
         await signInManager.SignInAsync(user, true);
     }
 
-    return Results.Redirect("http://localhost:5173/");
+    return Results.Redirect("http://localhost:5175/");
 });
 
 app.MapGet("/api/auth/me", async (HttpContext httpContext, LuminaDbContext db, UserManager<AppUser> userManager) =>
@@ -530,6 +530,41 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == request.ClientId && c.PracticeId == scope.Value.practiceId);
+    if (!clientExists)
+    {
+        return Results.BadRequest(new { message = "Selected client was not found." });
+    }
+
+    var now = DateTimeOffset.UtcNow;
+    var status = request.Status ?? (request.Mode == SessionEntryMode.LogPast ? SessionStatus.Completed : SessionStatus.Upcoming);
+
+    if (request.Mode == SessionEntryMode.Schedule)
+    {
+        if (request.Date <= now)
+        {
+            return Results.BadRequest(new { message = "Scheduled sessions must be created in the future." });
+        }
+
+        if (status != SessionStatus.Upcoming)
+        {
+            return Results.BadRequest(new { message = "Schedule mode only supports scheduled sessions." });
+        }
+    }
+    else
+    {
+        if (request.Date > now)
+        {
+            return Results.BadRequest(new { message = "Past sessions must be logged with a past date and time." });
+        }
+
+        if (status == SessionStatus.Upcoming)
+        {
+            return Results.BadRequest(new { message = "Past sessions cannot use the scheduled status." });
+        }
+    }
+
     var session = new Session
     {
         PracticeId = scope.Value.practiceId,
@@ -537,10 +572,10 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
         ClientId = request.ClientId,
         Date = request.Date,
         Duration = request.Duration,
-        SessionType = request.SessionType,
-        Focus = request.Focus,
-        Status = SessionStatus.Upcoming,
-        Location = SessionLocation.Zoom
+        SessionType = string.IsNullOrWhiteSpace(request.SessionType) ? "Session" : request.SessionType.Trim(),
+        Focus = request.Focus?.Trim() ?? string.Empty,
+        Status = status,
+        Location = request.Location
     };
     db.Sessions.Add(session);
     await db.SaveChangesAsync();
@@ -1166,7 +1201,7 @@ static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpConte
 
 public record LoginRequest(string Email, string Password);
 public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, int? Duration, SessionLocation? Location, SessionStatus? Status, string? Focus, string? Notes);
-public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, string SessionType, string Focus, string? Payment = null);
+public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, SessionLocation Location, SessionStatus? Status, string SessionType, string Focus, SessionEntryMode Mode = SessionEntryMode.Schedule, string? Payment = null);
 public record NotesTemplateSettingsRequest(string TemplateMode, string? SelectedTemplateKind = null, int? SelectedTemplateId = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
@@ -1178,3 +1213,8 @@ public record ClientNoteCreateRequest(string Content, string? Type = null, strin
 public record NotesTemplateSettingsResponse(string TemplateMode, string? SelectedTemplateKind, int? SelectedTemplateId);
 public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
 public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);
+public enum SessionEntryMode
+{
+    Schedule = 1,
+    LogPast = 2
+}

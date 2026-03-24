@@ -1,7 +1,9 @@
 import { Chip } from '@mui/material';
+import type { SessionStatusValue } from '../../api/types';
+import { getSessionStatusBadgeStyles, getSessionStatusLabel } from '../../lib/sessionStatus';
 import { colors, typography, borderRadius } from '../../theme';
 
-export type SessionStatus = 'upcoming' | 'completed' | 'cancelled';
+export type SessionStatus = SessionStatusValue;
 export type PaymentStatus = 'paid' | 'unpaid' | 'invoiced' | 'package';
 
 interface StatusBadgeProps {
@@ -13,16 +15,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ status, size = 'small', type = 'session' }: StatusBadgeProps) {
   const getStatusStyles = () => {
     if (type === 'session') {
-      switch (status as SessionStatus) {
-        case 'upcoming':
-          return colors.status.upcoming;
-        case 'completed':
-          return colors.status.completed;
-        case 'cancelled':
-          return colors.status.cancelled;
-        default:
-          return colors.status.upcoming;
-      }
+      return getSessionStatusBadgeStyles(status as SessionStatus);
     } else {
       switch (status as PaymentStatus) {
         case 'paid':
@@ -40,7 +33,10 @@ export function StatusBadge({ status, size = 'small', type = 'session' }: Status
   };
 
   const styles = getStatusStyles();
-  const label = status.charAt(0).toUpperCase() + status.slice(1);
+  const label =
+    type === 'session'
+      ? getSessionStatusLabel(status as SessionStatus)
+      : status.charAt(0).toUpperCase() + status.slice(1);
 
   return (
     <Chip

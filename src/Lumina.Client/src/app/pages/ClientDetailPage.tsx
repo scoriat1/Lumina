@@ -31,7 +31,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import { format } from 'date-fns';
 import { colors } from '../styles/colors';
-import { NewSessionModal } from '../components/NewSessionModal';
+import { SessionEntryModal } from '../components/SessionEntryModal';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
 import { apiClient } from '../api/client';
 import type {
@@ -58,7 +58,8 @@ type ClientFieldErrors = {
 const statusLabelMap: Record<string, string> = {
     upcoming: 'Scheduled',
     completed: 'Completed',
-    cancelled: 'Cancelled',
+    cancelled: 'Canceled',
+    noShow: 'No-show',
 };
 
 const locationLabelMap: Record<SessionDto['location'], string> = {
@@ -405,6 +406,14 @@ export function ClientDetailPage() {
         setSelectedSessionId(null);
     };
 
+    const handleOpenSessionModal = () => {
+        setIsNewSessionModalOpen(true);
+    };
+
+    const handleCloseSessionModal = () => {
+        setIsNewSessionModalOpen(false);
+    };
+
     const handleOpenNoteComposer = () => {
         setNoteError(null);
         setIsNoteComposerOpen(true);
@@ -625,30 +634,32 @@ export function ClientDetailPage() {
                         {client.name}
                     </Typography>
 
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => setIsNewSessionModalOpen(true)}
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            fontSize: '14px',
-                            bgcolor: '#8B5CF6',
-                            color: 'white',
-                            height: '42px',
-                            px: 3.5,
-                            borderRadius: '10px',
-                            boxShadow:
-                                '0 2px 12px rgba(139, 92, 246, 0.3)',
-                            '&:hover': {
-                                bgcolor: '#7C3AED',
+                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                        <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={handleOpenSessionModal}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                fontSize: '14px',
+                                bgcolor: '#8B5CF6',
+                                color: 'white',
+                                height: '42px',
+                                px: 3.5,
+                                borderRadius: '10px',
                                 boxShadow:
-                                    '0 6px 20px rgba(139, 92, 246, 0.5)',
-                            },
-                        }}
-                    >
-                        New Session
-                    </Button>
+                                    '0 2px 12px rgba(139, 92, 246, 0.3)',
+                                '&:hover': {
+                                    bgcolor: '#7C3AED',
+                                    boxShadow:
+                                        '0 6px 20px rgba(139, 92, 246, 0.5)',
+                                },
+                            }}
+                        >
+                            Add New Session
+                        </Button>
+                    </Box>
                 </Box>
 
                 <Typography
@@ -1520,9 +1531,9 @@ export function ClientDetailPage() {
                 surfaceVariant="client-detail"
             />
 
-            <NewSessionModal
+            <SessionEntryModal
                 open={isNewSessionModalOpen}
-                onClose={() => setIsNewSessionModalOpen(false)}
+                onClose={handleCloseSessionModal}
                 preselectedClientId={client.id}
                 onCreated={async () => {
                     await loadData();

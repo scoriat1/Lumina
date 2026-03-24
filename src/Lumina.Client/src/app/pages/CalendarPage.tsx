@@ -39,10 +39,11 @@ import AddIcon from '@mui/icons-material/Add';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { useNavigate, useLocation } from 'react-router';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
-import { NewSessionModal } from '../components/NewSessionModal';
+import { SessionEntryModal } from '../components/SessionEntryModal';
 import { apiClient } from '../api/client';
 import type { SessionDto } from '../api/types';
 import { PageHeader } from '../components/PageHeader';
+import { getSessionCalendarStyles } from '../lib/sessionStatus';
 
 type ViewMode = 'month' | 'week' | 'day';
 
@@ -113,14 +114,26 @@ export function CalendarPage() {
     }
   };
 
+  const openSessionModal = (options?: { initialDate?: string; initialTime?: string }) => {
+    setNewSessionInitialDate(options?.initialDate);
+    setNewSessionInitialTime(options?.initialTime);
+    setIsNewSessionModalOpen(true);
+  };
+
+  const handleCloseSessionModal = () => {
+    setIsNewSessionModalOpen(false);
+    setNewSessionInitialDate(undefined);
+    setNewSessionInitialTime(undefined);
+  };
+
   const handleDayClick = (day: Date) => {
     // Don't allow scheduling on past dates
     if (isBefore(startOfDay(day), startOfDay(new Date()))) {
       return;
     }
-    setNewSessionInitialDate(format(day, 'yyyy-MM-dd'));
-    setNewSessionInitialTime(undefined);
-    setIsNewSessionModalOpen(true);
+    openSessionModal({
+      initialDate: format(day, 'yyyy-MM-dd'),
+    });
   };
 
   const handleTimeSlotClick = (day: Date, hour: number) => {
@@ -130,9 +143,10 @@ export function CalendarPage() {
     if (isBefore(slotDateTime, new Date())) {
       return;
     }
-    setNewSessionInitialDate(format(day, 'yyyy-MM-dd'));
-    setNewSessionInitialTime(format(new Date().setHours(hour, 0), 'HH:mm'));
-    setIsNewSessionModalOpen(true);
+    openSessionModal({
+      initialDate: format(day, 'yyyy-MM-dd'),
+      initialTime: format(new Date().setHours(hour, 0), 'HH:mm'),
+    });
   };
 
   const renderMonthView = () => {
@@ -243,45 +257,51 @@ export function CalendarPage() {
                         gap: 0.5,
                       }}
                     >
-                      {events.map((event) => (
-                        <Box
-                          key={event.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSessionClick(event.id);
-                          }}
-                          sx={{
-                            px: 1.25,
-                            py: 0.5,
-                            borderRadius: '4px',
-                            bgcolor: event.avatarColor,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.5,
-                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                            cursor: 'pointer',
-                            flexShrink: 0,
-                            '&:hover': {
-                              transform: 'scale(1.02)',
-                              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.12)',
-                            },
-                          }}
-                        >
-                          <Typography
-                            variant="caption"
+                      {events.map((event) => {
+                        const eventColors = getSessionCalendarStyles(event.status);
+
+                        return (
+                          <Box
+                            key={event.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSessionClick(event.id);
+                            }}
                             sx={{
-                              color: '#FFFFFF',
-                              fontWeight: 600,
-                              fontSize: '11px',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
+                              px: 1.25,
+                              py: 0.5,
+                              borderRadius: '4px',
+                              bgcolor: eventColors.bg,
+                              border: `1px solid ${eventColors.border}`,
+                              borderLeft: `3px solid ${event.avatarColor}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                              '&:hover': {
+                                transform: 'scale(1.02)',
+                                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.12)',
+                              },
                             }}
                           >
-                            {format(new Date(event.date), 'h:mm a')} {event.client}
-                          </Typography>
-                        </Box>
-                      ))}
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: eventColors.text,
+                                fontWeight: 600,
+                                fontSize: '11px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {format(new Date(event.date), 'h:mm a')} {event.client}
+                            </Typography>
+                          </Box>
+                        );
+                      })}
                     </Box>
                   </Box>
                 );
@@ -350,7 +370,9 @@ export function CalendarPage() {
         {/* Day columns with events */}
         <Box sx={{ display: 'flex', flex: 1, overflow: 'auto' }}>
           {weekDays.map((day) => {
-            const dayEvents = getEventsForDay(day).sort((a, b) => a.date.getTime() - b.date.getTime());
+            const dayEvents = getEventsForDay(day).sort(
+              (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+            );
             const isTodayDate = isToday(day);
             const isPastDate = isBefore(startOfDay(day), startOfDay(new Date()));
 
@@ -386,68 +408,76 @@ export function CalendarPage() {
                     No sessions
                   </Typography>
                 ) : (
-                  dayEvents.map((event) => (
-                    <Paper
-                      key={event.id}
-                      elevation={1}
-                      sx={{
-                        p: 2,
-                        borderRadius: '8px',
-                        bgcolor: event.avatarColor,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        '&:hover': {
-                          elevation: 3,
-                          transform: 'translateY(-2px)',
-                        },
-                      }}
-                      onClick={() => handleSessionClick(event.id)}
-                    >
-                      <Typography
-                        variant="body2"
+                  dayEvents.map((event) => {
+                    const eventColors = getSessionCalendarStyles(event.status);
+
+                    return (
+                      <Paper
+                        key={event.id}
+                        elevation={1}
                         sx={{
-                          color: '#FFFFFF',
-                          fontWeight: 700,
-                          fontSize: '13px',
-                          mb: 0.5,
+                          p: 2,
+                          borderRadius: '8px',
+                          bgcolor: eventColors.bg,
+                          border: `1px solid ${eventColors.border}`,
+                          borderLeft: `3px solid ${event.avatarColor}`,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            elevation: 3,
+                            transform: 'translateY(-2px)',
+                          },
                         }}
+                        onClick={() => handleSessionClick(event.id)}
                       >
-                        {format(new Date(event.date), 'h:mm a')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: '#FFFFFF',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                          mb: 0.25,
-                        }}
-                      >
-                        {event.client}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: 'rgba(255, 255, 255, 0.9)',
-                          fontSize: '11px',
-                          display: 'block',
-                        }}
-                      >
-                        {event.sessionType}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: 'rgba(255, 255, 255, 0.85)',
-                          fontSize: '10px',
-                          display: 'block',
-                          mt: 0.25,
-                        }}
-                      >
-                        {event.duration} min
-                      </Typography>
-                    </Paper>
-                  ))
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: eventColors.text,
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            mb: 0.5,
+                          }}
+                        >
+                          {format(new Date(event.date), 'h:mm a')}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: eventColors.text,
+                            fontWeight: 600,
+                            fontSize: '13px',
+                            mb: 0.25,
+                          }}
+                        >
+                          {event.client}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: eventColors.text,
+                            opacity: 0.9,
+                            fontSize: '11px',
+                            display: 'block',
+                          }}
+                        >
+                          {event.sessionType}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: eventColors.text,
+                            opacity: 0.85,
+                            fontSize: '10px',
+                            display: 'block',
+                            mt: 0.25,
+                          }}
+                        >
+                          {event.duration} min
+                        </Typography>
+                      </Paper>
+                    );
+                  })
                 )}
               </Box>
             );
@@ -525,14 +555,14 @@ export function CalendarPage() {
                         sx={{
                           p: 3,
                           borderRadius: '12px',
-                          border: `3px solid ${event.avatarColor}`,
-                          bgcolor: '#FDFCFB',
+                          border: `1px solid ${getSessionCalendarStyles(event.status).border}`,
+                          borderLeft: `4px solid ${event.avatarColor}`,
+                          bgcolor: getSessionCalendarStyles(event.status).bg,
                           cursor: 'pointer',
                           transition: 'all 0.2s ease',
                           '&:hover': {
                             elevation: 6,
                             transform: 'translateX(4px)',
-                            bgcolor: '#FFFFFF',
                           },
                         }}
                         onClick={(e) => {
@@ -555,11 +585,11 @@ export function CalendarPage() {
                           <Box sx={{ flex: 1 }}>
                             <Typography
                               variant="h6"
-                              sx={{ fontWeight: 600, color: '#4A4542', fontSize: '18px', mb: 0.5 }}
+                              sx={{ fontWeight: 600, color: getSessionCalendarStyles(event.status).text, fontSize: '18px', mb: 0.5 }}
                             >
                               {event.client}
                             </Typography>
-                            <Typography variant="body2" sx={{ color: '#7A746F', mb: 1 }}>
+                            <Typography variant="body2" sx={{ color: getSessionCalendarStyles(event.status).text, opacity: 0.9, mb: 1 }}>
                               {event.sessionType}
                             </Typography>
                             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
@@ -568,8 +598,8 @@ export function CalendarPage() {
                                 size="small"
                                 sx={{
                                   bgcolor: '#FFFFFF',
-                                  border: '1px solid #E8E5E1',
-                                  color: '#4A4542',
+                                  border: `1px solid ${getSessionCalendarStyles(event.status).border}`,
+                                  color: getSessionCalendarStyles(event.status).text,
                                   fontWeight: 600,
                                 }}
                               />
@@ -662,7 +692,7 @@ export function CalendarPage() {
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <ToggleButtonGroup
             value={viewMode}
             exclusive
@@ -698,9 +728,9 @@ export function CalendarPage() {
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
-            onClick={() => setIsNewSessionModalOpen(true)}
+            onClick={() => openSessionModal()}
           >
-            New Session
+            Add New Session
           </Button>
         </Box>
       </Box>
@@ -723,9 +753,9 @@ export function CalendarPage() {
       </Card>
 
       {/* New Session Modal */}
-      <NewSessionModal
+      <SessionEntryModal
         open={isNewSessionModalOpen}
-        onClose={() => setIsNewSessionModalOpen(false)}
+        onClose={handleCloseSessionModal}
         initialDate={newSessionInitialDate}
         initialTime={newSessionInitialTime}
         onCreated={async () => {

@@ -43,6 +43,11 @@ import type {
 import { useNotesTemplate } from "../contexts/NotesTemplateContext";
 import { SessionNotes, SessionNote } from "./SessionNotes";
 import { PreviousSessionPreview } from "./PreviousSessionPreview";
+import {
+    allSessionStatusOptions,
+    getSessionStatusBadgeStyles,
+    getSessionStatusLabel,
+} from "../lib/sessionStatus";
 
 const sessionTypes = [
     "Initial Consultation",
@@ -63,11 +68,7 @@ const durations = [
     { value: 90, label: "90 min" },
 ];
 
-const statusOptions = [
-    { value: "upcoming", label: "Upcoming" },
-    { value: "completed", label: "Completed" },
-    { value: "cancelled", label: "Cancelled" },
-];
+const statusOptions = allSessionStatusOptions;
 
 type SessionLike = Omit<SessionDto, "date"> & {
     date: Date;
@@ -707,33 +708,13 @@ export function SessionDetailsDrawer({
         }
     };
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case "upcoming":
-                return {
-                    bgcolor: "rgba(168, 181, 160, 0.12)",
-                    color: "#5B7052",
-                    border: "1px solid rgba(168, 181, 160, 0.2)",
-                };
-            case "completed":
-                return {
-                    bgcolor: "rgba(157, 170, 181, 0.12)",
-                    color: "#4A5B6D",
-                    border: "1px solid rgba(157, 170, 181, 0.2)",
-                };
-            case "cancelled":
-                return {
-                    bgcolor: "rgba(139, 74, 74, 0.08)",
-                    color: "#8B4A4A",
-                    border: "1px solid rgba(139, 74, 74, 0.15)",
-                };
-            default:
-                return {
-                    bgcolor: "#F5F3F1",
-                    color: "#7A746F",
-                    border: "1px solid #E8E5E1",
-                };
-        }
+    const getStatusColor = (status: SessionLike["status"]) => {
+        const styles = getSessionStatusBadgeStyles(status);
+        return {
+            bgcolor: styles.bg,
+            color: styles.text,
+            border: `1px solid ${styles.border}`,
+        };
     };
 
     const statusColors = getStatusColor(
@@ -1583,15 +1564,16 @@ export function SessionDetailsDrawer({
                                             </TextField>
                                         ) : (
                                             <Chip
-                                                label={
-                                                    session.status
-                                                        .charAt(0)
-                                                        .toUpperCase() +
-                                                    session.status.slice(1)
-                                                }
+                                                label={getSessionStatusLabel(
+                                                    session.status,
+                                                )}
                                                 size="small"
                                                 sx={{
-                                                    ...statusColors,
+                                                    bgcolor:
+                                                        statusColors.bgcolor,
+                                                    color: statusColors.color,
+                                                    border:
+                                                        statusColors.border,
                                                     fontWeight: 600,
                                                     fontSize: "12px",
                                                     height: 26,

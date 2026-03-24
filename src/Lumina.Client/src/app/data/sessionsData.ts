@@ -1,4 +1,4 @@
-export type StatusFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
+export type StatusFilter = 'all' | 'upcoming' | 'completed' | 'cancelled' | 'noShow';
 
 export interface Session {
   id: string;
@@ -9,7 +9,7 @@ export interface Session {
   date: Date;
   duration: number;
   location: 'zoom' | 'phone' | 'office';
-  status: 'upcoming' | 'completed' | 'cancelled';
+  status: 'upcoming' | 'completed' | 'cancelled' | 'noShow';
   payment: string;
   paymentStatus?: 'paid' | 'unpaid' | 'invoiced' | 'package';
   billingSource?: 'pay-per-session' | 'package' | 'included';

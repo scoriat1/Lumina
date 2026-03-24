@@ -3,6 +3,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import PhoneIcon from '@mui/icons-material/Phone';
 import BusinessIcon from '@mui/icons-material/Business';
+import type { SessionStatusValue } from '../../api/types';
 import { UserAvatar } from '../common/UserAvatar';
 import { StatusBadge } from '../common/StatusBadge';
 import { colors, typography, borderRadius, shadows, transitions } from '../../theme';
@@ -15,7 +16,7 @@ interface SessionCardProps {
   time: string;
   date?: string;
   location: 'zoom' | 'phone' | 'office';
-  status: 'upcoming' | 'completed' | 'cancelled';
+  status: SessionStatusValue;
   onClick?: () => void;
 }
 

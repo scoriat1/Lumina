@@ -1,3 +1,7 @@
+export type SessionLocationValue = 'zoom' | 'phone' | 'office';
+export type SessionStatusValue = 'upcoming' | 'completed' | 'cancelled' | 'noShow';
+export type SessionEntryMode = 'schedule' | 'logPast';
+
 export interface ClientDto {
   id: string;
   name: string;
@@ -24,8 +28,8 @@ export interface SessionDto {
   sessionType: string;
   date: string;
   duration: number;
-  location: 'zoom' | 'phone' | 'office';
-  status: 'upcoming' | 'completed' | 'cancelled';
+  location: SessionLocationValue;
+  status: SessionStatusValue;
   payment?: string;
   paymentStatus?: 'paid' | 'unpaid' | 'invoiced' | 'package';
   billingSource?: 'pay-per-session' | 'package' | 'included';

@@ -3,6 +3,8 @@ import VideocamIcon from '@mui/icons-material/Videocam';
 import PersonIcon from '@mui/icons-material/Person';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useNavigate } from 'react-router';
+import type { SessionStatusValue } from '../api/types';
+import { getSessionStatusBadgeStyles, getSessionStatusLabel } from '../lib/sessionStatus';
 import { colors } from '../styles/colors';
 
 interface Session {
@@ -12,7 +14,7 @@ interface Session {
   time: string;
   date: string;
   fullDate: Date;
-  status: 'scheduled' | 'upcoming' | 'completed';
+  status: SessionStatusValue;
   platform?: string;
 }
 
@@ -22,19 +24,6 @@ interface UpcomingSessionsProps {
 
 export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
   const navigate = useNavigate();
-
-  const getStatusColor = (status: Session['status']) => {
-    switch (status) {
-      case 'scheduled':
-        return { bg: 'rgba(157, 170, 181, 0.12)', text: '#7A8A96' };
-      case 'upcoming':
-        return { bg: 'rgba(168, 181, 160, 0.12)', text: '#7A8873' };
-      case 'completed':
-        return { bg: 'rgba(155, 139, 158, 0.12)', text: '#6D5F70' };
-      default:
-        return { bg: 'rgba(122, 116, 111, 0.12)', text: '#7A746F' };
-    }
-  };
 
   const handleSessionClick = (session: Session) => {
     navigate(`/sessions?focusSessionId=${session.id}`);
@@ -82,7 +71,7 @@ export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}> {/* Increased gap between items */}
           {sessions.map((session) => {
-            const statusColors = getStatusColor(session.status);
+            const statusColors = getSessionStatusBadgeStyles(session.status);
             return (
               <Box
                 key={session.id}
@@ -161,11 +150,12 @@ export function UpcomingSessions({ sessions }: UpcomingSessionsProps) {
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Chip
-                    label={session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                    label={getSessionStatusLabel(session.status)}
                     size="small"
                     sx={{
                       bgcolor: statusColors.bg,
                       color: statusColors.text,
+                      border: `1px solid ${statusColors.border}`,
                       fontWeight: 600,
                       fontSize: '12px',
                       height: 24,

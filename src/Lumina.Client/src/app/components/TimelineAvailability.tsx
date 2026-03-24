@@ -1,16 +1,17 @@
 import { Box, Typography } from '@mui/material';
 import { format, isSameDay } from 'date-fns';
+import type { SessionStatusValue } from '../api/types';
+import { getSessionCalendarStyles } from '../lib/sessionStatus';
 
 interface CalendarEvent {
   id: string;
   date: Date;
   client: string;
   clientName?: string;
-  initials: string;
   avatarColor: string;
   sessionType: string;
   duration: number;
-  status: 'upcoming' | 'completed' | 'cancelled';
+  status: SessionStatusValue;
 }
 
 interface TimelineAvailabilityProps {
@@ -19,13 +20,14 @@ interface TimelineAvailabilityProps {
   selectedTime?: string | null;
   onDateChange: (date: Date) => void;
   onTimeSelect: (time: string) => void;
+  selectionMode?: 'future' | 'past';
 }
 
-const BUSINESS_HOURS = { start: 8, end: 18 }; // 8 AM to 6 PM
-const SLOT_HEIGHT = 34; // Compressed height per 30-min slot - no scrolling needed
+const BUSINESS_HOURS = { start: 8, end: 18 };
+const SLOT_HEIGHT = 34;
 const HOURS_RANGE = Array.from(
   { length: BUSINESS_HOURS.end - BUSINESS_HOURS.start },
-  (_, i) => BUSINESS_HOURS.start + i
+  (_, index) => BUSINESS_HOURS.start + index,
 );
 
 export function TimelineAvailability({
@@ -34,21 +36,19 @@ export function TimelineAvailability({
   selectedTime,
   onDateChange,
   onTimeSelect,
+  selectionMode = 'future',
 }: TimelineAvailabilityProps) {
   const dayEvents = events.filter((event) => isSameDay(event.date, selectedDate));
   const now = new Date();
 
-  const getEventAtSlot = (hour: number, minute: number) => {
-    return dayEvents.find((event) => {
-      const eventHour = event.date.getHours();
-      const eventMinute = event.date.getMinutes();
+  const getEventAtSlot = (hour: number, minute: number) =>
+    dayEvents.find((event) => {
       const slotTime = hour * 60 + minute;
-      const eventStartTime = eventHour * 60 + eventMinute;
+      const eventStartTime = event.date.getHours() * 60 + event.date.getMinutes();
       const eventEndTime = eventStartTime + event.duration;
-      
+
       return slotTime >= eventStartTime && slotTime < eventEndTime;
     });
-  };
 
   const isTimeSelected = (hour: number, minute: number) => {
     if (!selectedTime) return false;
@@ -56,24 +56,25 @@ export function TimelineAvailability({
     return selectedHour === hour && selectedMinute === minute;
   };
 
-  const isPastTime = (hour: number, minute: number) => {
+  const isUnavailableTime = (hour: number, minute: number) => {
     const slotDate = new Date(selectedDate);
     slotDate.setHours(hour, minute, 0, 0);
-    return slotDate < now;
+    return selectionMode === 'future' ? slotDate < now : slotDate > now;
   };
 
   const handleSlotClick = (hour: number, minute: number) => {
     const event = getEventAtSlot(hour, minute);
-    const isPast = isPastTime(hour, minute);
-    if (!event && !isPast) {
-      const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      onTimeSelect(timeString);
+    const isUnavailable = isUnavailableTime(hour, minute);
+
+    if (!event && !isUnavailable) {
+      onTimeSelect(
+        `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
+      );
     }
   };
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Timeline - NO duplicate date navigation, NO bottom instruction text */}
       <Box
         sx={{
           flex: 1,
@@ -87,41 +88,32 @@ export function TimelineAvailability({
         <Box sx={{ height: '100%', overflowY: 'auto', p: 1 }}>
           {HOURS_RANGE.map((hour) => (
             <Box key={hour} sx={{ display: 'flex', mb: 0.5 }}>
-              {/* Hour Label */}
-              <Box
-                sx={{
-                  width: 50,
-                  flexShrink: 0,
-                  pr: 1,
-                  pt: 0.5,
-                }}
-              >
+              <Box sx={{ width: 50, flexShrink: 0, pr: 1, pt: 0.5 }}>
                 <Typography
                   variant="caption"
-                  sx={{
-                    color: '#9A9490',
-                    fontSize: '11px',
-                    fontWeight: 500,
-                  }}
+                  sx={{ color: '#9A9490', fontSize: '11px', fontWeight: 500 }}
                 >
                   {format(new Date().setHours(hour, 0), 'h a')}
                 </Typography>
               </Box>
 
-              {/* Time Slots */}
               <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 {[0, 30].map((minute) => {
                   const event = getEventAtSlot(hour, minute);
+                  const eventColors = event
+                    ? getSessionCalendarStyles(event.status)
+                    : null;
                   const isSelected = isTimeSelected(hour, minute);
-                  const isPast = isPastTime(hour, minute);
-                  const isFirstSlotOfEvent = event && event.date.getHours() === hour && event.date.getMinutes() === minute;
+                  const isUnavailable = isUnavailableTime(hour, minute);
+                  const isFirstSlotOfEvent =
+                    event &&
+                    event.date.getHours() === hour &&
+                    event.date.getMinutes() === minute;
 
-                  // Skip rendering slots that are part of an event (except the first slot)
                   if (event && !isFirstSlotOfEvent) {
                     return null;
                   }
 
-                  // Calculate height for event blocks
                   const slotHeight = event ? (event.duration / 30) * SLOT_HEIGHT : SLOT_HEIGHT;
 
                   return (
@@ -131,7 +123,7 @@ export function TimelineAvailability({
                       sx={{
                         height: slotHeight,
                         borderRadius: '6px',
-                        cursor: event ? 'default' : isPast ? 'not-allowed' : 'pointer',
+                        cursor: event ? 'default' : isUnavailable ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s ease',
                         display: 'flex',
                         alignItems: 'center',
@@ -139,31 +131,32 @@ export function TimelineAvailability({
                         py: 0.75,
                         ...(event
                           ? {
-                              bgcolor: event.avatarColor,
-                              border: '1px solid rgba(0, 0, 0, 0.08)',
+                              bgcolor: eventColors!.bg,
+                              border: `1px solid ${eventColors!.border}`,
+                              borderLeft: `3px solid ${event.avatarColor}`,
                               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
                             }
                           : isSelected
-                          ? {
-                              bgcolor: '#6E5BCE',
-                              border: '2px solid #6E5BCE',
-                              boxShadow: '0 2px 6px rgba(110, 91, 206, 0.25)',
-                            }
-                          : isPast
-                          ? {
-                              bgcolor: '#FAFAFA',
-                              border: '1px solid #E8E5E1',
-                              opacity: 0.5,
-                            }
-                          : {
-                              bgcolor: '#F9F8F7',
-                              border: '1px solid #E8E5E1',
-                              '&:hover': {
-                                bgcolor: 'rgba(110, 91, 206, 0.08)',
-                                borderColor: '#6E5BCE',
-                                transform: 'translateX(2px)',
-                              },
-                            }),
+                            ? {
+                                bgcolor: '#6E5BCE',
+                                border: '2px solid #6E5BCE',
+                                boxShadow: '0 2px 6px rgba(110, 91, 206, 0.25)',
+                              }
+                            : isUnavailable
+                              ? {
+                                  bgcolor: '#FAFAFA',
+                                  border: '1px solid #E8E5E1',
+                                  opacity: 0.5,
+                                }
+                              : {
+                                  bgcolor: '#F9F8F7',
+                                  border: '1px solid #E8E5E1',
+                                  '&:hover': {
+                                    bgcolor: 'rgba(110, 91, 206, 0.08)',
+                                    borderColor: '#6E5BCE',
+                                    transform: 'translateX(2px)',
+                                  },
+                                }),
                       }}
                     >
                       {event ? (
@@ -171,7 +164,7 @@ export function TimelineAvailability({
                           <Typography
                             variant="body2"
                             sx={{
-                              color: '#FFFFFF',
+                              color: eventColors!.text,
                               fontWeight: 600,
                               fontSize: '13px',
                               mb: 0.25,
@@ -182,18 +175,19 @@ export function TimelineAvailability({
                           <Typography
                             variant="caption"
                             sx={{
-                              color: 'rgba(255, 255, 255, 0.85)',
+                              color: eventColors!.text,
                               fontSize: '11px',
+                              opacity: 0.85,
                             }}
                           >
-                            {event.duration} min • {event.sessionType}
+                            {event.duration} min | {event.sessionType}
                           </Typography>
                         </Box>
                       ) : (
                         <Typography
                           variant="caption"
                           sx={{
-                            color: isSelected ? '#FFFFFF' : isPast ? '#B0ABA6' : '#9A9490',
+                            color: isSelected ? '#FFFFFF' : isUnavailable ? '#B0ABA6' : '#9A9490',
                             fontSize: '12px',
                             fontWeight: isSelected ? 600 : 400,
                           }}

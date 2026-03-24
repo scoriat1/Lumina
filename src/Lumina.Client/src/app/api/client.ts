@@ -9,6 +9,9 @@ import type {
   NotesTemplateSettingsDto,
   ProviderDto,
   SessionDto,
+  SessionEntryMode,
+  SessionLocationValue,
+  SessionStatusValue,
   SessionStructuredNoteDto,
   TemplateDto,
   TemplateFieldDto,
@@ -216,7 +219,16 @@ export const apiClient = {
     const sessions = await request<SessionApiDto[]>(`/api/clients/${id}/sessions`);
     return sessions.map(mapSessionDto);
   },
-  createSession: (payload: { clientId: string | number; date: string; duration: number; sessionType: string; focus: string; }) => request<{ id: string }>('/api/sessions', {
+  createSession: (payload: {
+    clientId: string | number;
+    date: string;
+    duration: number;
+    sessionType: string;
+    focus: string;
+    location: SessionLocationValue;
+    status?: SessionStatusValue;
+    mode?: SessionEntryMode;
+  }) => request<{ id: string }>('/api/sessions', {
     method: 'POST',
     body: JSON.stringify({ ...payload, clientId: Number(payload.clientId) }),
   }),

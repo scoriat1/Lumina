@@ -60,7 +60,7 @@ export function DashboardPage() {
     time: format(new Date(session.date), 'h:mm a'),
     date: format(new Date(session.date), 'EEEE'),
     fullDate: new Date(session.date),
-    status: session.status === 'upcoming' ? 'upcoming' : 'completed',
+    status: session.status,
     platform: session.location === 'zoom' ? 'Zoom' : session.location,
   }));
 

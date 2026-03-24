@@ -11,6 +11,8 @@ import {
   isToday,
 } from 'date-fns';
 
+import type { SessionStatusValue } from '../api/types';
+
 interface CalendarEvent {
   id: string;
   date: Date;
@@ -19,7 +21,7 @@ interface CalendarEvent {
   avatarColor: string;
   sessionType: string;
   duration: number;
-  status: 'upcoming' | 'completed' | 'cancelled';
+  status: SessionStatusValue;
 }
 
 interface MonthCalendarProps {

@@ -3,6 +3,8 @@ import { format, addDays, subDays } from 'date-fns';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
+import type { SessionStatusValue } from '../api/types';
+
 interface CalendarEvent {
   id: string;
   date: Date;
@@ -11,7 +13,7 @@ interface CalendarEvent {
   avatarColor: string;
   sessionType: string;
   duration: number;
-  status: 'upcoming' | 'completed' | 'cancelled';
+  status: SessionStatusValue;
 }
 
 interface CompactAvailabilityProps {

@@ -45,8 +45,13 @@ import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
 import { NewSessionModal } from '../components/NewSessionModal';
 import type { SessionDto } from '../api/types';
 import { apiClient } from '../api/client';
+import {
+  getSessionStatusBadgeStyles,
+  getSessionStatusLabel,
+  isPastSessionStatus,
+} from '../lib/sessionStatus';
 
-type StatusFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
+type StatusFilter = 'all' | SessionDto['status'];
 type Session = Omit<SessionDto, 'date'> & { date: Date };
 const toSession = (session: SessionDto): Session => ({ ...session, date: new Date(session.date) });
 
@@ -216,7 +221,7 @@ export function SessionsPage() {
 
   // Separate upcoming and past sessions
   const upcomingSessions = filteredSessions.filter((s) => s.status === 'upcoming');
-  const pastSessions = filteredSessions.filter((s) => s.status === 'completed' || s.status === 'cancelled');
+  const pastSessions = filteredSessions.filter((s) => isPastSessionStatus(s.status));
 
   // Limit upcoming sessions to 6 unless showAllUpcoming is true
   const displayedUpcomingSessions = showAllUpcoming ? upcomingSessions : upcomingSessions.slice(0, 6);
@@ -254,17 +259,13 @@ export function SessionsPage() {
     focusedSessionRow?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [focusSessionId, filteredSessions, displayedUpcomingSessions.length, pastSessions.length]);
 
-  const getStatusStyles = (status: string) => {
-    switch (status) {
-      case 'upcoming':
-        return { bgcolor: 'rgba(168, 181, 160, 0.12)', color: '#5B7052', border: '1px solid rgba(168, 181, 160, 0.2)' };
-      case 'completed':
-        return { bgcolor: 'rgba(157, 170, 181, 0.12)', color: '#4A5B6D', border: '1px solid rgba(157, 170, 181, 0.2)' };
-      case 'cancelled':
-        return { bgcolor: 'rgba(139, 74, 74, 0.08)', color: '#8B4A4A', border: '1px solid rgba(139, 74, 74, 0.15)' };
-      default:
-        return { bgcolor: '#F5F3F1', color: '#7A746F', border: '1px solid #E8E5E1' };
-    }
+  const getStatusStyles = (status: SessionDto['status']) => {
+    const styles = getSessionStatusBadgeStyles(status);
+    return {
+      bgcolor: styles.bg,
+      color: styles.text,
+      border: `1px solid ${styles.border}`,
+    };
   };
 
   const getPaymentStyles = (payment: string) => {
@@ -308,118 +309,40 @@ export function SessionsPage() {
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Page Header - Title + Action */}
-      <PageHeader
-        title="Sessions"
-        action={{
-          label: 'New Session',
-          icon: <AddIcon />,
-          onClick: () => setIsNewSessionModalOpen(true),
-        }}
-      />
+      {/* Page Header */}
+      <PageHeader title="Sessions" />
 
       {/* Controls - Search and Filters */}
       <Box
         sx={{
           display: 'flex',
+          justifyContent: 'space-between',
           gap: 2,
           mb: 3,
-          flexDirection: { xs: 'column', sm: 'row' },
-          alignItems: { xs: 'stretch', sm: 'center' },
+          flexDirection: { xs: 'column', lg: 'row' },
+          alignItems: { xs: 'stretch', lg: 'center' },
         }}
       >
-        <TextField
-          placeholder="Search by client, session type, or focus..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+        <Box
           sx={{
-            flex: { xs: '1 1 auto', sm: '0 1 auto' },
+            display: 'flex',
+            gap: 2,
+            flex: 1,
             minWidth: 0,
-            width: { sm: '500px' },
-            '& .MuiOutlinedInput-root': {
-              bgcolor: '#F5F3F1',
-              borderRadius: '10px',
-              '& fieldset': {
-                borderColor: '#E8E5E1',
-              },
-              '&:hover fieldset': {
-                borderColor: '#9B8B9E',
-              },
-            },
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'stretch', sm: 'center' },
           }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ color: '#9B9691' }} />
-              </InputAdornment>
-            ),
-            endAdornment: searchQuery && (
-              <InputAdornment position="end">
-                <IconButton
-                  size="small"
-                  onClick={() => setSearchQuery('')}
-                  sx={{
-                    color: '#9B9691',
-                    '&:hover': {
-                      bgcolor: 'rgba(155, 139, 158, 0.08)',
-                    },
-                  }}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-
-        <FormControl sx={{ minWidth: 160, flexShrink: 0 }}>
-          <InputLabel sx={{ fontSize: '15px' }}>Date Range</InputLabel>
-          <Select
-            value={dateRangeFilter}
-            onChange={(e) => {
-              setDateRangeFilter(e.target.value);
-              if (e.target.value !== 'custom') {
-                setCustomDateFilter('');
-              }
-            }}
-            label="Date Range"
-            sx={{
-              borderRadius: '10px',
-              fontSize: '15px',
-              bgcolor: '#FFFFFF',
-              height: '56px',
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#E8E5E1',
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: '#9B8B9E',
-              },
-            }}
-          >
-            <MenuItem value="all">
-              <em>All dates</em>
-            </MenuItem>
-            <MenuItem value="today">Today</MenuItem>
-            <MenuItem value="this-week">This week</MenuItem>
-            <MenuItem value="this-month">This month</MenuItem>
-            <MenuItem value="last-month">Last month</MenuItem>
-            <MenuItem value="custom">Custom date</MenuItem>
-          </Select>
-        </FormControl>
-
-        {dateRangeFilter === 'custom' && (
+        >
           <TextField
-            label="Select Date"
-            variant="outlined"
-            value={customDateFilter}
-            onChange={(e) => setCustomDateFilter(e.target.value)}
-            type="date"
-            InputLabelProps={{ shrink: true }}
+            placeholder="Search by client, session type, or focus..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             sx={{
-              minWidth: 180,
-              flexShrink: 0,
-              bgcolor: '#FFFFFF',
+              flex: { xs: '1 1 auto', sm: '0 1 auto' },
+              minWidth: 0,
+              width: { sm: '500px' },
               '& .MuiOutlinedInput-root': {
+                bgcolor: '#F5F3F1',
                 borderRadius: '10px',
                 '& fieldset': {
                   borderColor: '#E8E5E1',
@@ -429,43 +352,142 @@ export function SessionsPage() {
                 },
               },
             }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: '#9B9691' }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery && (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setSearchQuery('')}
+                    sx={{
+                      color: '#9B9691',
+                      '&:hover': {
+                        bgcolor: 'rgba(155, 139, 158, 0.08)',
+                      },
+                    }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
-        )}
 
-        <Badge
-          badgeContent={(clientFilter !== 'all' ? 1 : 0) + (statusFilter !== 'upcoming' ? 1 : 0) + (locationFilter !== 'all' ? 1 : 0) + (paymentFilter !== 'all' ? 1 : 0)}
-          color="primary"
-          sx={{
-            flexShrink: 0,
-            '& .MuiBadge-badge': {
-              bgcolor: '#9B8B9E',
-              color: '#FFFFFF',
-            },
-          }}
-        >
-          <Button
-            variant="outlined"
-            startIcon={<FilterListIcon />}
-            onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+          <FormControl sx={{ minWidth: 160, flexShrink: 0 }}>
+            <InputLabel sx={{ fontSize: '15px' }}>Date Range</InputLabel>
+            <Select
+              value={dateRangeFilter}
+              onChange={(e) => {
+                setDateRangeFilter(e.target.value);
+                if (e.target.value !== 'custom') {
+                  setCustomDateFilter('');
+                }
+              }}
+              label="Date Range"
+              sx={{
+                borderRadius: '10px',
+                fontSize: '15px',
+                bgcolor: '#FFFFFF',
+                height: '56px',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#E8E5E1',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#9B8B9E',
+                },
+              }}
+            >
+              <MenuItem value="all">
+                <em>All dates</em>
+              </MenuItem>
+              <MenuItem value="today">Today</MenuItem>
+              <MenuItem value="this-week">This week</MenuItem>
+              <MenuItem value="this-month">This month</MenuItem>
+              <MenuItem value="last-month">Last month</MenuItem>
+              <MenuItem value="custom">Custom date</MenuItem>
+            </Select>
+          </FormControl>
+
+          {dateRangeFilter === 'custom' && (
+            <TextField
+              label="Select Date"
+              variant="outlined"
+              value={customDateFilter}
+              onChange={(e) => setCustomDateFilter(e.target.value)}
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                minWidth: 180,
+                flexShrink: 0,
+                bgcolor: '#FFFFFF',
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '10px',
+                  '& fieldset': {
+                    borderColor: '#E8E5E1',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#9B8B9E',
+                  },
+                },
+              }}
+            />
+          )}
+
+          <Badge
+            badgeContent={(clientFilter !== 'all' ? 1 : 0) + (statusFilter !== 'upcoming' ? 1 : 0) + (locationFilter !== 'all' ? 1 : 0) + (paymentFilter !== 'all' ? 1 : 0)}
+            color="primary"
             sx={{
-              borderColor: '#E8E5E1',
-              color: '#7A746F',
-              borderRadius: '10px',
-              textTransform: 'none',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-              minWidth: '140px',
-              height: '56px',
-              px: 3,
-              '&:hover': {
-                borderColor: '#9B8B9E',
-                bgcolor: 'rgba(155, 139, 158, 0.04)',
+              flexShrink: 0,
+              '& .MuiBadge-badge': {
+                bgcolor: '#9B8B9E',
+                color: '#FFFFFF',
               },
             }}
           >
-            Filter
-          </Button>
-        </Badge>
+            <Button
+              variant="outlined"
+              startIcon={<FilterListIcon />}
+              onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+              sx={{
+                borderColor: '#E8E5E1',
+                color: '#7A746F',
+                borderRadius: '10px',
+                textTransform: 'none',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                minWidth: '140px',
+                height: '56px',
+                px: 3,
+                '&:hover': {
+                  borderColor: '#9B8B9E',
+                  bgcolor: 'rgba(155, 139, 158, 0.04)',
+                },
+              }}
+            >
+              Filter
+            </Button>
+          </Badge>
+        </Box>
+
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => setIsNewSessionModalOpen(true)}
+          sx={{
+            flexShrink: 0,
+            alignSelf: { xs: 'stretch', lg: 'center' },
+            height: '56px',
+            px: 3,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          New Session
+        </Button>
 
         <Menu
           anchorEl={filterAnchorEl}
@@ -533,7 +555,7 @@ export function SessionsPage() {
                     }}
                   />
                 }
-                label="Upcoming"
+                label="Scheduled"
               />
               <FormControlLabel
                 control={
@@ -563,7 +585,22 @@ export function SessionsPage() {
                     }}
                   />
                 }
-                label="Cancelled"
+                label="Canceled"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={statusFilter === 'noShow'}
+                    onChange={() => setStatusFilter('noShow')}
+                    sx={{
+                      color: '#7A746F',
+                      '&.Mui-checked': {
+                        color: '#9B8B9E',
+                      },
+                    }}
+                  />
+                }
+                label="No-show"
               />
               <FormControlLabel
                 control={
@@ -847,7 +884,7 @@ export function SessionsPage() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
                       {/* Status Badge */}
                       <Chip
-                        label={session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                        label={getSessionStatusLabel(session.status)}
                         sx={{
                           ...statusStyles,
                           fontWeight: 600,
@@ -1085,7 +1122,7 @@ export function SessionsPage() {
                         </TableCell>
                         <TableCell sx={{ py: 2.5, borderBottom: '1px solid #F5F3F1' }}>
                           <Chip
-                            label={session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                            label={getSessionStatusLabel(session.status)}
                             size="small"
                             sx={{
                               ...statusStyles,
