@@ -25,6 +25,7 @@ import EmailIcon from '@mui/icons-material/Email';
 import PhoneIcon from '@mui/icons-material/Phone';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import WorkIcon from '@mui/icons-material/Work';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import VideoCallIcon from '@mui/icons-material/VideoCall';
 import NoteIcon from '@mui/icons-material/Note';
 import EditIcon from '@mui/icons-material/Edit';
@@ -179,6 +180,18 @@ function getStatusColor(status: string) {
     }
 }
 
+function getClientStatusLabel(status: ClientDto['status']) {
+    switch (status) {
+        case 'paused':
+            return 'Paused';
+        case 'completed':
+            return 'Completed';
+        case 'active':
+        default:
+            return 'Active';
+    }
+}
+
 function buildEngagementActivities(
     engagement: ClientDetailEngagementDto,
     timeline: ClientTimelineEntryDto[],
@@ -225,7 +238,6 @@ function createClientDraft(client: ClientDto) {
         phone: client.phone ?? '',
         status: client.status,
         startDate: format(new Date(client.startDate), 'yyyy-MM-dd'),
-        notes: client.notes ?? '',
     };
 }
 
@@ -260,7 +272,6 @@ export function ClientDetailPage() {
         phone: '',
         status: 'active' as ClientDto['status'],
         startDate: '',
-        notes: '',
     });
     const [savingClient, setSavingClient] = useState(false);
     const [clientError, setClientError] = useState<string | null>(null);
@@ -513,7 +524,7 @@ export function ClientDetailPage() {
                 program: client.program,
                 startDate: new Date(clientDraft.startDate).toISOString(),
                 status: clientDraft.status,
-                notes: clientDraft.notes.trim() ? clientDraft.notes.trim() : null,
+                notes: client.notes ?? null,
                 email,
                 phone: clientDraft.phone.trim(),
             });
@@ -1186,7 +1197,17 @@ export function ClientDetailPage() {
                     </Box>
                 </Box>
 
-                <Box sx={{ flex: { xs: 1, md: '0 0 calc(30% - 16px)' } }}>
+                <Box
+                    sx={{
+                        flex: {
+                            xs: 1,
+                            md: isClientEditOpen
+                                ? '0 0 calc(38% - 16px)'
+                                : '0 0 calc(32% - 16px)',
+                        },
+                        transition: 'flex-basis 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                >
                     <Box
                         sx={{
                             position: 'sticky',
@@ -1196,193 +1217,360 @@ export function ClientDetailPage() {
                             gap: 3,
                         }}
                     >
-                        <Card sx={{ borderRadius: '12px', border: '1px solid rgba(0, 0, 0, 0.06)' }}>
-                            <CardContent sx={{ p: 3 }}>
+                        <Card
+                            sx={{
+                                borderRadius: '12px',
+                                border: '1px solid rgba(0, 0, 0, 0.06)',
+                                boxShadow: isClientEditOpen
+                                    ? '0 12px 32px rgba(31, 28, 26, 0.08)'
+                                    : undefined,
+                            }}
+                        >
+                            <CardContent sx={{ p: isClientEditOpen ? 3.5 : 3 }}>
                                 <Box
                                     sx={{
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center',
+                                        alignItems: 'flex-start',
                                         mb: 2.5,
                                     }}
                                 >
-                                    <Typography sx={{ fontWeight: 600, fontSize: '14px', color: colors.text.primary }}>
-                                        Contact Information
-                                    </Typography>
-                                    <IconButton
-                                        size="small"
-                                        onClick={isClientEditOpen ? handleSaveClientEdit : handleOpenClientEdit}
-                                        disabled={savingClient}
-                                        sx={{ color: colors.primary.main }}
-                                    >
-                                        {isClientEditOpen ? <SaveIcon sx={{ fontSize: 18 }} /> : <EditIcon sx={{ fontSize: 18 }} />}
-                                    </IconButton>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                                            <Box
+                                                sx={{
+                                                    width: 36,
+                                                    height: 36,
+                                                    borderRadius: '11px',
+                                                    bgcolor: 'rgba(110, 91, 206, 0.12)',
+                                                    color: colors.primary.main,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                <PersonOutlineIcon sx={{ fontSize: 20 }} />
+                                            </Box>
+                                            <Typography sx={{ fontWeight: 600, fontSize: '14px', color: colors.text.primary }}>
+                                                Client Information
+                                            </Typography>
+                                        </Box>
+
+                                        {!isClientEditOpen ? (
+                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                                <Chip
+                                                    label={getClientStatusLabel(client.status)}
+                                                    size="small"
+                                                    sx={{
+                                                        height: 24,
+                                                        fontWeight: 600,
+                                                        bgcolor: getStatusColor(client.status).bg,
+                                                        color: getStatusColor(client.status).text,
+                                                        border: `1px solid ${getStatusColor(client.status).border}`,
+                                                    }}
+                                                />
+                                                <Chip
+                                                    icon={<CalendarTodayIcon sx={{ fontSize: '14px !important' }} />}
+                                                    label={`Started ${formatDateOnly(client.startDate)}`}
+                                                    size="small"
+                                                    sx={{
+                                                        height: 24,
+                                                        bgcolor: 'rgba(255, 255, 255, 0.85)',
+                                                        color: 'rgba(60, 60, 60, 0.82)',
+                                                        border: '1px solid rgba(110, 91, 206, 0.12)',
+                                                        '& .MuiChip-label': { px: 1 },
+                                                        '& .MuiChip-icon': { color: 'rgba(110, 91, 206, 0.7)' },
+                                                    }}
+                                                />
+                                            </Box>
+                                        ) : null}
+                                    </Box>
+                                    {!isClientEditOpen ? (
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleOpenClientEdit}
+                                            disabled={savingClient}
+                                            sx={{ color: colors.primary.main }}
+                                        >
+                                            <EditIcon sx={{ fontSize: 18 }} />
+                                        </IconButton>
+                                    ) : null}
                                 </Box>
 
                                 <Collapse in={!isClientEditOpen} unmountOnExit>
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                                            <EmailIcon sx={{ fontSize: 18, color: 'rgba(110, 91, 206, 0.6)', mt: 0.25 }} />
-                                            <Box>
-                                                <Typography sx={{ fontSize: '11px', color: 'rgba(80, 80, 80, 0.6)', mb: 0.25 }}>
-                                                    Email
-                                                </Typography>
-                                                <Typography sx={{ fontSize: '13px', color: colors.text.primary }}>
-                                                    {client.email || 'Not provided'}
-                                                </Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
+                                        <Box
+                                            sx={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '1fr',
+                                                gap: 1.25,
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'flex-start',
+                                                    gap: 1.5,
+                                                    p: 1.5,
+                                                    borderRadius: '12px',
+                                                    bgcolor: 'rgba(0, 0, 0, 0.015)',
+                                                }}
+                                            >
+                                                <EmailIcon sx={{ fontSize: 18, color: 'rgba(110, 91, 206, 0.6)', mt: 0.25 }} />
+                                                <Box>
+                                                    <Typography sx={{ fontSize: '11px', color: 'rgba(80, 80, 80, 0.6)', mb: 0.25 }}>
+                                                        Email
+                                                    </Typography>
+                                                    <Typography sx={{ fontSize: '13px', color: colors.text.primary }}>
+                                                        {client.email || 'Not provided'}
+                                                    </Typography>
+                                                </Box>
                                             </Box>
-                                        </Box>
 
-                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                                            <PhoneIcon sx={{ fontSize: 18, color: 'rgba(110, 91, 206, 0.6)', mt: 0.25 }} />
-                                            <Box>
-                                                <Typography sx={{ fontSize: '11px', color: 'rgba(80, 80, 80, 0.6)', mb: 0.25 }}>
-                                                    Phone
-                                                </Typography>
-                                                <Typography sx={{ fontSize: '13px', color: colors.text.primary }}>
-                                                    {client.phone || 'Not provided'}
-                                                </Typography>
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'flex-start',
+                                                    gap: 1.5,
+                                                    p: 1.5,
+                                                    borderRadius: '12px',
+                                                    bgcolor: 'rgba(0, 0, 0, 0.015)',
+                                                }}
+                                            >
+                                                <PhoneIcon sx={{ fontSize: 18, color: 'rgba(110, 91, 206, 0.6)', mt: 0.25 }} />
+                                                <Box>
+                                                    <Typography sx={{ fontSize: '11px', color: 'rgba(80, 80, 80, 0.6)', mb: 0.25 }}>
+                                                        Phone
+                                                    </Typography>
+                                                    <Typography sx={{ fontSize: '13px', color: colors.text.primary }}>
+                                                        {client.phone || 'Not provided'}
+                                                    </Typography>
+                                                </Box>
                                             </Box>
                                         </Box>
                                     </Box>
                                 </Collapse>
 
                                 <Collapse in={isClientEditOpen} unmountOnExit>
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
                                         {clientError ? (
                                             <Alert severity="error">{clientError}</Alert>
                                         ) : null}
 
                                         <Box
                                             sx={{
-                                                display: 'grid',
-                                                gridTemplateColumns: {
-                                                    xs: '1fr',
-                                                    sm: '1fr 1fr',
-                                                },
-                                                gap: 1.25,
+                                                py: 0.5,
                                             }}
                                         >
-                                            <TextField
-                                                label="First Name"
-                                                size="small"
-                                                fullWidth
-                                                value={clientDraft.firstName}
-                                                onChange={(event) =>
-                                                    setClientDraft((current) => ({
-                                                        ...current,
-                                                        firstName: event.target.value,
-                                                    }))
-                                                }
-                                                error={Boolean(clientFieldErrors.firstName)}
-                                                helperText={clientFieldErrors.firstName}
-                                                sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px' } }}
-                                            />
-                                            <TextField
-                                                label="Last Name"
-                                                size="small"
-                                                fullWidth
-                                                value={clientDraft.lastName}
-                                                onChange={(event) =>
-                                                    setClientDraft((current) => ({
-                                                        ...current,
-                                                        lastName: event.target.value,
-                                                    }))
-                                                }
-                                                error={Boolean(clientFieldErrors.lastName)}
-                                                helperText={clientFieldErrors.lastName}
-                                                sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px' } }}
-                                            />
-                                            <TextField
-                                                label="Email"
-                                                type="email"
-                                                size="small"
-                                                fullWidth
-                                                value={clientDraft.email}
-                                                onChange={(event) =>
-                                                    setClientDraft((current) => ({
-                                                        ...current,
-                                                        email: event.target.value,
-                                                    }))
-                                                }
-                                                error={Boolean(clientFieldErrors.email)}
-                                                helperText={clientFieldErrors.email}
-                                                sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px' } }}
-                                            />
-                                            <TextField
-                                                label="Phone"
-                                                size="small"
-                                                fullWidth
-                                                value={clientDraft.phone}
-                                                onChange={(event) =>
-                                                    setClientDraft((current) => ({
-                                                        ...current,
-                                                        phone: event.target.value,
-                                                    }))
-                                                }
-                                                sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px' } }}
-                                            />
-                                            <TextField
-                                                select
-                                                label="Status"
-                                                size="small"
-                                                fullWidth
-                                                value={clientDraft.status}
-                                                onChange={(event) =>
-                                                    setClientDraft((current) => ({
-                                                        ...current,
-                                                        status: event.target.value as ClientDto['status'],
-                                                    }))
-                                                }
-                                                sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px' } }}
+                                            <Box
+                                                sx={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: '1fr',
+                                                    rowGap: 2.25,
+                                                }}
                                             >
-                                                <MenuItem value="active">Active</MenuItem>
-                                                <MenuItem value="paused">Paused</MenuItem>
-                                                <MenuItem value="completed">Completed</MenuItem>
-                                            </TextField>
-                                            <TextField
-                                                label="Start Date"
-                                                type="date"
-                                                size="small"
-                                                fullWidth
-                                                InputLabelProps={{ shrink: true }}
-                                                value={clientDraft.startDate}
-                                                onChange={(event) =>
-                                                    setClientDraft((current) => ({
-                                                        ...current,
-                                                        startDate: event.target.value,
-                                                    }))
-                                                }
-                                                error={Boolean(clientFieldErrors.startDate)}
-                                                helperText={clientFieldErrors.startDate}
-                                                sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px' } }}
-                                            />
+                                                <TextField
+                                                    label="First Name"
+                                                    fullWidth
+                                                    value={clientDraft.firstName}
+                                                    onChange={(event) =>
+                                                        setClientDraft((current) => ({
+                                                            ...current,
+                                                            firstName: event.target.value,
+                                                        }))
+                                                    }
+                                                    error={Boolean(clientFieldErrors.firstName)}
+                                                    helperText={clientFieldErrors.firstName}
+                                                    sx={{
+                                                        '& .MuiInputLabel-root': {
+                                                            fontSize: '15px',
+                                                            fontWeight: 600,
+                                                            color: 'rgba(44, 39, 36, 0.82)',
+                                                        },
+                                                        '& .MuiFormHelperText-root': { mt: 1, fontSize: '12px' },
+                                                        '& .MuiOutlinedInput-root': {
+                                                            fontSize: '16px',
+                                                            borderRadius: '12px',
+                                                            minHeight: 62,
+                                                            bgcolor: '#FCFBFA',
+                                                        },
+                                                    }}
+                                                />
+                                                <TextField
+                                                    label="Last Name"
+                                                    fullWidth
+                                                    value={clientDraft.lastName}
+                                                    onChange={(event) =>
+                                                        setClientDraft((current) => ({
+                                                            ...current,
+                                                            lastName: event.target.value,
+                                                        }))
+                                                    }
+                                                    error={Boolean(clientFieldErrors.lastName)}
+                                                    helperText={clientFieldErrors.lastName}
+                                                    sx={{
+                                                        '& .MuiInputLabel-root': {
+                                                            fontSize: '15px',
+                                                            fontWeight: 600,
+                                                            color: 'rgba(44, 39, 36, 0.82)',
+                                                        },
+                                                        '& .MuiFormHelperText-root': { mt: 1, fontSize: '12px' },
+                                                        '& .MuiOutlinedInput-root': {
+                                                            fontSize: '16px',
+                                                            borderRadius: '12px',
+                                                            minHeight: 62,
+                                                            bgcolor: '#FCFBFA',
+                                                        },
+                                                    }}
+                                                />
+                                                <TextField
+                                                    select
+                                                    label="Status"
+                                                    fullWidth
+                                                    value={clientDraft.status}
+                                                    onChange={(event) =>
+                                                        setClientDraft((current) => ({
+                                                            ...current,
+                                                            status: event.target.value as ClientDto['status'],
+                                                        }))
+                                                    }
+                                                    sx={{
+                                                        '& .MuiInputLabel-root': {
+                                                            fontSize: '15px',
+                                                            fontWeight: 600,
+                                                            color: 'rgba(44, 39, 36, 0.82)',
+                                                        },
+                                                        '& .MuiOutlinedInput-root': {
+                                                            fontSize: '16px',
+                                                            borderRadius: '12px',
+                                                            minHeight: 62,
+                                                            bgcolor: '#FCFBFA',
+                                                        },
+                                                    }}
+                                                >
+                                                    <MenuItem value="active">Active</MenuItem>
+                                                    <MenuItem value="paused">Paused</MenuItem>
+                                                    <MenuItem value="completed">Completed</MenuItem>
+                                                </TextField>
+                                                <TextField
+                                                    label="Start Date"
+                                                    type="date"
+                                                    fullWidth
+                                                    InputLabelProps={{ shrink: true }}
+                                                    value={clientDraft.startDate}
+                                                    onChange={(event) =>
+                                                        setClientDraft((current) => ({
+                                                            ...current,
+                                                            startDate: event.target.value,
+                                                        }))
+                                                    }
+                                                    error={Boolean(clientFieldErrors.startDate)}
+                                                    helperText={clientFieldErrors.startDate}
+                                                    sx={{
+                                                        '& .MuiInputLabel-root': {
+                                                            fontSize: '15px',
+                                                            fontWeight: 600,
+                                                            color: 'rgba(44, 39, 36, 0.82)',
+                                                        },
+                                                        '& .MuiFormHelperText-root': { mt: 1, fontSize: '12px' },
+                                                        '& .MuiOutlinedInput-root': {
+                                                            fontSize: '16px',
+                                                            borderRadius: '12px',
+                                                            minHeight: 62,
+                                                            bgcolor: '#FCFBFA',
+                                                        },
+                                                    }}
+                                                />
+                                                <TextField
+                                                    label="Email"
+                                                    type="email"
+                                                    fullWidth
+                                                    value={clientDraft.email}
+                                                    onChange={(event) =>
+                                                        setClientDraft((current) => ({
+                                                            ...current,
+                                                            email: event.target.value,
+                                                        }))
+                                                    }
+                                                    error={Boolean(clientFieldErrors.email)}
+                                                    helperText={clientFieldErrors.email}
+                                                    sx={{
+                                                        '& .MuiInputLabel-root': {
+                                                            fontSize: '15px',
+                                                            fontWeight: 600,
+                                                            color: 'rgba(44, 39, 36, 0.82)',
+                                                        },
+                                                        '& .MuiFormHelperText-root': { mt: 1, fontSize: '12px' },
+                                                        '& .MuiOutlinedInput-root': {
+                                                            fontSize: '16px',
+                                                            borderRadius: '12px',
+                                                            minHeight: 62,
+                                                            bgcolor: '#FCFBFA',
+                                                        },
+                                                    }}
+                                                />
+                                                <TextField
+                                                    label="Phone"
+                                                    fullWidth
+                                                    value={clientDraft.phone}
+                                                    onChange={(event) =>
+                                                        setClientDraft((current) => ({
+                                                            ...current,
+                                                            phone: event.target.value,
+                                                        }))
+                                                    }
+                                                    sx={{
+                                                        '& .MuiInputLabel-root': {
+                                                            fontSize: '15px',
+                                                            fontWeight: 600,
+                                                            color: 'rgba(44, 39, 36, 0.82)',
+                                                        },
+                                                        '& .MuiOutlinedInput-root': {
+                                                            fontSize: '16px',
+                                                            borderRadius: '12px',
+                                                            minHeight: 62,
+                                                            bgcolor: '#FCFBFA',
+                                                        },
+                                                    }}
+                                                />
+                                            </Box>
                                         </Box>
 
-                                        <TextField
-                                            label="Internal Summary"
-                                            multiline
-                                            minRows={3}
-                                            fullWidth
-                                            value={clientDraft.notes}
-                                            onChange={(event) =>
-                                                setClientDraft((current) => ({
-                                                    ...current,
-                                                    notes: event.target.value,
-                                                }))
-                                            }
-                                            sx={{ '& .MuiOutlinedInput-root': { fontSize: '13px' } }}
-                                        />
-
-                                        <Button
-                                            fullWidth
-                                            variant="outlined"
-                                            onClick={handleCancelClientEdit}
-                                            disabled={savingClient}
-                                            sx={{ mt: 0.5, textTransform: 'none', fontSize: '13px' }}
-                                        >
-                                            Cancel
-                                        </Button>
+                                        <Box sx={{ display: 'flex', gap: 1.5, pt: 0.25 }}>
+                                            <Button
+                                                variant="contained"
+                                                startIcon={<SaveIcon sx={{ fontSize: 16 }} />}
+                                                onClick={handleSaveClientEdit}
+                                                disabled={savingClient}
+                                                sx={{
+                                                    flex: 1,
+                                                    textTransform: 'none',
+                                                    fontSize: '15px',
+                                                    fontWeight: 700,
+                                                    borderRadius: '12px',
+                                                    py: 1.35,
+                                                    boxShadow: 'none',
+                                                }}
+                                            >
+                                                Save changes
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                onClick={handleCancelClientEdit}
+                                                disabled={savingClient}
+                                                sx={{
+                                                    flex: 1,
+                                                    textTransform: 'none',
+                                                    fontSize: '15px',
+                                                    fontWeight: 600,
+                                                    borderRadius: '12px',
+                                                    py: 1.35,
+                                                }}
+                                            >
+                                                Cancel
+                                            </Button>
+                                        </Box>
                                     </Box>
                                 </Collapse>
                             </CardContent>
