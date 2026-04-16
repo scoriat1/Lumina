@@ -272,9 +272,7 @@ export function SessionsPage() {
     switch (payment) {
       case 'paid':
         return { bgcolor: 'rgba(168, 181, 160, 0.12)', color: '#5B7052', border: '1px solid rgba(168, 181, 160, 0.2)' };
-      case 'package':
-        return { bgcolor: 'rgba(155, 139, 158, 0.12)', color: '#7A6B7D', border: '1px solid rgba(155, 139, 158, 0.2)' };
-      case 'unpaid':
+      case 'pending':
         return { bgcolor: 'rgba(212, 184, 138, 0.12)', color: '#8B7444', border: '1px solid rgba(212, 184, 138, 0.2)' };
       default:
         return { bgcolor: '#F5F3F1', color: '#7A746F', border: '1px solid #E8E5E1' };
@@ -700,8 +698,8 @@ export function SessionsPage() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={paymentFilter === 'unpaid'}
-                    onChange={() => setPaymentFilter(paymentFilter === 'unpaid' ? 'all' : 'unpaid')}
+                    checked={paymentFilter === 'pending'}
+                    onChange={() => setPaymentFilter(paymentFilter === 'pending' ? 'all' : 'pending')}
                     sx={{
                       color: '#7A746F',
                       '&.Mui-checked': {
@@ -710,37 +708,7 @@ export function SessionsPage() {
                     }}
                   />
                 }
-                label="Unpaid"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={paymentFilter === 'invoiced'}
-                    onChange={() => setPaymentFilter(paymentFilter === 'invoiced' ? 'all' : 'invoiced')}
-                    sx={{
-                      color: '#7A746F',
-                      '&.Mui-checked': {
-                        color: '#9B8B9E',
-                      },
-                    }}
-                  />
-                }
-                label="Invoiced"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={paymentFilter === 'package'}
-                    onChange={() => setPaymentFilter(paymentFilter === 'package' ? 'all' : 'package')}
-                    sx={{
-                      color: '#7A746F',
-                      '&.Mui-checked': {
-                        color: '#9B8B9E',
-                      },
-                    }}
-                  />
-                }
-                label="Package"
+                label="Pending"
               />
             </Stack>
           </Box>
@@ -920,11 +888,9 @@ export function SessionsPage() {
                         sx={{
                           ...(session.paymentStatus === 'paid'
                             ? { bgcolor: 'rgba(168, 181, 160, 0.12)', color: '#5B7052', border: '1px solid rgba(168, 181, 160, 0.2)' }
-                            : session.paymentStatus === 'unpaid'
+                            : session.paymentStatus === 'pending'
                             ? { bgcolor: 'rgba(212, 184, 138, 0.12)', color: '#8B7444', border: '1px solid rgba(212, 184, 138, 0.2)' }
-                            : session.paymentStatus === 'invoiced'
-                            ? { bgcolor: 'rgba(157, 170, 181, 0.12)', color: '#4A5B6D', border: '1px solid rgba(157, 170, 181, 0.2)' }
-                            : { bgcolor: 'rgba(155, 139, 158, 0.12)', color: '#7A6B7D', border: '1px solid rgba(155, 139, 158, 0.2)' }),
+                            : { bgcolor: '#F5F3F1', color: '#7A746F', border: '1px solid #E8E5E1' }),
                           fontWeight: 600,
                           fontSize: '11px',
                           height: 24,

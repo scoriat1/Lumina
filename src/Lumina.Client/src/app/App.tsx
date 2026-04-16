@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router';
 import { theme } from './theme';
 import { router } from './routes';
 import { NotesTemplateProvider } from './contexts/NotesTemplateContext';
+import { PracticePackagesProvider } from './contexts/PracticePackagesContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
 
@@ -16,17 +17,19 @@ function AppContent() {
     <CleanThemeProvider>
       <CssBaseline />
       <AuthProvider>
-        <NotesTemplateProvider>
-          <Box sx={{ height: '100%', width: '100%' }}>
-            <RouterProvider router={router} />
-          </Box>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 2000,
-            }}
-          />
-        </NotesTemplateProvider>
+        <PracticePackagesProvider>
+          <NotesTemplateProvider>
+            <Box sx={{ height: '100%', width: '100%' }}>
+              <RouterProvider router={router} />
+            </Box>
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 2000,
+              }}
+            />
+          </NotesTemplateProvider>
+        </PracticePackagesProvider>
       </AuthProvider>
     </CleanThemeProvider>
   );

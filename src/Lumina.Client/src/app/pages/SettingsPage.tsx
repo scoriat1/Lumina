@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router';
-import { Box, TextField, Button, Switch, FormControlLabel, Typography, Select, MenuItem, InputAdornment, Avatar, Chip, IconButton } from '@mui/material';
+import { Alert, Box, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Switch, Typography, Select, MenuItem, InputAdornment, Avatar, Chip, IconButton } from '@mui/material';
 import { Add, Edit, MoreVert, CloudUpload } from '@mui/icons-material';
 import { PageHeader } from '../components/PageHeader';
 import { colors } from '../styles/colors';
 import { NotesTemplateSettings } from '../components/NotesTemplateSettings';
 import { apiClient } from '../api/client';
-import type { ProviderDto } from '../api/types';
+import { usePracticePackages } from '../contexts/PracticePackagesContext';
+import type { BillingSettingsDto, PracticePackageDto, ProviderDto } from '../api/types';
 
 type SettingsTab = 
   | 'practice'
@@ -17,11 +18,6 @@ type SettingsTab =
   | 'notifications'
   | 'notes'
   | 'roles';
-
-const mockPackages = [
-  { id: '1', name: '4-Session Package', sessionCount: 4, price: 800, billingType: 'One-time', status: 'Active', enabled: true },
-  { id: '2', name: 'Monthly Retainer', sessionCount: 8, price: 1500, billingType: 'Recurring', status: 'Active', enabled: true },
-];
 
 const mockRoles = [
   { 
@@ -49,6 +45,18 @@ export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('practice');
   const [isDirty, setIsDirty] = useState(false);
   const [providers, setProviders] = useState<ProviderDto[]>([]);
+  const { packages, createPackage, updatePackage } = usePracticePackages();
+  const [billingSaveError, setBillingSaveError] = useState<string | null>(null);
+  const [packageSaveError, setPackageSaveError] = useState<string | null>(null);
+  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [isCreatingPackage, setIsCreatingPackage] = useState(false);
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+  const [newPackageDraft, setNewPackageDraft] = useState({
+    name: '',
+    sessionCount: '4',
+    price: '',
+    enabled: true,
+  });
 
   // Handle URL hash navigation (e.g., /settings#notes)
   useEffect(() => {
@@ -61,6 +69,17 @@ export function SettingsPage() {
 
   useEffect(() => {
     apiClient.getProviders().then(setProviders).catch(() => setProviders([]));
+    apiClient.getBillingSettings()
+      .then((settings) => {
+        setDefaultDueDays(String(settings.defaultDueDays));
+        setDefaultSessionAmount(String(settings.defaultSessionAmount));
+        setInitialBillingSettings(settings);
+      })
+      .catch(() => {
+        setDefaultDueDays('30');
+        setDefaultSessionAmount('125');
+        setInitialBillingSettings({ defaultDueDays: 30, defaultSessionAmount: 125 });
+      });
   }, []);
 
   // Practice settings state
@@ -88,24 +107,132 @@ export function SettingsPage() {
   // Billing settings state
   const [stripeConnected, setStripeConnected] = useState(false);
   const [defaultDueDays, setDefaultDueDays] = useState('30');
+  const [defaultSessionAmount, setDefaultSessionAmount] = useState('125');
   const [autoSendInvoices, setAutoSendInvoices] = useState(true);
   const [taxRate, setTaxRate] = useState('');
   const [clientPaysProcessingFees, setClientPaysProcessingFees] = useState(false);
   const [allowPayPerSession, setAllowPayPerSession] = useState(true);
   const [allowPackageBilling, setAllowPackageBilling] = useState(true);
   const [allowRecurringSubscriptions, setAllowRecurringSubscriptions] = useState(false);
+  const [initialBillingSettings, setInitialBillingSettings] = useState<BillingSettingsDto>({
+    defaultDueDays: 30,
+    defaultSessionAmount: 125,
+  });
 
   // Availability settings
   const [applyToAllProviders, setApplyToAllProviders] = useState(true);
 
-  const handleSave = () => {
-    console.log('Saving settings...');
-    setIsDirty(false);
+  const handleSave = async () => {
+    if (activeTab !== 'billing') {
+      setIsDirty(false);
+      return;
+    }
+
+    try {
+      const updated = await apiClient.updateBillingSettings({
+        defaultDueDays: Number(defaultDueDays),
+        defaultSessionAmount: Number(defaultSessionAmount),
+      });
+
+      setDefaultDueDays(String(updated.defaultDueDays));
+      setDefaultSessionAmount(String(updated.defaultSessionAmount));
+      setInitialBillingSettings(updated);
+      setBillingSaveError(null);
+      setIsDirty(false);
+    } catch (error) {
+      setBillingSaveError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to save billing settings.',
+      );
+    }
   };
 
   const handleCancel = () => {
-    console.log('Canceling changes...');
+    if (activeTab === 'billing') {
+      setDefaultDueDays(String(initialBillingSettings.defaultDueDays));
+      setDefaultSessionAmount(String(initialBillingSettings.defaultSessionAmount));
+      setBillingSaveError(null);
+    }
+
     setIsDirty(false);
+  };
+
+  const handleOpenPackageModal = () => {
+    setNewPackageDraft({
+      name: '',
+      sessionCount: '4',
+      price: '',
+      enabled: true,
+    });
+    setEditingPackageId(null);
+    setPackageSaveError(null);
+    setIsPackageModalOpen(true);
+  };
+
+  const handleOpenEditPackageModal = (pkg: PracticePackageDto) => {
+    setNewPackageDraft({
+      name: pkg.name,
+      sessionCount: String(pkg.sessionCount),
+      price: String(pkg.price),
+      enabled: pkg.enabled,
+    });
+    setEditingPackageId(pkg.id);
+    setPackageSaveError(null);
+    setIsPackageModalOpen(true);
+  };
+
+  const handleClosePackageModal = () => {
+    if (isCreatingPackage) {
+      return;
+    }
+
+    setIsPackageModalOpen(false);
+    setPackageSaveError(null);
+    setEditingPackageId(null);
+  };
+
+  const handleSavePackage = async () => {
+    try {
+      setIsCreatingPackage(true);
+      const payload = {
+        name: newPackageDraft.name.trim(),
+        sessionCount: Number(newPackageDraft.sessionCount),
+        price: Number(newPackageDraft.price),
+        enabled: newPackageDraft.enabled,
+      };
+
+      if (editingPackageId) {
+        await updatePackage(editingPackageId, payload);
+      } else {
+        await createPackage(payload);
+      }
+
+      setIsPackageModalOpen(false);
+      setPackageSaveError(null);
+      setEditingPackageId(null);
+    } catch (error) {
+      setPackageSaveError(
+        error instanceof Error ? error.message : 'Unable to save package.',
+      );
+    } finally {
+      setIsCreatingPackage(false);
+    }
+  };
+
+  const handleTogglePackage = async (pkg: PracticePackageDto, enabled: boolean) => {
+    try {
+      await updatePackage(pkg.id, {
+        name: pkg.name,
+        sessionCount: pkg.sessionCount,
+        price: pkg.price,
+        enabled,
+      });
+    } catch (error) {
+      setPackageSaveError(
+        error instanceof Error ? error.message : 'Unable to update package.',
+      );
+    }
   };
 
   return (
@@ -210,7 +337,13 @@ export function SettingsPage() {
           )}
 
           {activeTab === 'packages' && (
-            <PackagesSettings packages={mockPackages} />
+            <PackagesSettings
+              packages={packages}
+              saveError={packageSaveError}
+              onCreatePackage={handleOpenPackageModal}
+              onEditPackage={handleOpenEditPackageModal}
+              onTogglePackage={handleTogglePackage}
+            />
           )}
 
           {activeTab === 'billing' && (
@@ -219,6 +352,8 @@ export function SettingsPage() {
               setStripeConnected={setStripeConnected}
               defaultDueDays={defaultDueDays}
               setDefaultDueDays={setDefaultDueDays}
+              defaultSessionAmount={defaultSessionAmount}
+              setDefaultSessionAmount={setDefaultSessionAmount}
               autoSendInvoices={autoSendInvoices}
               setAutoSendInvoices={setAutoSendInvoices}
               taxRate={taxRate}
@@ -231,6 +366,7 @@ export function SettingsPage() {
               setAllowPackageBilling={setAllowPackageBilling}
               allowRecurringSubscriptions={allowRecurringSubscriptions}
               setAllowRecurringSubscriptions={setAllowRecurringSubscriptions}
+              saveError={billingSaveError}
               isDirty={isDirty}
               setIsDirty={setIsDirty}
               onSave={handleSave}
@@ -274,6 +410,68 @@ export function SettingsPage() {
           )}
         </Box>
       </Box>
+
+      <Dialog
+        open={isPackageModalOpen}
+        onClose={handleClosePackageModal}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{editingPackageId ? 'Edit Package' : 'Create Package'}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: '20px !important' }}>
+          <TextField
+            label="Package Name"
+            value={newPackageDraft.name}
+            onChange={(event) =>
+              setNewPackageDraft((current) => ({ ...current, name: event.target.value }))
+            }
+            placeholder="3-Month Package"
+            fullWidth
+          />
+          <TextField
+            label="Sessions"
+            type="number"
+            value={newPackageDraft.sessionCount}
+            onChange={(event) =>
+              setNewPackageDraft((current) => ({ ...current, sessionCount: event.target.value }))
+            }
+            inputProps={{ min: 1 }}
+            fullWidth
+          />
+          <TextField
+            label="Price"
+            type="number"
+            value={newPackageDraft.price}
+            onChange={(event) =>
+              setNewPackageDraft((current) => ({ ...current, price: event.target.value }))
+            }
+            inputProps={{ min: 0, step: '0.01' }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+            }}
+            fullWidth
+          />
+          {packageSaveError ? <Alert severity="error">{packageSaveError}</Alert> : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={handleClosePackageModal} disabled={isCreatingPackage} sx={cancelButtonStyles}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSavePackage}
+            disabled={
+              isCreatingPackage ||
+              !newPackageDraft.name.trim() ||
+              Number(newPackageDraft.sessionCount) <= 0 ||
+              Number(newPackageDraft.price) <= 0
+            }
+            variant="contained"
+            sx={saveButtonStyles}
+          >
+            {editingPackageId ? 'Save Package' : 'Create Package'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -748,16 +946,27 @@ function ProvidersSettings({ providers }: any) {
 }
 
 // Packages Settings Section
-function PackagesSettings({ packages }: any) {
+function PackagesSettings({
+  packages,
+  saveError,
+  onCreatePackage,
+  onEditPackage,
+  onTogglePackage,
+}: {
+  packages: PracticePackageDto[];
+  saveError: string | null;
+  onCreatePackage: () => void;
+  onEditPackage: (pkg: PracticePackageDto) => void;
+  onTogglePackage: (pkg: PracticePackageDto, enabled: boolean) => void | Promise<void>;
+}) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <ContentCard>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <SectionHeader title="Packages" />
-          {/* TODO(nav): wire package creation flow. */}
           <Button
             variant="outlined"
-            disabled
+            onClick={onCreatePackage}
             startIcon={<Add sx={{ fontSize: '18px' }} />}
             sx={{
               borderColor: colors.neutral.gray200,
@@ -778,7 +987,8 @@ function PackagesSettings({ packages }: any) {
         </Box>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          {packages.map((pkg: any) => (
+          {saveError ? <Alert severity="error">{saveError}</Alert> : null}
+          {packages.map((pkg) => (
             <Box
               key={pkg.id}
               sx={{
@@ -813,7 +1023,7 @@ function PackagesSettings({ packages }: any) {
                     }}
                   />
                 </Box>
-                <Box sx={{ display: 'flex', gap: 4 }}>
+                <Box sx={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <Box>
                     <Typography sx={{ fontSize: '12px', color: colors.text.secondary, mb: 0.25 }}>
                       Sessions
@@ -830,14 +1040,6 @@ function PackagesSettings({ packages }: any) {
                       ${pkg.price}
                     </Typography>
                   </Box>
-                  <Box>
-                    <Typography sx={{ fontSize: '12px', color: colors.text.secondary, mb: 0.25 }}>
-                      Billing Type
-                    </Typography>
-                    <Typography sx={{ fontSize: '14px', fontWeight: 600, color: colors.text.primary }}>
-                      {pkg.billingType}
-                    </Typography>
-                  </Box>
                 </Box>
               </Box>
 
@@ -848,6 +1050,7 @@ function PackagesSettings({ packages }: any) {
                   </Typography>
                   <Switch
                     checked={pkg.enabled}
+                    onChange={(event) => onTogglePackage(pkg, event.target.checked)}
                     size="small"
                     sx={{
                       '& .MuiSwitch-switchBase.Mui-checked': {
@@ -859,10 +1062,9 @@ function PackagesSettings({ packages }: any) {
                     }}
                   />
                 </Box>
-                {/* TODO(nav): wire package edit flow. */}
                 <IconButton
                   size="small"
-                  disabled
+                  onClick={() => onEditPackage(pkg)}
                   sx={{
                     color: colors.text.secondary,
                     '&:hover': { color: colors.primary.main },
@@ -885,6 +1087,8 @@ function BillingSettings({
   setStripeConnected,
   defaultDueDays,
   setDefaultDueDays,
+  defaultSessionAmount,
+  setDefaultSessionAmount,
   autoSendInvoices,
   setAutoSendInvoices,
   taxRate,
@@ -897,6 +1101,7 @@ function BillingSettings({
   setAllowPackageBilling,
   allowRecurringSubscriptions,
   setAllowRecurringSubscriptions,
+  saveError,
   isDirty,
   setIsDirty,
   onSave,
@@ -964,20 +1169,37 @@ function BillingSettings({
               />
             </FormField>
 
-            <FormField label="Tax rate (%)">
+            <FormField label="Default session amount">
               <TextField
                 fullWidth
                 type="number"
-                value={taxRate}
+                value={defaultSessionAmount}
                 onChange={(e) => {
-                  setTaxRate(e.target.value);
+                  setDefaultSessionAmount(e.target.value);
                   setIsDirty(true);
                 }}
-                placeholder="0"
+                placeholder="125"
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                }}
                 sx={textFieldStyles}
               />
             </FormField>
           </Box>
+
+          <FormField label="Tax rate (%)">
+            <TextField
+              fullWidth
+              type="number"
+              value={taxRate}
+              onChange={(e) => {
+                setTaxRate(e.target.value);
+                setIsDirty(true);
+              }}
+              placeholder="0"
+              sx={textFieldStyles}
+            />
+          </FormField>
 
           <ToggleRow
             label="Auto-send invoices"
@@ -1058,6 +1280,8 @@ function BillingSettings({
           Configure automated payouts to providers and payout schedules.
         </Typography>
       </ContentCard>
+
+      {saveError ? <Alert severity="error">{saveError}</Alert> : null}
 
       {isDirty && (
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>

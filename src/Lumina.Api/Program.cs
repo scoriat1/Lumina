@@ -11,6 +11,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+const int DefaultInvoiceDueDays = 30;
+const decimal DefaultSessionAmount = 125m;
 
 builder.Services.AddDbContext<LuminaDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Lumina")));
@@ -80,6 +82,11 @@ using (var scope = app.Services.CreateScope())
         "SQL connection configured. DataSource={DataSource}; Database={Database}",
         connection.DataSource,
         connection.Database);
+
+    if (app.Environment.IsDevelopment())
+    {
+        db.Database.Migrate();
+    }
 }
 
 app.UseCors("client");
@@ -293,27 +300,13 @@ api.MapGet("/clients/{id:int}/sessions", async (int id, LuminaDbContext db, Http
     var sessions = await db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
         .Include(s => s.Client)
+        .Include(s => s.ClientPackage)
+            .ThenInclude(cp => cp!.Package)
+        .Include(s => s.Invoice)
         .OrderByDescending(s => s.Date)
-        .Select(s => new
-        {
-            id = s.Id,
-            clientId = s.ClientId,
-            client = s.Client.Name,
-                sessionType = s.SessionType,
-            date = s.Date,
-            duration = s.Duration,
-            location = s.Location.ToString().ToLowerInvariant(),
-            status = s.Status.ToString().ToLowerInvariant(),
-            payment = "paid",
-            paymentStatus = "paid",
-            billingSource = "pay-per-session",
-            packageRemaining = (int?)null,
-            focus = s.Focus,
-            notes = s.Notes
-        })
         .ToListAsync();
 
-    return Results.Ok(sessions);
+    return Results.Ok(sessions.Select(s => MapSessionDto(s, s.Client.Name)));
 });
 
 api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, HttpContext context) =>
@@ -329,6 +322,9 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
     var sessions = await db.Sessions
         .AsNoTracking()
         .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
+        .Include(s => s.ClientPackage)
+            .ThenInclude(cp => cp!.Package)
+        .Include(s => s.Invoice)
         .OrderBy(s => s.Date)
         .ToListAsync();
 
@@ -363,7 +359,7 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
         .Select(boundary =>
         {
             var packageSessions = sessions
-                .Where(s => s.Date >= boundary.Start && s.Date < boundary.End)
+                .Where(s => s.ClientPackageId == boundary.Package.Id)
                 .ToList();
 
             var completed = Math.Max(0, boundary.Package.Package.SessionCount - boundary.Package.RemainingSessions);
@@ -392,7 +388,7 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
         .ToHashSet();
 
     var singleSessions = sessions
-        .Where(s => !assignedSessionIds.Contains(s.Id))
+        .Where(s => s.ClientPackageId is null && !assignedSessionIds.Contains(s.Id))
         .ToList();
 
     if (singleSessions.Count > 0)
@@ -473,27 +469,14 @@ api.MapGet("/sessions", async (int? clientId, LuminaDbContext db, HttpContext co
         .Where(s => s.PracticeId == scope.Value.practiceId)
         .Where(s => !clientId.HasValue || s.ClientId == clientId.Value)
         .Include(s => s.Client)
+        .Include(s => s.ClientPackage)
+            .ThenInclude(cp => cp!.Package)
+        .Include(s => s.Invoice)
         .OrderBy(s => s.Date);
 
-    var sessions = await query.Select(s => new
-    {
-        id = s.Id,
-        clientId = s.ClientId,
-        client = s.Client.Name,
-        sessionType = s.SessionType,
-        date = s.Date,
-        duration = s.Duration,
-        location = s.Location.ToString().ToLowerInvariant(),
-        status = s.Status.ToString().ToLowerInvariant(),
-        payment = "paid",
-        paymentStatus = "paid",
-        billingSource = "pay-per-session",
-        packageRemaining = (int?)null,
-        focus = s.Focus,
-        notes = s.Notes
-    }).ToListAsync();
+    var sessions = await query.ToListAsync();
 
-    return Results.Ok(sessions);
+    return Results.Ok(sessions.Select(s => MapSessionDto(s, s.Client.Name)));
 });
 
 api.MapGet("/sessions/{id:int}", async (int id, LuminaDbContext db, HttpContext context) =>
@@ -504,26 +487,12 @@ api.MapGet("/sessions/{id:int}", async (int id, LuminaDbContext db, HttpContext 
     var session = await db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId && s.Id == id)
         .Include(s => s.Client)
-        .Select(s => new
-        {
-            id = s.Id,
-            clientId = s.ClientId,
-            client = s.Client.Name,
-            sessionType = s.SessionType,
-            date = s.Date,
-            duration = s.Duration,
-            location = s.Location.ToString().ToLowerInvariant(),
-            status = s.Status.ToString().ToLowerInvariant(),
-            payment = "paid",
-            paymentStatus = "paid",
-            billingSource = "pay-per-session",
-            packageRemaining = (int?)null,
-            focus = s.Focus,
-            notes = s.Notes
-        })
+        .Include(s => s.ClientPackage)
+            .ThenInclude(cp => cp!.Package)
+        .Include(s => s.Invoice)
         .FirstOrDefaultAsync();
 
-    return session is null ? Results.NotFound() : Results.Ok(session);
+    return session is null ? Results.NotFound() : Results.Ok(MapSessionDto(session, session.Client.Name));
 });
 
 api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db, HttpContext context) =>
@@ -531,14 +500,36 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
 
-    var clientExists = await db.Clients.AnyAsync(c => c.Id == request.ClientId && c.PracticeId == scope.Value.practiceId);
-    if (!clientExists)
+    var client = await db.Clients
+        .FirstOrDefaultAsync(c => c.Id == request.ClientId && c.PracticeId == scope.Value.practiceId);
+    if (client is null)
     {
         return Results.BadRequest(new { message = "Selected client was not found." });
     }
 
     var now = DateTimeOffset.UtcNow;
     var status = request.Status ?? (request.Mode == SessionEntryMode.LogPast ? SessionStatus.Completed : SessionStatus.Upcoming);
+    var sessionsToCreate = request.RecurrenceCount.GetValueOrDefault(1);
+    var hasRecurrence = sessionsToCreate > 1;
+
+    if (sessionsToCreate <= 0)
+    {
+        return Results.BadRequest(new { message = "Recurring session count must be at least 1." });
+    }
+
+    string? recurrenceFrequency = null;
+    if (hasRecurrence)
+    {
+        if (request.Mode != SessionEntryMode.Schedule)
+        {
+            return Results.BadRequest(new { message = "Recurring sessions can only be scheduled in schedule mode." });
+        }
+
+        if (!TryNormalizeRecurrenceFrequency(request.RecurrenceFrequency, out recurrenceFrequency))
+        {
+            return Results.BadRequest(new { message = "A valid recurrence frequency is required for recurring sessions." });
+        }
+    }
 
     if (request.Mode == SessionEntryMode.Schedule)
     {
@@ -565,21 +556,154 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
         }
     }
 
-    var session = new Session
+    var practice = await db.Practices
+        .FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+
+    if (practice is null) return Results.NotFound();
+
+    await using var transaction = await db.Database.BeginTransactionAsync();
+    ClientPackage? clientPackage = null;
+
+    if (request.BillingMode == SessionBillingMode.Package)
     {
-        PracticeId = scope.Value.practiceId,
-        ProviderId = scope.Value.providerId,
-        ClientId = request.ClientId,
-        Date = request.Date,
-        Duration = request.Duration,
-        SessionType = string.IsNullOrWhiteSpace(request.SessionType) ? "Session" : request.SessionType.Trim(),
-        Focus = request.Focus?.Trim() ?? string.Empty,
-        Status = status,
-        Location = request.Location
-    };
-    db.Sessions.Add(session);
+        if (!request.ClientPackageId.HasValue && !request.PackageId.HasValue)
+        {
+            return Results.BadRequest(new { message = "A package is required for package billing." });
+        }
+
+        if (request.ClientPackageId.HasValue)
+        {
+            clientPackage = await db.ClientPackages
+                .Include(cp => cp.Package)
+                .FirstOrDefaultAsync(cp =>
+                    cp.Id == request.ClientPackageId.Value &&
+                    cp.PracticeId == scope.Value.practiceId &&
+                    cp.ClientId == request.ClientId);
+        }
+        else if (request.PackageId.HasValue)
+        {
+            var package = await db.Packages
+                .FirstOrDefaultAsync(p =>
+                    p.Id == request.PackageId.Value &&
+                    p.PracticeId == scope.Value.practiceId &&
+                    p.IsActive);
+
+            if (package is null)
+            {
+                return Results.BadRequest(new { message = "Selected package was not found." });
+            }
+
+            clientPackage = await db.ClientPackages
+                .Include(cp => cp.Package)
+                .Where(cp =>
+                    cp.PracticeId == scope.Value.practiceId &&
+                    cp.ClientId == request.ClientId &&
+                    cp.PackageId == package.Id &&
+                    cp.RemainingSessions > 0)
+                .OrderByDescending(cp => cp.PurchasedAt)
+                .FirstOrDefaultAsync();
+
+            if (clientPackage is null)
+            {
+                clientPackage = new ClientPackage
+                {
+                    PracticeId = scope.Value.practiceId,
+                    ClientId = request.ClientId,
+                    PackageId = package.Id,
+                    PurchasedAt = now,
+                    RemainingSessions = package.SessionCount,
+                    Package = package
+                };
+
+                db.ClientPackages.Add(clientPackage);
+            }
+        }
+
+        if (clientPackage is null)
+        {
+            return Results.BadRequest(new { message = "Selected package was not found for this client." });
+        }
+
+        if (clientPackage.RemainingSessions <= 0)
+        {
+            return Results.BadRequest(new { message = "Selected package has no remaining sessions." });
+        }
+
+        if (clientPackage.RemainingSessions < sessionsToCreate)
+        {
+            return Results.BadRequest(new
+            {
+                message = $"Selected package only has {clientPackage.RemainingSessions} session(s) remaining."
+            });
+        }
+
+        clientPackage.RemainingSessions -= sessionsToCreate;
+    }
+    else
+    {
+        if (!request.Amount.HasValue || request.Amount.Value <= 0)
+        {
+            return Results.BadRequest(new { message = "A positive amount is required for pay-per-session billing." });
+        }
+    }
+
+    var createdSessions = new List<Session>();
+    for (var occurrence = 0; occurrence < sessionsToCreate; occurrence++)
+    {
+        var sessionDate = hasRecurrence && recurrenceFrequency is not null
+            ? GetRecurringSessionDate(request.Date, recurrenceFrequency, occurrence)
+            : request.Date;
+
+        var session = new Session
+        {
+            PracticeId = scope.Value.practiceId,
+            ProviderId = scope.Value.providerId,
+            ClientId = request.ClientId,
+            Date = sessionDate,
+            Duration = request.Duration,
+            SessionType = string.IsNullOrWhiteSpace(request.SessionType) ? "Session" : request.SessionType.Trim(),
+            Focus = request.Focus?.Trim() ?? string.Empty,
+            Status = status,
+            Location = request.Location
+        };
+
+        if (request.BillingMode == SessionBillingMode.Package)
+        {
+            session.ClientPackage = clientPackage;
+        }
+        else
+        {
+            var invoice = new Invoice
+            {
+                PracticeId = scope.Value.practiceId,
+                ClientId = request.ClientId,
+                InvoiceNumber = await GenerateInvoiceNumberAsync(db, scope.Value.practiceId),
+                Description = string.IsNullOrWhiteSpace(session.SessionType)
+                    ? $"Session for {client.Name}"
+                    : $"{session.SessionType} session",
+                Amount = decimal.Round(request.Amount!.Value, 2, MidpointRounding.AwayFromZero),
+                DueDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(practice.BillingDefaultDueDays)),
+                Status = InvoiceStatus.Pending,
+                CreatedAt = now
+            };
+
+            db.Invoices.Add(invoice);
+            session.Invoice = invoice;
+        }
+
+        db.Sessions.Add(session);
+        createdSessions.Add(session);
+    }
+
     await db.SaveChangesAsync();
-    return Results.Ok(new { id = session.Id });
+    await transaction.CommitAsync();
+
+    return Results.Ok(new
+    {
+        id = createdSessions[0].Id,
+        ids = createdSessions.Select(s => s.Id).ToList(),
+        createdCount = createdSessions.Count
+    });
 });
 
 api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, LuminaDbContext db, HttpContext context) =>
@@ -737,6 +861,35 @@ api.MapPost("/clients/{id:int}/notes", async (int id, ClientNoteCreateRequest re
     return Results.Ok(new { id = note.Id });
 });
 
+api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var clientExists = await db.Clients.AnyAsync(c => c.Id == id && c.PracticeId == scope.Value.practiceId);
+    if (!clientExists) return Results.NotFound();
+
+    var packages = await db.ClientPackages
+        .AsNoTracking()
+        .Where(cp => cp.PracticeId == scope.Value.practiceId && cp.ClientId == id)
+        .Include(cp => cp.Package)
+        .OrderByDescending(cp => cp.PurchasedAt)
+        .Select(cp => new
+        {
+            id = cp.Id,
+            packageId = cp.PackageId,
+            packageName = cp.Package.Name,
+            purchasedAt = cp.PurchasedAt,
+            totalSessions = cp.Package.SessionCount,
+            remainingSessions = cp.RemainingSessions,
+            price = cp.Package.Price,
+            status = cp.RemainingSessions > 0 ? "active" : "completed"
+        })
+        .ToListAsync();
+
+    return Results.Ok(packages);
+});
+
 api.MapGet("/billing/summary", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
@@ -764,11 +917,26 @@ api.MapGet("/billing/invoices", async (LuminaDbContext db, HttpContext context) 
         date = i.CreatedAt,
         dueDate = i.DueDate,
         status = i.Status.ToString().ToLowerInvariant(),
-        sessionCount = i.Description,
+        sessionCount = i.Sessions.Count,
         description = i.Description
     }).ToListAsync();
 
     return Results.Ok(invoices);
+});
+
+api.MapPost("/billing/invoices/{id:int}/mark-paid", async (int id, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var invoice = await db.Invoices
+        .FirstOrDefaultAsync(i => i.Id == id && i.PracticeId == scope.Value.practiceId);
+
+    if (invoice is null) return Results.NotFound();
+
+    invoice.Status = InvoiceStatus.Paid;
+    await db.SaveChangesAsync();
+    return Results.Ok();
 });
 
 api.MapGet("/settings/providers", async (LuminaDbContext db, HttpContext context) =>
@@ -787,6 +955,163 @@ api.MapGet("/settings/providers", async (LuminaDbContext db, HttpContext context
     }).ToListAsync();
 
     return Results.Ok(providers);
+});
+
+api.MapGet("/settings/packages", async (LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var packages = await db.Packages
+        .AsNoTracking()
+        .Where(p => p.PracticeId == scope.Value.practiceId)
+        .OrderBy(p => p.Id)
+        .Select(p => new
+        {
+            id = p.Id,
+            name = p.Name,
+            sessionCount = p.SessionCount,
+            price = p.Price,
+            billingType = p.BillingType,
+            status = p.IsActive ? "Active" : "Inactive",
+            enabled = p.IsActive
+        })
+        .ToListAsync();
+
+    return Results.Ok(packages);
+});
+
+api.MapPost("/settings/packages", async (CreatePackageRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name))
+    {
+        return Results.BadRequest(new { message = "Package name is required." });
+    }
+
+    if (request.SessionCount <= 0)
+    {
+        return Results.BadRequest(new { message = "Session count must be greater than 0." });
+    }
+
+    if (request.Price <= 0)
+    {
+        return Results.BadRequest(new { message = "Price must be greater than 0." });
+    }
+
+    var package = new Package
+    {
+        PracticeId = scope.Value.practiceId,
+        Name = name,
+        BillingType = "oneTime",
+        SessionCount = request.SessionCount,
+        Price = decimal.Round(request.Price, 2, MidpointRounding.AwayFromZero),
+        IsActive = request.Enabled
+    };
+
+    db.Packages.Add(package);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new
+    {
+        id = package.Id,
+        name = package.Name,
+        sessionCount = package.SessionCount,
+        price = package.Price,
+        billingType = package.BillingType,
+        status = package.IsActive ? "Active" : "Inactive",
+        enabled = package.IsActive
+    });
+});
+
+api.MapPut("/settings/packages/{id:int}", async (int id, UpdatePackageRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var package = await db.Packages
+        .FirstOrDefaultAsync(p => p.Id == id && p.PracticeId == scope.Value.practiceId);
+
+    if (package is null) return Results.NotFound();
+
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name))
+    {
+        return Results.BadRequest(new { message = "Package name is required." });
+    }
+
+    if (request.SessionCount <= 0)
+    {
+        return Results.BadRequest(new { message = "Session count must be greater than 0." });
+    }
+
+    if (request.Price <= 0)
+    {
+        return Results.BadRequest(new { message = "Price must be greater than 0." });
+    }
+
+    package.Name = name;
+    package.SessionCount = request.SessionCount;
+    package.Price = decimal.Round(request.Price, 2, MidpointRounding.AwayFromZero);
+    package.IsActive = request.Enabled;
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new
+    {
+        id = package.Id,
+        name = package.Name,
+        sessionCount = package.SessionCount,
+        price = package.Price,
+        billingType = package.BillingType,
+        status = package.IsActive ? "Active" : "Inactive",
+        enabled = package.IsActive
+    });
+});
+
+api.MapGet("/settings/billing", async (LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var practice = await db.Practices
+        .AsNoTracking()
+        .FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+
+    if (practice is null) return Results.NotFound();
+
+    return Results.Ok(MapBillingSettingsResponse(practice));
+});
+
+api.MapPut("/settings/billing", async (BillingSettingsRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var practice = await db.Practices
+        .FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+
+    if (practice is null) return Results.NotFound();
+
+    if (request.DefaultDueDays <= 0)
+    {
+        return Results.BadRequest(new { message = "Default due days must be greater than 0." });
+    }
+
+    if (request.DefaultSessionAmount <= 0)
+    {
+        return Results.BadRequest(new { message = "Default session amount must be greater than 0." });
+    }
+
+    practice.BillingDefaultDueDays = request.DefaultDueDays;
+    practice.BillingDefaultSessionAmount = decimal.Round(request.DefaultSessionAmount, 2, MidpointRounding.AwayFromZero);
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(MapBillingSettingsResponse(practice));
 });
 
 api.MapGet("/settings/notes", async (LuminaDbContext db, HttpContext context) =>
@@ -1170,8 +1495,18 @@ static NotesTemplateSettingsResponse MapNotesTemplateSettingsResponse(Practice p
         practice.NotesSelectedTemplateId);
 }
 
+static BillingSettingsResponse MapBillingSettingsResponse(Practice practice)
+{
+    return new BillingSettingsResponse(
+        practice.BillingDefaultDueDays <= 0 ? DefaultInvoiceDueDays : practice.BillingDefaultDueDays,
+        practice.BillingDefaultSessionAmount <= 0 ? DefaultSessionAmount : practice.BillingDefaultSessionAmount);
+}
+
 static ApiSessionItem MapSessionDto(Session session, string clientName)
 {
+    var billingSource = GetSessionBillingSource(session);
+    var paymentStatus = GetSessionPaymentStatus(session);
+
     return new ApiSessionItem(
         session.Id,
         session.ClientId,
@@ -1181,12 +1516,80 @@ static ApiSessionItem MapSessionDto(Session session, string clientName)
         session.Duration,
         session.Location.ToString().ToLowerInvariant(),
         session.Status.ToString().ToLowerInvariant(),
-        "paid",
-        "paid",
-        "pay-per-session",
-        null,
+        paymentStatus,
+        paymentStatus,
+        billingSource,
+        session.ClientPackage?.RemainingSessions,
         session.Focus,
-        session.Notes);
+        session.Notes,
+        session.ClientPackage?.PackageId,
+        session.ClientPackageId,
+        session.ClientPackage?.Package.Name,
+        session.ClientPackage?.Package.Price,
+        session.InvoiceId);
+}
+
+static string GetSessionBillingSource(Session session) =>
+    session.ClientPackageId.HasValue ? "package" : "pay-per-session";
+
+static string GetSessionPaymentStatus(Session session)
+{
+    if (session.ClientPackageId.HasValue)
+    {
+        return "paid";
+    }
+
+    if (session.Invoice is null)
+    {
+        return "paid";
+    }
+
+    return session.Invoice.Status == InvoiceStatus.Paid ? "paid" : "pending";
+}
+
+static async Task<string> GenerateInvoiceNumberAsync(LuminaDbContext db, int practiceId)
+{
+    var prefix = $"INV-{DateTime.UtcNow:yyyy}-";
+    var invoiceNumbers = await db.Invoices
+        .Where(i => i.PracticeId == practiceId && i.InvoiceNumber.StartsWith(prefix))
+        .Select(i => i.InvoiceNumber)
+        .ToListAsync();
+
+    var nextNumber = invoiceNumbers
+        .Select(invoiceNumber =>
+        {
+            var suffix = invoiceNumber[prefix.Length..];
+            return int.TryParse(suffix, out var parsed) ? parsed : 0;
+        })
+        .DefaultIfEmpty(0)
+        .Max() + 1;
+
+    return $"{prefix}{nextNumber:000}";
+}
+
+static bool TryNormalizeRecurrenceFrequency(string? frequency, out string? normalized)
+{
+    normalized = frequency?.Trim().ToLowerInvariant();
+    return normalized is "weekly" or "biweekly" or "monthly";
+}
+
+static DateTimeOffset GetRecurringSessionDate(
+    DateTimeOffset baseDate,
+    string recurrenceFrequency,
+    int occurrence)
+{
+    if (occurrence <= 0)
+    {
+        return baseDate;
+    }
+
+    return recurrenceFrequency switch
+    {
+        "weekly" => baseDate.AddDays(7 * occurrence),
+        "biweekly" => baseDate.AddDays(14 * occurrence),
+        "monthly" => baseDate.AddMonths(occurrence),
+        _ => baseDate
+    };
 }
 
 app.Run();
@@ -1201,15 +1604,19 @@ static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpConte
 
 public record LoginRequest(string Email, string Password);
 public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, int? Duration, SessionLocation? Location, SessionStatus? Status, string? Focus, string? Notes);
-public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, SessionLocation Location, SessionStatus? Status, string SessionType, string Focus, SessionEntryMode Mode = SessionEntryMode.Schedule, string? Payment = null);
+public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, SessionLocation Location, SessionStatus? Status, string SessionType, string Focus, SessionEntryMode Mode = SessionEntryMode.Schedule, SessionBillingMode BillingMode = SessionBillingMode.PayPerSession, int? PackageId = null, int? ClientPackageId = null, decimal? Amount = null, string? RecurrenceFrequency = null, int? RecurrenceCount = null);
+public record CreatePackageRequest(string Name, int SessionCount, decimal Price, bool Enabled = true);
+public record UpdatePackageRequest(string Name, int SessionCount, decimal Price, bool Enabled = true);
+public record BillingSettingsRequest(int DefaultDueDays, decimal DefaultSessionAmount);
 public record NotesTemplateSettingsRequest(string TemplateMode, string? SelectedTemplateKind = null, int? SelectedTemplateId = null);
 public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
 public record TemplateUpdateRequest(int PracticeId, string Name, string? Description, IReadOnlyList<TemplateUpdateFieldRequest> Fields);
 public record TemplateUpdateFieldRequest(int Id, string Label, int SortOrder, string? FieldType);
-public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes);
+public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes, int? packageId = null, int? clientPackageId = null, string? packageName = null, decimal? packagePrice = null, int? invoiceId = null);
 public record SessionStructuredNoteRequest(int? TemplateId, string Content, string LegacyNotes, string? NoteType = null);
 public record ClientNoteCreateRequest(string Content, string? Type = null, string? Source = null);
+public record BillingSettingsResponse(int DefaultDueDays, decimal DefaultSessionAmount);
 public record NotesTemplateSettingsResponse(string TemplateMode, string? SelectedTemplateKind, int? SelectedTemplateId);
 public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
 public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);
@@ -1217,4 +1624,9 @@ public enum SessionEntryMode
 {
     Schedule = 1,
     LogPast = 2
+}
+public enum SessionBillingMode
+{
+    PayPerSession = 1,
+    Package = 2
 }

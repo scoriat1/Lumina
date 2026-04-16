@@ -15,4 +15,5 @@ public class Invoice
     public DateOnly DueDate { get; set; }
     public InvoiceStatus Status { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public ICollection<Session> Sessions { get; set; } = new List<Session>();
 }

@@ -32,13 +32,16 @@ export function BillingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState({ totalRevenue: 0, pendingAmount: 0, overdueAmount: 0 });
 
-  useEffect(() => {
+  const loadBilling = () =>
     Promise.all([apiClient.getBillingSummary(), apiClient.getBillingInvoices()])
       .then(([billingSummary, billingInvoices]) => {
         setSummary(billingSummary);
         setInvoices(billingInvoices);
       })
       .catch(() => undefined);
+
+  useEffect(() => {
+    void loadBilling();
   }, []);
 
   const selectedInvoice = useMemo(() => invoices.find((inv) => inv.id === selectedInvoiceId) ?? null, [invoices, selectedInvoiceId]);
@@ -51,6 +54,15 @@ export function BillingPage() {
   const handleDrawerClose = () => {
     setDrawerOpen(false);
     setTimeout(() => setSelectedInvoiceId(null), 300);
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (!selectedInvoiceId) {
+      return;
+    }
+
+    await apiClient.markInvoicePaid(selectedInvoiceId);
+    await loadBilling();
   };
 
   const getStatusStyles = (status: Invoice['status']) => {
@@ -559,25 +571,26 @@ export function BillingPage() {
               </Button>
               {selectedInvoice?.status !== 'paid' && (
                 <>
-                  {/* TODO(nav): wire mark-as-paid action to billing status update endpoint. */}
                   <Button
                     fullWidth
                     variant="contained"
-                    disabled
-                  startIcon={<PaymentIcon />}
-                  sx={{
-                    bgcolor: '#9B8B9E',
-                    color: '#FFFFFF',
-                    borderRadius: '10px',
-                    py: 1.5,
-                    fontWeight: 600,
-                    textTransform: 'none',
-                    '&:hover': {
-                      bgcolor: '#8A7A8D',
-                    },
-                  }}
-                >
-                  Mark as Paid
+                    onClick={() => {
+                      void handleMarkAsPaid();
+                    }}
+                    startIcon={<PaymentIcon />}
+                    sx={{
+                      bgcolor: '#9B8B9E',
+                      color: '#FFFFFF',
+                      borderRadius: '10px',
+                      py: 1.5,
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      '&:hover': {
+                        bgcolor: '#8A7A8D',
+                      },
+                    }}
+                  >
+                    Mark as Paid
                   </Button>
                 </>
               )}

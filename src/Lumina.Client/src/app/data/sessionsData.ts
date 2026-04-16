@@ -11,8 +11,8 @@ export interface Session {
   location: 'zoom' | 'phone' | 'office';
   status: 'upcoming' | 'completed' | 'cancelled' | 'noShow';
   payment: string;
-  paymentStatus?: 'paid' | 'unpaid' | 'invoiced' | 'package';
-  billingSource?: 'pay-per-session' | 'package' | 'included';
+  paymentStatus?: 'paid' | 'pending';
+  billingSource?: 'pay-per-session' | 'package';
   packageRemaining?: number;
   focus: string;
   notes?: string;
@@ -47,8 +47,8 @@ export const sessionsData: Session[] = [
     duration: 45,
     location: 'phone',
     status: 'upcoming',
-    payment: 'package',
-    paymentStatus: 'package',
+    payment: 'paid',
+    paymentStatus: 'paid',
     billingSource: 'package',
     packageRemaining: 5,
     focus: 'Work-life balance strategies',
@@ -65,8 +65,8 @@ export const sessionsData: Session[] = [
     duration: 30,
     location: 'office',
     status: 'upcoming',
-    payment: 'unpaid',
-    paymentStatus: 'unpaid',
+    payment: 'pending',
+    paymentStatus: 'pending',
     billingSource: 'pay-per-session',
     focus: 'Leadership development',
     notes: 'Client mentioned interest in advanced leadership training',
@@ -82,8 +82,8 @@ export const sessionsData: Session[] = [
     duration: 90,
     location: 'zoom',
     status: 'upcoming',
-    payment: 'paid',
-    paymentStatus: 'invoiced',
+    payment: 'pending',
+    paymentStatus: 'pending',
     billingSource: 'pay-per-session',
     focus: 'Business planning and execution',
     isRecurring: false,
@@ -98,8 +98,8 @@ export const sessionsData: Session[] = [
     duration: 45,
     location: 'phone',
     status: 'upcoming',
-    payment: 'package',
-    paymentStatus: 'package',
+    payment: 'paid',
+    paymentStatus: 'paid',
     billingSource: 'package',
     packageRemaining: 8,
     focus: 'Stress management techniques',
@@ -132,8 +132,8 @@ export const sessionsData: Session[] = [
     duration: 45,
     location: 'zoom',
     status: 'upcoming',
-    payment: 'package',
-    paymentStatus: 'package',
+    payment: 'paid',
+    paymentStatus: 'paid',
     billingSource: 'package',
     packageRemaining: 3,
     focus: 'Communication skills development',
@@ -168,8 +168,8 @@ export const sessionsData: Session[] = [
     duration: 90,
     location: 'phone',
     status: 'completed',
-    payment: 'package',
-    paymentStatus: 'package',
+    payment: 'paid',
+    paymentStatus: 'paid',
     billingSource: 'package',
     packageRemaining: 6,
     focus: 'Long-term career planning',
@@ -203,8 +203,8 @@ export const sessionsData: Session[] = [
     duration: 45,
     location: 'zoom',
     status: 'cancelled',
-    payment: 'unpaid',
-    paymentStatus: 'unpaid',
+    payment: 'pending',
+    paymentStatus: 'pending',
     billingSource: 'pay-per-session',
     focus: 'Business review',
     notes: 'Client requested reschedule due to urgent business matter.',

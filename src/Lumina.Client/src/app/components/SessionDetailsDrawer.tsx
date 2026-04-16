@@ -1398,7 +1398,7 @@ export function SessionDetailsDrawer({
                                                             border:
                                                                 "1px solid rgba(168, 181, 160, 0.2)",
                                                         }
-                                                        : session.paymentStatus === "unpaid"
+                                                        : session.paymentStatus === "pending"
                                                             ? {
                                                                 bgcolor:
                                                                     "rgba(212, 184, 138, 0.12)",
@@ -1406,22 +1406,13 @@ export function SessionDetailsDrawer({
                                                                 border:
                                                                     "1px solid rgba(212, 184, 138, 0.2)",
                                                             }
-                                                            : session.paymentStatus ===
-                                                                "invoiced"
-                                                                ? {
-                                                                    bgcolor:
-                                                                        "rgba(157, 170, 181, 0.12)",
-                                                                    color: "#4A5B6D",
-                                                                    border:
-                                                                        "1px solid rgba(157, 170, 181, 0.2)",
-                                                                }
-                                                                : {
-                                                                    bgcolor:
-                                                                        "rgba(155, 139, 158, 0.12)",
-                                                                    color: "#7A6B7D",
-                                                                    border:
-                                                                        "1px solid rgba(155, 139, 158, 0.2)",
-                                                                }),
+                                                            : {
+                                                                bgcolor:
+                                                                    "#F5F3F1",
+                                                                color: "#7A746F",
+                                                                border:
+                                                                    "1px solid #E8E5E1",
+                                                            }),
                                                     fontWeight: 600,
                                                     fontSize: "11px",
                                                     height: 24,

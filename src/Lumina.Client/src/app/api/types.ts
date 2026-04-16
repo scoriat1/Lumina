@@ -1,6 +1,7 @@
 export type SessionLocationValue = 'zoom' | 'phone' | 'office';
 export type SessionStatusValue = 'upcoming' | 'completed' | 'cancelled' | 'noShow';
 export type SessionEntryMode = 'schedule' | 'logPast';
+export type SessionBillingModeValue = 'payPerSession' | 'package';
 
 export interface ClientDto {
   id: string;
@@ -31,15 +32,16 @@ export interface SessionDto {
   location: SessionLocationValue;
   status: SessionStatusValue;
   payment?: string;
-  paymentStatus?: 'paid' | 'unpaid' | 'invoiced' | 'package';
-  billingSource?: 'pay-per-session' | 'package' | 'included';
+  paymentStatus?: 'paid' | 'pending';
+  billingSource?: 'pay-per-session' | 'package';
   packageRemaining?: number;
   focus: string;
   notes?: string;
   packageId?: string;
   clientPackageId?: string;
   packageName?: string;
-  packagePrice?: string;
+  packagePrice?: number;
+  invoiceId?: string;
 }
 
 export interface SessionStructuredNoteDto {
@@ -126,6 +128,11 @@ export interface BillingSummaryDto {
   overdueAmount: number;
 }
 
+export interface BillingSettingsDto {
+  defaultDueDays: number;
+  defaultSessionAmount: number;
+}
+
 export interface InvoiceDto {
   id: string;
   invoiceNumber: string;
@@ -137,8 +144,28 @@ export interface InvoiceDto {
   date: string;
   dueDate: string;
   status: 'paid' | 'pending' | 'overdue';
-  sessionCount: string;
+  sessionCount: number;
   description: string;
+}
+
+export interface ClientPackageDto {
+  id: string;
+  packageId: string;
+  packageName: string;
+  purchasedAt: string;
+  totalSessions: number;
+  remainingSessions: number;
+  price?: number;
+  status: 'active' | 'completed';
+}
+
+export interface PracticePackageDto {
+  id: string;
+  name: string;
+  sessionCount: number;
+  price: number;
+  status: string;
+  enabled: boolean;
 }
 
 export interface ProviderDto {

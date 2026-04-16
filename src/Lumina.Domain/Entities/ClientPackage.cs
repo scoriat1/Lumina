@@ -11,4 +11,5 @@ public class ClientPackage
     public Package Package { get; set; } = default!;
     public DateTimeOffset PurchasedAt { get; set; }
     public int RemainingSessions { get; set; }
+    public ICollection<Session> Sessions { get; set; } = new List<Session>();
 }

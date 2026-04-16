@@ -44,6 +44,7 @@ public class PackageConfiguration : IEntityTypeConfiguration<Package>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
         builder.Property(x => x.Name).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.BillingType).HasMaxLength(24).HasDefaultValue("oneTime").IsRequired();
         builder.Property(x => x.Price).HasPrecision(18, 2);
     }
 }

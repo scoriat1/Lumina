@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { MouseEvent } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -9,6 +8,7 @@ import {
   Dialog,
   IconButton,
   MenuItem,
+  InputAdornment,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -20,20 +20,30 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import BusinessIcon from '@mui/icons-material/Business';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { addDays, format, isAfter, isBefore, parse, startOfDay, subDays } from 'date-fns';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import {
+  addDays,
+  format,
+  isAfter,
+  isBefore,
+  parse,
+  startOfDay,
+  subDays,
+} from 'date-fns';
 import { TimelineAvailability } from './TimelineAvailability';
 import { apiClient } from '../api/client';
+import { usePracticePackages } from '../contexts/PracticePackagesContext';
 import type {
   SessionDto,
+  SessionBillingModeValue,
   SessionEntryMode,
   SessionLocationValue,
   SessionStatusValue,
 } from '../api/types';
 import { colors } from '../styles/colors';
 import {
+  allSessionStatusOptions,
   getSessionStatusLabel,
-  logPastSessionStatusOptions,
-  scheduleSessionStatusOptions,
 } from '../lib/sessionStatus';
 
 export interface SessionEntryModalProps {
@@ -62,6 +72,9 @@ type AvailabilityEvent = Pick<
 
 type SessionFormState = {
   clientId: string;
+  billingMode: SessionBillingModeValue;
+  packageId: string;
+  amount: string;
   sessionType: string;
   date: string;
   time: string;
@@ -69,6 +82,8 @@ type SessionFormState = {
   location: SessionLocationValue;
   status: SessionStatusValue;
 };
+
+type RecurringFrequency = 'weekly' | 'biweekly' | 'monthly';
 
 const sessionTypes = [
   'Initial Consultation',
@@ -91,6 +106,24 @@ const durations = [
 
 const LAST_PAST_SLOT = { hour: 17, minute: 30 };
 const BUSINESS_START_HOUR = 8;
+
+function formatSessionCount(count: number) {
+  return `${count} ${count === 1 ? 'session' : 'sessions'}`;
+}
+
+function clampRecurringCount(value: string, max?: number | null) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return '1';
+  }
+
+  const normalized = Math.max(1, Math.floor(numericValue));
+  if (max == null) {
+    return String(normalized);
+  }
+
+  return String(Math.min(normalized, max));
+}
 
 function setTimeForDay(day: Date, hour: number, minute: number) {
   const next = new Date(day);
@@ -177,6 +210,9 @@ function createInitialFormState(
 
   return {
     clientId: preselectedClientId ?? '',
+    billingMode: 'payPerSession',
+    packageId: '',
+    amount: '',
     sessionType: '',
     date: selection.date,
     time: selection.time,
@@ -189,6 +225,7 @@ function createInitialFormState(
 function adjustFormDataForMode(
   current: SessionFormState,
   nextMode: SessionEntryMode,
+  nextStatus: SessionStatusValue,
   initialDate?: string,
   initialTime?: string,
 ) {
@@ -211,7 +248,7 @@ function adjustFormDataForMode(
     ...current,
     date: hasValidDate ? current.date : fallbackSelection.date,
     time: hasValidTime ? current.time : fallbackSelection.time,
-    status: nextMode === 'schedule' ? 'upcoming' : 'completed',
+    status: nextStatus,
   };
 }
 
@@ -254,26 +291,37 @@ export function SessionEntryModal({
   initialDate,
   initialTime,
 }: SessionEntryModalProps) {
-  const [entryMode, setEntryMode] = useState<SessionEntryMode>(mode);
+  const { packages } = usePracticePackages();
   const [formData, setFormData] = useState<SessionFormState>(() =>
     createInitialFormState(mode, preselectedClientId, initialDate, initialTime),
   );
   const [clients, setClients] = useState<ModalClient[]>([]);
   const [events, setEvents] = useState<AvailabilityEvent[]>([]);
+  const [defaultSessionAmount, setDefaultSessionAmount] = useState('125');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] =
+    useState<RecurringFrequency>('weekly');
+  const [recurringCount, setRecurringCount] = useState('6');
+  const enabledPracticePackages = useMemo(
+    () => packages.filter((pkg) => pkg.enabled),
+    [packages],
+  );
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    setEntryMode(mode);
     setFormData(
       createInitialFormState(mode, preselectedClientId, initialDate, initialTime),
     );
     setSubmitError(null);
     setIsSubmitting(false);
+    setIsRecurring(false);
+    setRecurringFrequency('weekly');
+    setRecurringCount('6');
   }, [open, mode, preselectedClientId, initialDate, initialTime]);
 
   useEffect(() => {
@@ -281,18 +329,27 @@ export function SessionEntryModal({
       return;
     }
 
-    Promise.all([apiClient.getClients(), apiClient.getSessions()])
-      .then(([clientItems, sessionItems]) => {
+    Promise.allSettled([
+      apiClient.getClients(),
+      apiClient.getSessions(),
+      apiClient.getBillingSettings(),
+    ]).then(([clientsResult, sessionsResult, billingResult]) => {
+      if (clientsResult.status === 'fulfilled') {
         setClients(
-          clientItems.map((client) => ({
+          clientsResult.value.map((client) => ({
             id: client.id,
             name: client.name,
             initials: client.initials,
             avatarColor: client.avatarColor,
           })),
         );
+      } else {
+        setClients([]);
+      }
+
+      if (sessionsResult.status === 'fulfilled') {
         setEvents(
-          sessionItems.map((session) => ({
+          sessionsResult.value.map((session) => ({
             id: session.id,
             client: session.client,
             sessionType: session.sessionType,
@@ -302,26 +359,66 @@ export function SessionEntryModal({
             date: new Date(session.date),
           })),
         );
-      })
-      .catch(() => {
-        setClients([]);
+      } else {
         setEvents([]);
-      });
+      }
+
+      const nextDefaultAmount =
+        billingResult.status === 'fulfilled'
+          ? String(billingResult.value.defaultSessionAmount)
+          : '125';
+
+      setDefaultSessionAmount(nextDefaultAmount);
+      setFormData((current) =>
+        current.amount ? current : { ...current, amount: nextDefaultAmount },
+      );
+    });
   }, [open]);
 
   const selectedDate = useMemo(
     () => parse(formData.date, 'yyyy-MM-dd', new Date()),
     [formData.date],
   );
-  const statusOptions =
-    entryMode === 'schedule'
-      ? scheduleSessionStatusOptions
-      : logPastSessionStatusOptions;
+  const entryMode: SessionEntryMode =
+    formData.status === 'upcoming' ? 'schedule' : 'logPast';
+  const statusOptions = allSessionStatusOptions;
   const isTimeSelected = Boolean(formData.time);
+  const selectedPracticePackage = useMemo(
+    () => enabledPracticePackages.find((pkg) => pkg.id === formData.packageId) ?? null,
+    [enabledPracticePackages, formData.packageId],
+  );
+  const packageSessionLimit =
+    formData.billingMode === 'package' && selectedPracticePackage
+      ? selectedPracticePackage.sessionCount
+      : null;
+  const recurringSessionCount = isRecurring
+    ? Number.parseInt(recurringCount, 10) || 1
+    : 1;
   const selectionMode = entryMode === 'schedule' ? 'future' : 'past';
   const title = 'Add New Session';
   const primaryActionLabel =
     entryMode === 'schedule' ? 'Schedule Session' : 'Log Session';
+  const showRecurringControls = entryMode === 'schedule';
+
+  useEffect(() => {
+    if (entryMode !== 'schedule') {
+      return;
+    }
+
+    if (formData.billingMode === 'package' && selectedPracticePackage) {
+      setIsRecurring(true);
+      setRecurringCount(String(selectedPracticePackage.sessionCount));
+      return;
+    }
+
+    if (formData.billingMode !== 'package') {
+      setRecurringCount((current) => clampRecurringCount(current));
+    }
+  }, [
+    entryMode,
+    formData.billingMode,
+    selectedPracticePackage,
+  ]);
   const previousDateDisabled =
     entryMode === 'schedule' &&
     !isAfter(startOfDay(selectedDate), startOfDay(new Date()));
@@ -336,18 +433,19 @@ export function SessionEntryModal({
     setFormData((current) => ({ ...current, [field]: value }));
   };
 
-  const handleModeChange = (
-    _: MouseEvent<HTMLElement>,
-    nextMode: SessionEntryMode | null,
-  ) => {
-    if (!nextMode || nextMode === entryMode) {
-      return;
-    }
+  const handleStatusChange = (nextStatus: SessionStatusValue) => {
+    const nextMode: SessionEntryMode =
+      nextStatus === 'upcoming' ? 'schedule' : 'logPast';
 
-    setEntryMode(nextMode);
     setSubmitError(null);
     setFormData((current) =>
-      adjustFormDataForMode(current, nextMode, initialDate, initialTime),
+      adjustFormDataForMode(
+        current,
+        nextMode,
+        nextStatus,
+        initialDate,
+        initialTime,
+      ),
     );
   };
 
@@ -393,6 +491,37 @@ export function SessionEntryModal({
       return;
     }
 
+    if (formData.billingMode === 'package') {
+      if (!formData.packageId) {
+        setSubmitError('Select a package to continue.');
+        return;
+      }
+
+      if (!selectedPracticePackage) {
+        setSubmitError('Selected package is not available.');
+        return;
+      }
+
+      if (
+        entryMode === 'schedule' &&
+        isRecurring &&
+        recurringSessionCount > selectedPracticePackage.sessionCount
+      ) {
+        setSubmitError(
+          `This package includes ${formatSessionCount(selectedPracticePackage.sessionCount)}.`,
+        );
+        return;
+      }
+    }
+
+    if (formData.billingMode === 'payPerSession') {
+      const amount = Number(formData.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        setSubmitError('Enter a positive amount for pay-per-session billing.');
+        return;
+      }
+    }
+
     const localDateTime = new Date(`${formData.date}T${formData.time}:00`);
 
     if (!isDateTimeAllowedForMode(localDateTime, entryMode)) {
@@ -411,7 +540,6 @@ export function SessionEntryModal({
 
     try {
       setIsSubmitting(true);
-
       const response = await apiClient.createSession({
         clientId: formData.clientId,
         date: localDateTime.toISOString(),
@@ -421,6 +549,17 @@ export function SessionEntryModal({
         location: formData.location,
         status: formData.status,
         mode: entryMode,
+        billingMode: formData.billingMode,
+        packageId:
+          formData.billingMode === 'package' ? formData.packageId : undefined,
+        amount:
+          formData.billingMode === 'payPerSession'
+            ? Number(formData.amount)
+            : undefined,
+        recurrenceFrequency:
+          entryMode === 'schedule' && isRecurring ? recurringFrequency : undefined,
+        recurrenceCount:
+          entryMode === 'schedule' && isRecurring ? recurringSessionCount : undefined,
       });
 
       await onCreated?.(response.id);
@@ -521,32 +660,81 @@ export function SessionEntryModal({
             sx={{
               flex: '0 0 40%',
               px: 4,
-              py: 4,
+              pt: 4,
+              pb: 5,
               display: 'flex',
               flexDirection: 'column',
               gap: 3,
+              '&::after': {
+                content: '""',
+                display: 'block',
+                height: '24px',
+                flexShrink: 0,
+              },
             }}
           >
             <Box>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: colors.text.primary,
-                  fontWeight: 600,
-                  mb: 0.75,
-                  display: 'block',
-                  fontSize: '11px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.8px',
+              <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                Client
+              </Typography>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                value={formData.clientId}
+                onChange={(event) => {
+                  handleChange('clientId', event.target.value);
                 }}
+                required
               >
-                Session Type
+                {clients.map((client) => (
+                  <MenuItem key={client.id} value={client.id}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar sx={{ width: 24, height: 24, bgcolor: client.avatarColor, fontSize: '11px', fontWeight: 600 }}>
+                        {client.initials}
+                      </Avatar>
+                      <Typography variant="body2" sx={{ fontSize: '14px' }}>
+                        {client.name}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+
+            <Box>
+              <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                Billing
               </Typography>
               <ToggleButtonGroup
-                value={entryMode}
+                value={formData.billingMode}
                 exclusive
                 fullWidth
-                onChange={handleModeChange}
+                onChange={(_, value: SessionBillingModeValue | null) => {
+                  if (!value) {
+                    return;
+                  }
+
+                  const shouldUsePackage = value === 'package';
+                  setFormData((current) => ({
+                    ...current,
+                    billingMode: value,
+                    packageId: value === 'package' ? current.packageId : '',
+                    amount:
+                      value === 'payPerSession'
+                        ? current.amount || defaultSessionAmount
+                        : current.amount,
+                  }));
+
+                  if (!shouldUsePackage) {
+                    return;
+                  }
+
+                  setIsRecurring(true);
+                  setRecurringCount((current) =>
+                    clampRecurringCount(current, packageSessionLimit),
+                  );
+                }}
                 sx={{
                   width: '100%',
                   '& .MuiToggleButton-root': {
@@ -570,37 +758,83 @@ export function SessionEntryModal({
                   },
                 }}
               >
-                <ToggleButton value="schedule">Schedule Upcoming</ToggleButton>
-                <ToggleButton value="logPast">Log Past Session</ToggleButton>
+                <ToggleButton value="payPerSession">Pay per session</ToggleButton>
+                <ToggleButton value="package">Package</ToggleButton>
               </ToggleButtonGroup>
             </Box>
 
-            <Box>
-              <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                Client
-              </Typography>
-              <TextField
-                select
-                fullWidth
-                size="small"
-                value={formData.clientId}
-                onChange={(event) => handleChange('clientId', event.target.value)}
-                required
-              >
-                {clients.map((client) => (
-                  <MenuItem key={client.id} value={client.id}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Avatar sx={{ width: 24, height: 24, bgcolor: client.avatarColor, fontSize: '11px', fontWeight: 600 }}>
-                        {client.initials}
-                      </Avatar>
-                      <Typography variant="body2" sx={{ fontSize: '14px' }}>
-                        {client.name}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
+            {formData.billingMode === 'payPerSession' ? (
+              <Box>
+                <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Invoice Amount
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  value={formData.amount}
+                  onChange={(event) => handleChange('amount', event.target.value)}
+                  inputProps={{ min: 0, step: '0.01' }}
+                  placeholder={defaultSessionAmount}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                  }}
+                />
+              </Box>
+            ) : (
+              <Box>
+                <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                  Package
+                </Typography>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  value={formData.packageId}
+                  onChange={(event) => handleChange('packageId', event.target.value)}
+                  disabled={enabledPracticePackages.length === 0}
+                  SelectProps={{
+                    displayEmpty: true,
+                    renderValue: (value) => {
+                      if (!value) {
+                        return (
+                          <Typography sx={{ color: '#8A837D', fontSize: '14px' }}>
+                            {enabledPracticePackages.length === 0
+                              ? 'No packages available'
+                              : 'Select an enabled package from Settings.'}
+                          </Typography>
+                        );
+                      }
+
+                      const selectedPackage = enabledPracticePackages.find(
+                        (pkg) => pkg.id === value,
+                      );
+
+                      return selectedPackage
+                        ? `${selectedPackage.name} - ${formatSessionCount(selectedPackage.sessionCount)}`
+                        : value;
+                    },
+                  }}
+                >
+                  {enabledPracticePackages.map((pkg) => (
+                    <MenuItem
+                      key={pkg.id}
+                      value={pkg.id}
+                    >
+                      {pkg.name} - {formatSessionCount(pkg.sessionCount)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                {selectedPracticePackage ? (
+                  <Typography
+                    variant="body2"
+                    sx={{ color: '#7A746F', fontSize: '12px', mt: 1 }}
+                  >
+                    {`This package includes ${formatSessionCount(selectedPracticePackage.sessionCount)}.`}
+                  </Typography>
+                ) : null}
+              </Box>
+            )}
 
             <Box>
               <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
@@ -683,9 +917,8 @@ export function SessionEntryModal({
                 size="small"
                 value={formData.status}
                 onChange={(event) =>
-                  handleChange('status', event.target.value as SessionStatusValue)
+                  handleStatusChange(event.target.value as SessionStatusValue)
                 }
-                disabled={statusOptions.length === 1}
               >
                 {statusOptions.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
@@ -697,18 +930,128 @@ export function SessionEntryModal({
 
             <Box
               sx={{
-                p: 2,
-                bgcolor: '#F9F8F7',
-                borderRadius: '10px',
-                textAlign: 'center',
+                p: 2.5,
+                background:
+                  'linear-gradient(135deg, rgba(155, 139, 158, 0.10) 0%, rgba(212, 184, 138, 0.08) 100%)',
+                border: '1px solid rgba(155, 139, 158, 0.12)',
+                borderRadius: '14px',
+                textAlign: 'left',
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.65)',
               }}
             >
-              <Typography variant="body2" sx={{ color: '#7A746F', fontSize: '13px', lineHeight: 1.5 }}>
-                {entryMode === 'schedule'
-                  ? 'Select a future time slot from the timeline.'
-                  : 'Select a past time slot from the timeline.'}
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#8B7F87',
+                  fontWeight: 700,
+                  display: 'block',
+                  fontSize: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  mb: 0.75,
+                }}
+              >
+                {isTimeSelected
+                  ? entryMode === 'schedule'
+                    ? 'Scheduled for'
+                    : `${getSessionStatusLabel(formData.status)} on`
+                  : 'Date & time'}
               </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: '#4E444D',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  lineHeight: 1.35,
+                  letterSpacing: '-0.1px',
+                }}
+              >
+                {isTimeSelected
+                  ? `${format(parse(`${formData.date} ${formData.time}`, 'yyyy-MM-dd HH:mm', new Date()), 'EEEE, MMMM d')} at ${format(parse(formData.time, 'HH:mm', new Date()), 'h:mm a')}`
+                  : entryMode === 'schedule'
+                    ? 'Choose a future time from the timeline.'
+                    : 'Choose a past time from the timeline.'}
+              </Typography>
+              {isTimeSelected ? (
+                <Box sx={{ mt: 0.75 }} />
+              ) : null}
             </Box>
+
+            {showRecurringControls ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Button
+                  onClick={() => {
+                    if (!isRecurring && packageSessionLimit != null) {
+                      setRecurringCount(String(packageSessionLimit));
+                    }
+                    setIsRecurring((current) => !current);
+                  }}
+                  startIcon={<SwapHorizIcon sx={{ fontSize: 18 }} />}
+                  sx={{
+                    alignSelf: 'flex-start',
+                    minWidth: 0,
+                    px: 1.75,
+                    py: 1,
+                    borderRadius: '10px',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    color: isRecurring ? '#8F7C98' : '#6F6964',
+                    bgcolor: isRecurring ? 'rgba(155, 139, 158, 0.12)' : 'transparent',
+                    border: isRecurring
+                      ? '1px solid rgba(155, 139, 158, 0.18)'
+                      : '1px solid transparent',
+                    '&:hover': {
+                      bgcolor: isRecurring
+                        ? 'rgba(155, 139, 158, 0.16)'
+                        : '#F9F8F7',
+                    },
+                  }}
+                >
+                  {isRecurring ? 'Repeating' : 'Make recurring'}
+                </Button>
+
+                {isRecurring ? (
+                  <Box sx={{ display: 'flex', gap: 1.5 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      value={recurringFrequency}
+                      onChange={(event) =>
+                        setRecurringFrequency(event.target.value as RecurringFrequency)
+                      }
+                    >
+                      <MenuItem value="weekly">Weekly</MenuItem>
+                      <MenuItem value="biweekly">Biweekly</MenuItem>
+                      <MenuItem value="monthly">Monthly</MenuItem>
+                    </TextField>
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={recurringCount}
+                      onChange={(event) =>
+                        setRecurringCount(
+                          clampRecurringCount(event.target.value, packageSessionLimit),
+                        )
+                      }
+                      inputProps={{
+                        min: 1,
+                        max: packageSessionLimit ?? undefined,
+                        step: 1,
+                      }}
+                      sx={{ width: '176px', flexShrink: 0 }}
+                      helperText={
+                        packageSessionLimit != null
+                          ? `Max ${formatSessionCount(packageSessionLimit)}`
+                          : 'Number of sessions'
+                      }
+                    />
+                  </Box>
+                ) : null}
+              </Box>
+            ) : null}
 
             {submitError ? <Alert severity="error">{submitError}</Alert> : null}
           </Box>
@@ -827,3 +1170,6 @@ export function SessionEntryModal({
     </Dialog>
   );
 }
+
+
+

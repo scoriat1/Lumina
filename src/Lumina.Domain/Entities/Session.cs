@@ -11,6 +11,10 @@ public class Session
     public Provider Provider { get; set; } = default!;
     public int ClientId { get; set; }
     public Client Client { get; set; } = default!;
+    public int? ClientPackageId { get; set; }
+    public ClientPackage? ClientPackage { get; set; }
+    public int? InvoiceId { get; set; }
+    public Invoice? Invoice { get; set; }
     public DateTimeOffset Date { get; set; }
     public int Duration { get; set; }
     public SessionLocation Location { get; set; }

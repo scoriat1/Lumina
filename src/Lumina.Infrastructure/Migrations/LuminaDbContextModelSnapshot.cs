@@ -239,6 +239,13 @@ namespace Lumina.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("BillingType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)")
+                        .HasDefaultValue("oneTime");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -271,6 +278,17 @@ namespace Lumina.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("BillingDefaultDueDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(30);
+
+                    b.Property<decimal>("BillingDefaultSessionAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(125m);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -346,6 +364,9 @@ namespace Lumina.Infrastructure.Migrations
                     b.Property<int>("ClientId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ClientPackageId")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset>("Date")
                         .HasColumnType("datetimeoffset");
 
@@ -358,6 +379,9 @@ namespace Lumina.Infrastructure.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("Location")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InvoiceId")
                         .HasColumnType("int");
 
                     b.Property<string>("Notes")
@@ -380,6 +404,10 @@ namespace Lumina.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClientId");
+
+                    b.HasIndex("ClientPackageId");
+
+                    b.HasIndex("InvoiceId");
 
                     b.HasIndex("ProviderId");
 
@@ -733,6 +761,8 @@ namespace Lumina.Infrastructure.Migrations
                     b.Navigation("Package");
 
                     b.Navigation("Practice");
+
+                    b.Navigation("Sessions");
                 });
 
             modelBuilder.Entity("Lumina.Domain.Entities.Invoice", b =>
@@ -752,6 +782,8 @@ namespace Lumina.Infrastructure.Migrations
                     b.Navigation("Client");
 
                     b.Navigation("Practice");
+
+                    b.Navigation("Sessions");
                 });
 
             modelBuilder.Entity("Lumina.Domain.Entities.Package", b =>
@@ -792,6 +824,16 @@ namespace Lumina.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Lumina.Domain.Entities.ClientPackage", "ClientPackage")
+                        .WithMany("Sessions")
+                        .HasForeignKey("ClientPackageId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Lumina.Domain.Entities.Invoice", "Invoice")
+                        .WithMany("Sessions")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Lumina.Domain.Entities.Practice", "Practice")
                         .WithMany()
                         .HasForeignKey("PracticeId")
@@ -805,6 +847,10 @@ namespace Lumina.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Client");
+
+                    b.Navigation("ClientPackage");
+
+                    b.Navigation("Invoice");
 
                     b.Navigation("Practice");
 
@@ -948,6 +994,10 @@ namespace Lumina.Infrastructure.Migrations
 
             modelBuilder.Entity("Lumina.Domain.Entities.Session", b =>
                 {
+                    b.Navigation("ClientPackage");
+
+                    b.Navigation("Invoice");
+
                     b.Navigation("SessionNotes");
                 });
 

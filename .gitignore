@@ -5,8 +5,12 @@ dist/
 
 # .NET
 .vs/
+.dotnet/
 **/bin/
 **/obj/
 
 # Vite
 src/Lumina.Client/dist/
+
+# Local diagnostics
+*.log

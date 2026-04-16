@@ -1,14 +1,18 @@
 import type {
   AuthMeDto,
+  BillingSettingsDto,
   BillingSummaryDto,
+  ClientPackageDto,
   ClientDetailViewDto,
   ClientDto,
   ClientNoteDto,
   DashboardDto,
   InvoiceDto,
   NotesTemplateSettingsDto,
+  PracticePackageDto,
   ProviderDto,
   SessionDto,
+  SessionBillingModeValue,
   SessionEntryMode,
   SessionLocationValue,
   SessionStatusValue,
@@ -102,8 +106,13 @@ const mapClientDto = (client: ClientApiDto): ClientDto => ({
 
 const mapSessionDto = (session: SessionApiDto): SessionDto => ({
   ...session,
+  id: String(session.id),
+  clientId: String(session.clientId),
   avatarColor: session.avatarColor ?? computeAvatarColor(session.clientId),
   initials: session.initials ?? computeInitials(session.client),
+  packageId: session.packageId ? String(session.packageId) : undefined,
+  clientPackageId: session.clientPackageId ? String(session.clientPackageId) : undefined,
+  invoiceId: session.invoiceId ? String(session.invoiceId) : undefined,
 });
 
 const mapInvoiceDto = (invoice: InvoiceApiDto): InvoiceDto => ({
@@ -115,6 +124,17 @@ const mapInvoiceDto = (invoice: InvoiceApiDto): InvoiceDto => ({
 const mapProviderDto = (provider: ProviderApiDto): ProviderDto => ({
   ...provider,
   initials: provider.initials ?? computeInitials(provider.name),
+});
+
+const mapClientPackageDto = (clientPackage: ClientPackageDto): ClientPackageDto => ({
+  ...clientPackage,
+  id: String(clientPackage.id),
+  packageId: String(clientPackage.packageId),
+});
+
+const mapPracticePackageDto = (pkg: PracticePackageDto): PracticePackageDto => ({
+  ...pkg,
+  id: String(pkg.id),
 });
 
 
@@ -219,6 +239,10 @@ export const apiClient = {
     const sessions = await request<SessionApiDto[]>(`/api/clients/${id}/sessions`);
     return sessions.map(mapSessionDto);
   },
+  getClientPackages: async (id: string) => {
+    const packages = await request<ClientPackageDto[]>(`/api/clients/${id}/packages`);
+    return packages.map(mapClientPackageDto);
+  },
   createSession: (payload: {
     clientId: string | number;
     date: string;
@@ -228,18 +252,75 @@ export const apiClient = {
     location: SessionLocationValue;
     status?: SessionStatusValue;
     mode?: SessionEntryMode;
-  }) => request<{ id: string }>('/api/sessions', {
+    billingMode: SessionBillingModeValue;
+    packageId?: string | number;
+    clientPackageId?: string | number;
+    amount?: number;
+    recurrenceFrequency?: 'weekly' | 'biweekly' | 'monthly';
+    recurrenceCount?: number;
+  }) => request<{ id: string; ids?: string[]; createdCount?: number }>('/api/sessions', {
     method: 'POST',
-    body: JSON.stringify({ ...payload, clientId: Number(payload.clientId) }),
+    body: JSON.stringify({
+      ...payload,
+      clientId: Number(payload.clientId),
+      packageId:
+        payload.packageId != null ? Number(payload.packageId) : null,
+      clientPackageId:
+        payload.clientPackageId != null ? Number(payload.clientPackageId) : null,
+      amount: payload.amount ?? null,
+      recurrenceFrequency: payload.recurrenceFrequency ?? null,
+      recurrenceCount: payload.recurrenceCount ?? null,
+    }),
   }),
   updateSession: (id: string, payload: Partial<SessionDto>) => request(`/api/sessions/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   }),
   getBillingSummary: () => request<BillingSummaryDto>('/api/billing/summary'),
+  getBillingSettings: () => request<BillingSettingsDto>('/api/settings/billing'),
+  updateBillingSettings: (payload: BillingSettingsDto) => request<BillingSettingsDto>('/api/settings/billing', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
   getBillingInvoices: async () => {
     const invoices = await request<InvoiceApiDto[]>('/api/billing/invoices');
     return invoices.map(mapInvoiceDto);
+  },
+  markInvoicePaid: (id: string) => request<void>(`/api/billing/invoices/${id}/mark-paid`, {
+    method: 'POST',
+  }),
+  getPracticePackages: async () => {
+    const packages = await request<PracticePackageDto[]>('/api/settings/packages');
+    return packages.map(mapPracticePackageDto);
+  },
+  createPracticePackage: async (payload: {
+    name: string;
+    sessionCount: number;
+    price: number;
+    enabled?: boolean;
+  }) => {
+    const pkg = await request<PracticePackageDto>('/api/settings/packages', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        enabled: payload.enabled ?? true,
+      }),
+    });
+
+    return mapPracticePackageDto(pkg);
+  },
+  updatePracticePackage: async (id: string | number, payload: {
+    name: string;
+    sessionCount: number;
+    price: number;
+    enabled: boolean;
+  }) => {
+    const pkg = await request<PracticePackageDto>(`/api/settings/packages/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+
+    return mapPracticePackageDto(pkg);
   },
   getProviders: async () => {
     const providers = await request<ProviderApiDto[]>('/api/settings/providers');

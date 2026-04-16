@@ -4,7 +4,7 @@ import { getSessionStatusBadgeStyles, getSessionStatusLabel } from '../../lib/se
 import { colors, typography, borderRadius } from '../../theme';
 
 export type SessionStatus = SessionStatusValue;
-export type PaymentStatus = 'paid' | 'unpaid' | 'invoiced' | 'package';
+export type PaymentStatus = 'paid' | 'pending';
 
 interface StatusBadgeProps {
   status: SessionStatus | PaymentStatus;
@@ -20,12 +20,8 @@ export function StatusBadge({ status, size = 'small', type = 'session' }: Status
       switch (status as PaymentStatus) {
         case 'paid':
           return colors.payment.paid;
-        case 'unpaid':
+        case 'pending':
           return colors.payment.unpaid;
-        case 'invoiced':
-          return colors.payment.invoiced;
-        case 'package':
-          return colors.payment.package;
         default:
           return colors.payment.paid;
       }

@@ -38,7 +38,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AddIcon from '@mui/icons-material/Add';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { useNavigate, useLocation } from 'react-router';
-import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer';
 import { SessionEntryModal } from '../components/SessionEntryModal';
 import { apiClient } from '../api/client';
 import type { SessionDto } from '../api/types';
@@ -103,15 +102,7 @@ export function CalendarPage() {
   };
 
   const handleSessionClick = (sessionId: string) => {
-    const session = calendarEvents.find(s => s.id === sessionId);
-    if (session) {
-      navigate('/sessions', { 
-        state: { 
-          sessionId,
-          fromCalendar: true,
-        } 
-      });
-    }
+    navigate(`/sessions?focusSessionId=${sessionId}`);
   };
 
   const openSessionModal = (options?: { initialDate?: string; initialTime?: string }) => {
