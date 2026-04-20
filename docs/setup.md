@@ -2,7 +2,6 @@
 
 ## Prerequisites
 - .NET 8 SDK
-- SQL Server Express running locally as `.\\SQLEXPRESS`
 - Node.js 18+
 
 ## Run API
@@ -14,6 +13,7 @@ dotnet run
 API runs on `http://localhost:5000` and auto-applies migrations + dev seed on startup.
 In Visual Studio, open `Lumina.sln` and start `Lumina.Api` or the `Lumina Full Stack` launch profile.
 The API project launches the frontend dev server from `src/Lumina.Client` through ASP.NET Core SPA proxy.
+The default development database is SQLite at `.dotnet/lumina.db`.
 
 ## Run Client
 ```bash

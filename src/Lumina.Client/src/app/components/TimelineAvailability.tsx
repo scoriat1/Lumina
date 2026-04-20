@@ -119,6 +119,7 @@ export function TimelineAvailability({
                   return (
                     <Box
                       key={minute}
+                      data-testid={!event && !isUnavailable ? 'timeline-slot-available' : undefined}
                       onClick={() => handleSlotClick(hour, minute)}
                       sx={{
                         height: slotHeight,

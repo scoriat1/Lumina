@@ -1,9 +1,11 @@
 using System.Security.Claims;
+using System.Data.Common;
 using Lumina.Domain.Entities;
 using Lumina.Domain.Enums;
 using Lumina.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.Json;
@@ -13,9 +15,33 @@ using System.Text.Json.Serialization;
 var builder = WebApplication.CreateBuilder(args);
 const int DefaultInvoiceDueDays = 30;
 const decimal DefaultSessionAmount = 125m;
+var repoRootPath = FindRepoRoot(builder.Environment.ContentRootPath) ?? builder.Environment.ContentRootPath;
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+var configuredLuminaConnectionString =
+    builder.Configuration.GetConnectionString("Lumina")
+    ?? throw new InvalidOperationException(
+        "Connection string 'Lumina' is not configured.");
+var luminaConnectionString = ResolveSqliteConnectionString(
+    configuredLuminaConnectionString,
+    repoRootPath);
+var useSqlite = IsSqliteConnectionString(luminaConnectionString);
+var dataProtectionKeysPath = Path.Combine(repoRootPath, ".dotnet", "data-protection-keys");
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("Lumina");
 
 builder.Services.AddDbContext<LuminaDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Lumina")));
+{
+    if (useSqlite)
+    {
+        options.UseSqlite(luminaConnectionString);
+        return;
+    }
+
+    options.UseSqlServer(luminaConnectionString);
+});
 
 builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
     {
@@ -63,7 +89,21 @@ builder.Services.AddAuthorization();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("client", policy =>
-        policy.WithOrigins("http://localhost:5175").AllowAnyHeader().AllowAnyMethod().AllowCredentials());
+        policy
+            .WithOrigins(
+                "http://localhost:5175",
+                "http://127.0.0.1:5175",
+                "http://localhost:5176",
+                "http://127.0.0.1:5176",
+                "http://localhost:5177",
+                "http://127.0.0.1:5177",
+                "http://localhost:5178",
+                "http://127.0.0.1:5178",
+                "http://localhost:5179",
+                "http://127.0.0.1:5179")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials());
 });
 
 builder.Services.Configure<JsonOptions>(options =>
@@ -85,7 +125,14 @@ using (var scope = app.Services.CreateScope())
 
     if (app.Environment.IsDevelopment())
     {
-        db.Database.Migrate();
+        if (useSqlite)
+        {
+            db.Database.EnsureCreated();
+        }
+        else
+        {
+            db.Database.Migrate();
+        }
     }
 }
 
@@ -194,6 +241,7 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    var now = DateTimeOffset.UtcNow;
 
     var clients = await db.Clients.Where(c => c.PracticeId == scope.Value.practiceId).OrderBy(c => c.Name).Select(c => new
     {
@@ -202,7 +250,6 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
         program = c.Program,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
         totalSessions = c.Sessions.Count,
-        nextSession = c.Sessions.Where(s => s.Date >= DateTimeOffset.UtcNow).OrderBy(s => s.Date).Select(s => s.Date).FirstOrDefault(),
         status = c.Status.ToString().ToLowerInvariant(),
         email = c.Email,
         phone = c.Phone,
@@ -210,13 +257,43 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
         notes = c.Notes
     }).ToListAsync();
 
-    return Results.Ok(clients);
+    var clientIds = clients.Select(c => c.id).ToArray();
+    var nextSessions = await db.Sessions
+        .Where(s => s.PracticeId == scope.Value.practiceId && clientIds.Contains(s.ClientId))
+        .Select(s => new { s.ClientId, s.Date })
+        .ToListAsync();
+
+    var nextSessionByClientId = nextSessions
+        .GroupBy(session => session.ClientId)
+        .ToDictionary(
+            group => group.Key,
+            group => group
+                .Where(session => session.Date >= now)
+                .OrderBy(session => session.Date)
+                .Select(session => (DateTimeOffset?)session.Date)
+                .FirstOrDefault());
+
+    return Results.Ok(clients.Select(client => new
+    {
+        client.id,
+        client.name,
+        client.program,
+        client.sessionsCompleted,
+        client.totalSessions,
+        nextSession = nextSessionByClientId.GetValueOrDefault(client.id),
+        client.status,
+        client.email,
+        client.phone,
+        client.startDate,
+        client.notes
+    }));
 });
 
 api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    var now = DateTimeOffset.UtcNow;
 
     var client = await db.Clients.Where(c => c.PracticeId == scope.Value.practiceId && c.Id == id).Select(c => new
     {
@@ -225,7 +302,6 @@ api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext c
         program = c.Program,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
         totalSessions = c.Sessions.Count,
-        nextSession = c.Sessions.Where(s => s.Date >= DateTimeOffset.UtcNow).OrderBy(s => s.Date).Select(s => s.Date).FirstOrDefault(),
         status = c.Status.ToString().ToLowerInvariant(),
         email = c.Email,
         phone = c.Phone,
@@ -233,7 +309,32 @@ api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext c
         notes = c.Notes
     }).FirstOrDefaultAsync();
 
-    return client is null ? Results.NotFound() : Results.Ok(client);
+    if (client is null)
+    {
+        return Results.NotFound();
+    }
+
+    var nextSession = (await db.Sessions
+        .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == client.id)
+        .Select(s => s.Date)
+        .ToListAsync())
+        .OrderBy(date => date)
+        .FirstOrDefault(date => date >= now);
+
+    return Results.Ok(new
+    {
+        client.id,
+        client.name,
+        client.program,
+        client.sessionsCompleted,
+        client.totalSessions,
+        nextSession,
+        client.status,
+        client.email,
+        client.phone,
+        client.startDate,
+        client.notes
+    });
 });
 
 api.MapPost("/clients", async (ClientUpsertRequest request, LuminaDbContext db, HttpContext context) =>
@@ -297,14 +398,15 @@ api.MapGet("/clients/{id:int}/sessions", async (int id, LuminaDbContext db, Http
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
 
-    var sessions = await db.Sessions
+    var sessions = (await db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
         .Include(s => s.Client)
         .Include(s => s.ClientPackage)
             .ThenInclude(cp => cp!.Package)
         .Include(s => s.Invoice)
+        .ToListAsync())
         .OrderByDescending(s => s.Date)
-        .ToListAsync();
+        .ToList();
 
     return Results.Ok(sessions.Select(s => MapSessionDto(s, s.Client.Name)));
 });
@@ -319,27 +421,30 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
         .FirstOrDefaultAsync(c => c.PracticeId == scope.Value.practiceId && c.Id == id);
     if (client is null) return Results.NotFound();
 
-    var sessions = await db.Sessions
+    var sessions = (await db.Sessions
         .AsNoTracking()
         .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
         .Include(s => s.ClientPackage)
             .ThenInclude(cp => cp!.Package)
         .Include(s => s.Invoice)
+        .ToListAsync())
         .OrderBy(s => s.Date)
-        .ToListAsync();
+        .ToList();
 
-    var packages = await db.ClientPackages
+    var packages = (await db.ClientPackages
         .AsNoTracking()
         .Where(cp => cp.PracticeId == scope.Value.practiceId && cp.ClientId == id)
         .Include(cp => cp.Package)
+        .ToListAsync())
         .OrderBy(cp => cp.PurchasedAt)
-        .ToListAsync();
+        .ToList();
 
-    var notes = await db.SessionNotes
+    var notes = (await db.SessionNotes
         .AsNoTracking()
         .Where(n => n.ClientId == id)
+        .ToListAsync())
         .OrderByDescending(n => n.CreatedAt)
-        .ToListAsync();
+        .ToList();
 
     var upcomingSession = sessions
         .Where(s => s.Date >= DateTimeOffset.UtcNow)
@@ -471,10 +576,11 @@ api.MapGet("/sessions", async (int? clientId, LuminaDbContext db, HttpContext co
         .Include(s => s.Client)
         .Include(s => s.ClientPackage)
             .ThenInclude(cp => cp!.Package)
-        .Include(s => s.Invoice)
-        .OrderBy(s => s.Date);
+        .Include(s => s.Invoice);
 
-    var sessions = await query.ToListAsync();
+    var sessions = (await query.ToListAsync())
+        .OrderBy(s => s.Date)
+        .ToList();
 
     return Results.Ok(sessions.Select(s => MapSessionDto(s, s.Client.Name)));
 });
@@ -593,15 +699,18 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
                 return Results.BadRequest(new { message = "Selected package was not found." });
             }
 
-            clientPackage = await db.ClientPackages
+            var matchingClientPackages = await db.ClientPackages
                 .Include(cp => cp.Package)
                 .Where(cp =>
                     cp.PracticeId == scope.Value.practiceId &&
                     cp.ClientId == request.ClientId &&
                     cp.PackageId == package.Id &&
                     cp.RemainingSessions > 0)
+                .ToListAsync();
+
+            clientPackage = matchingClientPackages
                 .OrderByDescending(cp => cp.PurchasedAt)
-                .FirstOrDefaultAsync();
+                .FirstOrDefault();
 
             if (clientPackage is null)
             {
@@ -869,11 +978,10 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
     var clientExists = await db.Clients.AnyAsync(c => c.Id == id && c.PracticeId == scope.Value.practiceId);
     if (!clientExists) return Results.NotFound();
 
-    var packages = await db.ClientPackages
+    var packages = (await db.ClientPackages
         .AsNoTracking()
         .Where(cp => cp.PracticeId == scope.Value.practiceId && cp.ClientId == id)
         .Include(cp => cp.Package)
-        .OrderByDescending(cp => cp.PurchasedAt)
         .Select(cp => new
         {
             id = cp.Id,
@@ -885,7 +993,9 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
             price = cp.Package.Price,
             status = cp.RemainingSessions > 0 ? "active" : "completed"
         })
-        .ToListAsync();
+        .ToListAsync())
+        .OrderByDescending(cp => cp.purchasedAt)
+        .ToList();
 
     return Results.Ok(packages);
 });
@@ -1590,6 +1700,68 @@ static DateTimeOffset GetRecurringSessionDate(
         "monthly" => baseDate.AddMonths(occurrence),
         _ => baseDate
     };
+}
+
+static bool IsSqliteConnectionString(string connectionString)
+{
+    return connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase)
+        && (connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains(".sqlite", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("mode=memory", StringComparison.OrdinalIgnoreCase));
+}
+
+static string ResolveSqliteConnectionString(string connectionString, string rootPath)
+{
+    if (!IsSqliteConnectionString(connectionString))
+    {
+        return connectionString;
+    }
+
+    var builder = new DbConnectionStringBuilder
+    {
+        ConnectionString = connectionString
+    };
+    var dataSourceKey = builder.Keys
+        .Cast<string>()
+        .FirstOrDefault(key => string.Equals(key, "Data Source", StringComparison.OrdinalIgnoreCase));
+
+    if (dataSourceKey is null || builder[dataSourceKey] is not string dataSource || string.IsNullOrWhiteSpace(dataSource))
+    {
+        return connectionString;
+    }
+
+    if (Path.IsPathRooted(dataSource) || dataSource.Contains("mode=memory", StringComparison.OrdinalIgnoreCase))
+    {
+        return connectionString;
+    }
+
+    var resolvedDataSource = Path.GetFullPath(Path.Combine(rootPath, dataSource));
+    var directory = Path.GetDirectoryName(resolvedDataSource);
+    if (!string.IsNullOrWhiteSpace(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+
+    builder[dataSourceKey] = resolvedDataSource;
+    return builder.ConnectionString;
+}
+
+static string? FindRepoRoot(string startPath)
+{
+    var current = new DirectoryInfo(startPath);
+    while (current is not null)
+    {
+        var hasSolution = current.GetFiles("*.sln").Length > 0;
+        var hasDotNetFolder = Directory.Exists(Path.Combine(current.FullName, ".dotnet"));
+        if (hasSolution || hasDotNetFolder)
+        {
+            return current.FullName;
+        }
+
+        current = current.Parent;
+    }
+
+    return null;
 }
 
 app.Run();

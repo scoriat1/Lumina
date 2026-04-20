@@ -522,7 +522,7 @@ export function ClientDetailPage() {
             await apiClient.updateClient(id, {
                 name: `${firstName} ${lastName}`,
                 program: client.program,
-                startDate: new Date(clientDraft.startDate).toISOString(),
+                startDate: clientDraft.startDate,
                 status: clientDraft.status,
                 notes: client.notes ?? null,
                 email,
@@ -1290,6 +1290,7 @@ export function ClientDetailPage() {
                                         <IconButton
                                             size="small"
                                             onClick={handleOpenClientEdit}
+                                            data-testid="client-edit-toggle"
                                             disabled={savingClient}
                                             sx={{ color: colors.primary.main }}
                                         >

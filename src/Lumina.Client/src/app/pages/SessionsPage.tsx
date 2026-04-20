@@ -769,6 +769,7 @@ export function SessionsPage() {
               return (
                 <Box
                   key={session.id}
+                  data-testid="session-card"
                   ref={setSessionRowRef(session.id)}
                   onClick={() => handleSessionClick(session)}
                   sx={{

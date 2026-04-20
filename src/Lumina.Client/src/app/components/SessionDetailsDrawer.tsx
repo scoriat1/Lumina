@@ -1087,11 +1087,11 @@ export function SessionDetailsDrawer({
                                         </Typography>
                                         {isEditMode ? (
                                             <Box sx={{ display: "flex", gap: 1 }}>
-                                                <TextField
-                                                    type="time"
-                                                    size="small"
-                                                    value={editFormData.time}
-                                                    onChange={(e) =>
+                                            <TextField
+                                                type="time"
+                                                size="small"
+                                                value={editFormData.time}
+                                                onChange={(e) =>
                                                         handleEditChange(
                                                             "time",
                                                             e.target.value,
@@ -1112,10 +1112,13 @@ export function SessionDetailsDrawer({
                                                             "&.Mui-focused fieldset": {
                                                                 borderColor: "#9B8B9E",
                                                                 borderWidth: "2px",
-                                                            },
                                                         },
-                                                    }}
-                                                />
+                                                    },
+                                                }}
+                                                inputProps={{
+                                                    'data-testid': 'session-edit-time-input',
+                                                }}
+                                            />
                                                 <TextField
                                                     select
                                                     size="small"

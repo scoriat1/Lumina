@@ -1092,6 +1092,7 @@ export function SessionEntryModal({
                   onClick={() => handleDateChange(addDays(selectedDate, -1))}
                   disabled={previousDateDisabled}
                   size="small"
+                  data-testid="session-date-prev"
                 >
                   <ChevronLeftIcon />
                 </IconButton>
@@ -1099,6 +1100,7 @@ export function SessionEntryModal({
                   onClick={() => handleDateChange(addDays(selectedDate, 1))}
                   disabled={nextDateDisabled}
                   size="small"
+                  data-testid="session-date-next"
                 >
                   <ChevronRightIcon />
                 </IconButton>

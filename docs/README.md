@@ -28,3 +28,8 @@
 - Run client:
   - `cd src/Lumina.Client && npm run dev`
 - `Lumina.Client` is included in the solution as a lightweight wrapper project so Visual Studio can load it reliably without the JavaScript `.esproj` dependency.
+
+## Browser Validation
+- Reusable Playwright workflow: [PLAYWRIGHT_WORKFLOW.md](./PLAYWRIGHT_WORKFLOW.md)
+- Default developer mode uses the normal local database.
+- Playwright validation should be run in an explicitly named isolated mode when repeatability matters.

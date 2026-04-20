@@ -967,6 +967,7 @@ function PackagesSettings({
           <Button
             variant="outlined"
             onClick={onCreatePackage}
+            data-testid="create-package-button"
             startIcon={<Add sx={{ fontSize: '18px' }} />}
             sx={{
               borderColor: colors.neutral.gray200,
@@ -991,6 +992,7 @@ function PackagesSettings({
           {packages.map((pkg) => (
             <Box
               key={pkg.id}
+              data-testid="package-card"
               sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1028,7 +1030,7 @@ function PackagesSettings({
                     <Typography sx={{ fontSize: '12px', color: colors.text.secondary, mb: 0.25 }}>
                       Sessions
                     </Typography>
-                    <Typography sx={{ fontSize: '14px', fontWeight: 600, color: colors.text.primary }}>
+                    <Typography data-testid="package-session-count" sx={{ fontSize: '14px', fontWeight: 600, color: colors.text.primary }}>
                       {pkg.sessionCount}
                     </Typography>
                   </Box>
