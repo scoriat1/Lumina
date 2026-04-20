@@ -467,7 +467,7 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
                 .Where(s => s.ClientPackageId == boundary.Package.Id)
                 .ToList();
 
-            var completed = Math.Max(0, boundary.Package.Package.SessionCount - boundary.Package.RemainingSessions);
+            var completed = CountCompletedPackageSessions(packageSessions);
             var start = packageSessions.MinBy(s => s.Date)?.Date ?? boundary.Package.PurchasedAt;
             var end = packageSessions.MaxBy(s => s.Date)?.Date;
 
@@ -482,7 +482,7 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
                 price = boundary.Package.Package.Price,
                 totalSessions = boundary.Package.Package.SessionCount,
                 usedSessions = completed,
-                status = boundary.Package.RemainingSessions <= 0 ? "completed" : "active",
+                status = completed >= boundary.Package.Package.SessionCount ? "completed" : "active",
                 sessions = packageSessions.Select(s => MapSessionDto(s, client.Name)).ToList()
             };
         })
@@ -681,6 +681,7 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
         {
             clientPackage = await db.ClientPackages
                 .Include(cp => cp.Package)
+                .Include(cp => cp.Sessions)
                 .FirstOrDefaultAsync(cp =>
                     cp.Id == request.ClientPackageId.Value &&
                     cp.PracticeId == scope.Value.practiceId &&
@@ -701,14 +702,15 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
 
             var matchingClientPackages = await db.ClientPackages
                 .Include(cp => cp.Package)
+                .Include(cp => cp.Sessions)
                 .Where(cp =>
                     cp.PracticeId == scope.Value.practiceId &&
                     cp.ClientId == request.ClientId &&
-                    cp.PackageId == package.Id &&
-                    cp.RemainingSessions > 0)
+                    cp.PackageId == package.Id)
                 .ToListAsync();
 
             clientPackage = matchingClientPackages
+                .Where(cp => GetAvailablePackageSessions(cp) > 0)
                 .OrderByDescending(cp => cp.PurchasedAt)
                 .FirstOrDefault();
 
@@ -733,20 +735,26 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
             return Results.BadRequest(new { message = "Selected package was not found for this client." });
         }
 
-        if (clientPackage.RemainingSessions <= 0)
-        {
-            return Results.BadRequest(new { message = "Selected package has no remaining sessions." });
-        }
+        var requiredPackageSlots = ConsumesPackageCapacity(status) ? sessionsToCreate : 0;
+        var availablePackageSessions = GetAvailablePackageSessions(clientPackage);
 
-        if (clientPackage.RemainingSessions < sessionsToCreate)
+        if (requiredPackageSlots > 0)
         {
-            return Results.BadRequest(new
+            if (availablePackageSessions <= 0)
             {
-                message = $"Selected package only has {clientPackage.RemainingSessions} session(s) remaining."
-            });
+                return Results.BadRequest(new { message = "Selected package has no remaining sessions." });
+            }
+
+            if (availablePackageSessions < requiredPackageSlots)
+            {
+                return Results.BadRequest(new
+                {
+                    message = $"Selected package only has {availablePackageSessions} session(s) remaining."
+                });
+            }
         }
 
-        clientPackage.RemainingSessions -= sessionsToCreate;
+        clientPackage.RemainingSessions = Math.Max(0, availablePackageSessions - requiredPackageSlots);
     }
     else
     {
@@ -819,8 +827,31 @@ api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, Lu
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
-    var session = await db.Sessions.FirstOrDefaultAsync(s => s.Id == id && s.PracticeId == scope.Value.practiceId);
+    var session = await db.Sessions
+        .Include(s => s.ClientPackage)
+            .ThenInclude(cp => cp!.Package)
+        .Include(s => s.ClientPackage)
+            .ThenInclude(cp => cp!.Sessions)
+        .FirstOrDefaultAsync(s => s.Id == id && s.PracticeId == scope.Value.practiceId);
     if (session is null) return Results.NotFound();
+
+    var nextStatus = request.Status ?? session.Status;
+
+    if (session.ClientPackage is not null)
+    {
+        var currentPackageSlots = ConsumesPackageCapacity(session.Status) ? 1 : 0;
+        var nextPackageSlots = ConsumesPackageCapacity(nextStatus) ? 1 : 0;
+        var requiredAdditionalSlots = nextPackageSlots - currentPackageSlots;
+        var availablePackageSessions = GetAvailablePackageSessions(session.ClientPackage);
+
+        if (requiredAdditionalSlots > 0 && availablePackageSessions < requiredAdditionalSlots)
+        {
+            return Results.BadRequest(new
+            {
+                message = $"This package only has {availablePackageSessions} session(s) available to schedule."
+            });
+        }
+    }
 
     if (request.Date is not null) session.Date = request.Date.Value;
     if (!string.IsNullOrWhiteSpace(request.SessionType)) session.SessionType = request.SessionType;
@@ -829,6 +860,12 @@ api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, Lu
     if (request.Status is not null) session.Status = request.Status.Value;
     if (!string.IsNullOrWhiteSpace(request.Focus)) session.Focus = request.Focus;
     if (request.Notes is not null) session.Notes = request.Notes;
+
+    if (session.ClientPackage is not null)
+    {
+        session.ClientPackage.RemainingSessions = GetAvailablePackageSessions(session.ClientPackage);
+    }
+
     await db.SaveChangesAsync();
     return Results.Ok();
 });
@@ -982,6 +1019,7 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
         .AsNoTracking()
         .Where(cp => cp.PracticeId == scope.Value.practiceId && cp.ClientId == id)
         .Include(cp => cp.Package)
+        .Include(cp => cp.Sessions)
         .Select(cp => new
         {
             id = cp.Id,
@@ -989,9 +1027,13 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
             packageName = cp.Package.Name,
             purchasedAt = cp.PurchasedAt,
             totalSessions = cp.Package.SessionCount,
-            remainingSessions = cp.RemainingSessions,
+            remainingSessions = Math.Max(
+                0,
+                cp.Package.SessionCount - cp.Sessions.Count(s => s.Status == SessionStatus.Upcoming || s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow)),
             price = cp.Package.Price,
-            status = cp.RemainingSessions > 0 ? "active" : "completed"
+            status = cp.Sessions.Count(s => s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow) >= cp.Package.SessionCount
+                ? "completed"
+                : "active"
         })
         .ToListAsync())
         .OrderByDescending(cp => cp.purchasedAt)
@@ -1610,6 +1652,19 @@ static BillingSettingsResponse MapBillingSettingsResponse(Practice practice)
     return new BillingSettingsResponse(
         practice.BillingDefaultDueDays <= 0 ? DefaultInvoiceDueDays : practice.BillingDefaultDueDays,
         practice.BillingDefaultSessionAmount <= 0 ? DefaultSessionAmount : practice.BillingDefaultSessionAmount);
+}
+
+static bool ConsumesPackageCapacity(SessionStatus status) =>
+    status is SessionStatus.Upcoming or SessionStatus.Completed or SessionStatus.NoShow;
+
+static int CountCompletedPackageSessions(IEnumerable<Session> sessions) =>
+    sessions.Count(session => session.Status is SessionStatus.Completed or SessionStatus.NoShow);
+
+static int GetAvailablePackageSessions(ClientPackage clientPackage)
+{
+    var totalSessions = clientPackage.Package.SessionCount;
+    var scheduledOrConsumedSessions = clientPackage.Sessions.Count(session => ConsumesPackageCapacity(session.Status));
+    return Math.Max(0, totalSessions - scheduledOrConsumedSessions);
 }
 
 static ApiSessionItem MapSessionDto(Session session, string clientName)

@@ -2,6 +2,7 @@
 
 ## Backend (API)
 - Connection string key: `ConnectionStrings:Lumina`
+- Local SQL Express target: `.\SQLEXPRESS`
 - Local SQL Server database name: `Lumina`
 - Run API:
   - `dotnet run --project src/Lumina.Api`
@@ -29,7 +30,6 @@
   - `cd src/Lumina.Client && npm run dev`
 - `Lumina.Client` is included in the solution as a lightweight wrapper project so Visual Studio can load it reliably without the JavaScript `.esproj` dependency.
 
-## Browser Validation
-- Reusable Playwright workflow: [PLAYWRIGHT_WORKFLOW.md](./PLAYWRIGHT_WORKFLOW.md)
+## Validation
 - Default developer mode uses the normal local database.
-- Playwright validation should be run in an explicitly named isolated mode when repeatability matters.
+- Use the validation approach that fits the change instead of a required browser automation workflow.
