@@ -1042,8 +1042,15 @@ export function ClientDetailPage() {
                                                         ) : null}
                                                         <Box
                                                             sx={{
+                                                                display: 'flex',
+                                                                flexDirection:
+                                                                    'column',
+                                                                alignItems:
+                                                                    'stretch',
                                                                 textAlign:
                                                                     'right',
+                                                                minWidth:
+                                                                    'max-content',
                                                             }}
                                                         >
                                                             <Typography
@@ -1065,7 +1072,8 @@ export function ClientDetailPage() {
                                                                     progress
                                                                 }
                                                                 sx={{
-                                                                    width: 120,
+                                                                    width:
+                                                                        '100%',
                                                                     height: 6,
                                                                     borderRadius: 3,
                                                                     bgcolor:

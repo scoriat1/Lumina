@@ -241,6 +241,7 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
     var now = DateTimeOffset.UtcNow;
 
     var clients = await db.Clients.Where(c => c.PracticeId == scope.Value.practiceId).OrderBy(c => c.Name).Select(c => new
@@ -293,6 +294,7 @@ api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext c
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
     var now = DateTimeOffset.UtcNow;
 
     var client = await db.Clients.Where(c => c.PracticeId == scope.Value.practiceId && c.Id == id).Select(c => new
@@ -397,6 +399,7 @@ api.MapGet("/clients/{id:int}/sessions", async (int id, LuminaDbContext db, Http
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
 
     var sessions = (await db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
@@ -415,6 +418,7 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
 
     var client = await db.Clients
         .AsNoTracking()
@@ -577,6 +581,7 @@ api.MapGet("/sessions", async (int? clientId, LuminaDbContext db, HttpContext co
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
 
     var query = db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId)
@@ -597,6 +602,7 @@ api.MapGet("/sessions/{id:int}", async (int id, LuminaDbContext db, HttpContext 
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
 
     var session = await db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId && s.Id == id)
@@ -1019,6 +1025,7 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
 
     var clientExists = await db.Clients.AnyAsync(c => c.Id == id && c.PracticeId == scope.Value.practiceId);
     if (!clientExists) return Results.NotFound();
@@ -1585,6 +1592,7 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await AutoCompletePastScheduledSessionsAsync(db, scope.Value.practiceId);
 
     var activeClients = await db.Clients.CountAsync(c => c.PracticeId == scope.Value.practiceId && c.Status == ClientStatus.Active);
     var monthStart = new DateTimeOffset(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, TimeSpan.Zero);
@@ -1702,6 +1710,29 @@ static int GetAvailablePackageSessions(ClientPackage clientPackage)
     var totalSessions = clientPackage.Package.SessionCount;
     var scheduledOrConsumedSessions = clientPackage.Sessions.Count(session => ConsumesPackageCapacity(session.Status));
     return Math.Max(0, totalSessions - scheduledOrConsumedSessions);
+}
+
+static async Task AutoCompletePastScheduledSessionsAsync(LuminaDbContext db, int practiceId)
+{
+    var now = DateTimeOffset.UtcNow;
+    var overdueSessions = await db.Sessions
+        .Where(session =>
+            session.PracticeId == practiceId &&
+            session.Status == SessionStatus.Upcoming &&
+            session.Date <= now)
+        .ToListAsync();
+
+    if (overdueSessions.Count == 0)
+    {
+        return;
+    }
+
+    foreach (var session in overdueSessions)
+    {
+        session.Status = SessionStatus.Completed;
+    }
+
+    await db.SaveChangesAsync();
 }
 
 static ApiSessionItem MapSessionDto(Session session, string clientName)
