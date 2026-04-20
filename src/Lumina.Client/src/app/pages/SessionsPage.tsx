@@ -53,6 +53,10 @@ import {
 
 type StatusFilter = 'all' | SessionDto['status'];
 type Session = Omit<SessionDto, 'date'> & { date: Date };
+type ReplacementDraft = Pick<
+  SessionDto,
+  'clientId' | 'packageId' | 'clientPackageId' | 'sessionType' | 'duration' | 'location'
+>;
 const toSession = (session: SessionDto): Session => ({ ...session, date: new Date(session.date) });
 
 export function SessionsPage() {
@@ -68,6 +72,7 @@ export function SessionsPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isSessionDetailsDrawerOpen, setIsSessionDetailsDrawerOpen] = useState(false);
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
+  const [replacementDraft, setReplacementDraft] = useState<ReplacementDraft | null>(null);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
   const sessionRowRefs = useRef(new Map<string, HTMLDivElement | HTMLTableRowElement | null>());
@@ -160,6 +165,18 @@ export function SessionsPage() {
       next.delete('focusSessionId');
       return next;
     }, { replace: true });
+  };
+
+  const handleOpenReplacementBooking = (session: ReplacementDraft) => {
+    setReplacementDraft({
+      clientId: session.clientId,
+      packageId: session.packageId,
+      clientPackageId: session.clientPackageId,
+      sessionType: session.sessionType,
+      duration: session.duration,
+      location: session.location,
+    });
+    setIsNewSessionModalOpen(true);
   };
 
   const handleUpdateSession = (sessionId: string, updates: Partial<Session>) => {
@@ -869,7 +886,7 @@ export function SessionsPage() {
                           session.billingSource === 'pay-per-session'
                             ? 'Pay per session'
                             : session.billingSource === 'package' && session.packageRemaining !== undefined
-                            ? `Package • ${session.packageRemaining} left`
+                            ? `Package • ${session.packageRemaining} available`
                             : 'Included'
                         }
                         sx={{
@@ -1144,14 +1161,27 @@ export function SessionsPage() {
         onClose={handleCloseSessionDetails}
         sessionId={selectedSessionId}
         sessions={sessionsData}
+        onBookReplacement={handleOpenReplacementBooking}
         onUpdateSession={handleUpdateSession}
       />
 
       {/* New Session Modal */}
       <NewSessionModal
         open={isNewSessionModalOpen}
-        onClose={() => setIsNewSessionModalOpen(false)}
+        onClose={() => {
+          setIsNewSessionModalOpen(false);
+          setReplacementDraft(null);
+        }}
+        preselectedClientId={replacementDraft?.clientId}
+        preselectedBillingMode={replacementDraft ? 'package' : undefined}
+        preselectedPackageId={replacementDraft?.packageId}
+        preselectedClientPackageId={replacementDraft?.clientPackageId}
+        prefilledSessionType={replacementDraft?.sessionType}
+        prefilledDuration={replacementDraft?.duration}
+        preselectedLocation={replacementDraft?.location}
+        forceSingleSession={Boolean(replacementDraft)}
         onCreated={async () => {
+          setReplacementDraft(null);
           await loadSessions();
         }}
       />

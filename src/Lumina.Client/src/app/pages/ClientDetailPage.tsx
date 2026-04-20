@@ -49,6 +49,9 @@ type EngagementActivity =
     | { id: string; occurredAt: number; kind: 'session'; session: SessionDto }
     | { id: string; occurredAt: number; kind: 'note'; note: ClientTimelineEntryDto };
 
+type SessionSeed = Pick<SessionDto, 'clientId' | 'packageId' | 'clientPackageId'> &
+    Partial<Pick<SessionDto, 'sessionType' | 'duration' | 'location'>>;
+
 type ClientFieldErrors = {
     firstName?: string;
     lastName?: string;
@@ -151,6 +154,12 @@ function getStatusColor(status: string) {
                 bg: colors.status.successBg,
                 text: colors.status.success,
                 border: colors.status.successBorder,
+            };
+        case 'fullyScheduled':
+            return {
+                bg: colors.badge.scheduled.bg,
+                text: colors.badge.scheduled.text,
+                border: colors.border.subtle,
             };
         case 'paused':
             return {
@@ -256,6 +265,7 @@ export function ClientDetailPage() {
         null,
     );
     const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
+    const [sessionSeed, setSessionSeed] = useState<SessionSeed | null>(null);
     const [expandedEngagements, setExpandedEngagements] = useState<Record<string, boolean>>({});
 
     const [noteDraft, setNoteDraft] = useState('');
@@ -327,8 +337,8 @@ export function ClientDetailPage() {
         const nextEngagements = [...(detailView?.engagements ?? [])];
 
         nextEngagements.sort((left, right) => {
-            const leftPriority = left.status === 'active' ? 0 : 1;
-            const rightPriority = right.status === 'active' ? 0 : 1;
+            const leftPriority = left.status === 'active' ? 0 : left.status === 'fullyScheduled' ? 1 : 2;
+            const rightPriority = right.status === 'active' ? 0 : right.status === 'fullyScheduled' ? 1 : 2;
 
             if (leftPriority !== rightPriority) {
                 return leftPriority - rightPriority;
@@ -349,7 +359,9 @@ export function ClientDetailPage() {
             let changed = false;
 
             for (const engagement of orderedEngagements) {
-                const isExpanded = current[engagement.id] ?? engagement.status === 'active';
+                const isExpanded =
+                    current[engagement.id] ??
+                    (engagement.status === 'active' || engagement.status === 'fullyScheduled');
                 next[engagement.id] = isExpanded;
 
                 if (current[engagement.id] !== isExpanded) {
@@ -418,11 +430,38 @@ export function ClientDetailPage() {
     };
 
     const handleOpenSessionModal = () => {
+        setSessionSeed(null);
         setIsNewSessionModalOpen(true);
     };
 
     const handleCloseSessionModal = () => {
+        setSessionSeed(null);
         setIsNewSessionModalOpen(false);
+    };
+
+    const handleOpenReplacementBooking = (session: SessionSeed) => {
+        setSessionSeed({
+            clientId: session.clientId,
+            packageId: session.packageId,
+            clientPackageId: session.clientPackageId,
+            sessionType: session.sessionType,
+            duration: session.duration,
+            location: session.location,
+        });
+        setIsNewSessionModalOpen(true);
+    };
+
+    const handleScheduleFromPackage = (engagement: ClientDetailEngagementDto) => {
+        if (!id || !engagement.packageId || !engagement.clientPackageId) {
+            return;
+        }
+
+        setSessionSeed({
+            clientId: id,
+            packageId: engagement.packageId,
+            clientPackageId: engagement.clientPackageId,
+        });
+        setIsNewSessionModalOpen(true);
     };
 
     const handleOpenNoteComposer = () => {
@@ -796,6 +835,11 @@ export function ClientDetailPage() {
                                     engagement,
                                     detailView?.timeline ?? [],
                                 );
+                                const canScheduleFromPackage =
+                                    Boolean(
+                                        engagement.packageId &&
+                                            engagement.clientPackageId,
+                                    ) && engagement.availableSessions > 0;
 
                                 return (
                                     <Box key={engagement.id}>
@@ -916,6 +960,9 @@ export function ClientDetailPage() {
                                                                     'active'
                                                                         ? 'Active'
                                                                         : engagement.status ===
+                                                                          'fullyScheduled'
+                                                                        ? 'Fully Scheduled'
+                                                                        : engagement.status ===
                                                                           'paused'
                                                                         ? 'Paused'
                                                                         : 'Completed'
@@ -972,6 +1019,27 @@ export function ClientDetailPage() {
                                                             ml: 2,
                                                         }}
                                                     >
+                                                        {canScheduleFromPackage ? (
+                                                            <Button
+                                                                variant="outlined"
+                                                                size="small"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    handleScheduleFromPackage(
+                                                                        engagement,
+                                                                    );
+                                                                }}
+                                                                sx={{
+                                                                    textTransform: 'none',
+                                                                    fontWeight: 600,
+                                                                    fontSize: '12px',
+                                                                    whiteSpace: 'nowrap',
+                                                                    borderRadius: '999px',
+                                                                }}
+                                                            >
+                                                                Schedule Session
+                                                            </Button>
+                                                        ) : null}
                                                         <Box
                                                             sx={{
                                                                 textAlign:
@@ -986,14 +1054,10 @@ export function ClientDetailPage() {
                                                                     mb: 0.5,
                                                                 }}
                                                             >
-                                                                {
-                                                                    engagement.usedSessions
-                                                                }{' '}
-                                                                of{' '}
-                                                                {
-                                                                    engagement.totalSessions
-                                                                }{' '}
-                                                                sessions
+                                                                {`${engagement.usedSessions} used • ${engagement.scheduledSessions} scheduled • ${engagement.availableSessions} available`}
+                                                                {engagement.cancelledSessions > 0
+                                                                    ? ` • ${engagement.cancelledSessions} cancelled`
+                                                                    : ''}
                                                             </Typography>
                                                             <LinearProgress
                                                                 variant="determinate"
@@ -1716,6 +1780,7 @@ export function ClientDetailPage() {
                 onClose={handleCloseSessionDetails}
                 sessions={sessions}
                 sessionId={selectedSessionId}
+                onBookReplacement={handleOpenReplacementBooking}
                 onSaved={loadData}
                 surfaceVariant="client-detail"
             />
@@ -1724,7 +1789,15 @@ export function ClientDetailPage() {
                 open={isNewSessionModalOpen}
                 onClose={handleCloseSessionModal}
                 preselectedClientId={client.id}
+                preselectedBillingMode={sessionSeed ? 'package' : undefined}
+                preselectedPackageId={sessionSeed?.packageId}
+                preselectedClientPackageId={sessionSeed?.clientPackageId}
+                prefilledSessionType={sessionSeed?.sessionType}
+                prefilledDuration={sessionSeed?.duration}
+                preselectedLocation={sessionSeed?.location}
+                forceSingleSession={Boolean(sessionSeed?.clientPackageId)}
                 onCreated={async () => {
+                    setSessionSeed(null);
                     await loadData();
                 }}
             />

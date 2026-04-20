@@ -34,6 +34,7 @@ import { TimelineAvailability } from './TimelineAvailability';
 import { apiClient } from '../api/client';
 import { usePracticePackages } from '../contexts/PracticePackagesContext';
 import type {
+  ClientPackageDto,
   SessionDto,
   SessionBillingModeValue,
   SessionEntryMode,
@@ -52,6 +53,13 @@ export interface SessionEntryModalProps {
   onClose: () => void;
   onCreated?: (sessionId: string) => void | Promise<void>;
   preselectedClientId?: string;
+  preselectedBillingMode?: SessionBillingModeValue;
+  preselectedPackageId?: string;
+  preselectedClientPackageId?: string;
+  prefilledSessionType?: string;
+  prefilledDuration?: number;
+  preselectedLocation?: SessionLocationValue;
+  forceSingleSession?: boolean;
   initialDate?: string;
   initialTime?: string;
 }
@@ -74,6 +82,7 @@ type SessionFormState = {
   clientId: string;
   billingMode: SessionBillingModeValue;
   packageId: string;
+  clientPackageId: string;
   amount: string;
   sessionType: string;
   date: string;
@@ -203,6 +212,12 @@ function getDefaultDateSelection(
 function createInitialFormState(
   mode: SessionEntryMode,
   preselectedClientId?: string,
+  preselectedBillingMode?: SessionBillingModeValue,
+  preselectedPackageId?: string,
+  preselectedClientPackageId?: string,
+  prefilledSessionType?: string,
+  prefilledDuration?: number,
+  preselectedLocation?: SessionLocationValue,
   initialDate?: string,
   initialTime?: string,
 ): SessionFormState {
@@ -210,14 +225,15 @@ function createInitialFormState(
 
   return {
     clientId: preselectedClientId ?? '',
-    billingMode: 'payPerSession',
-    packageId: '',
+    billingMode: preselectedBillingMode ?? 'payPerSession',
+    packageId: preselectedPackageId ?? '',
+    clientPackageId: preselectedClientPackageId ?? '',
     amount: '',
-    sessionType: '',
+    sessionType: prefilledSessionType ?? '',
     date: selection.date,
     time: selection.time,
-    duration: 60,
-    location: 'zoom',
+    duration: prefilledDuration ?? 60,
+    location: preselectedLocation ?? 'zoom',
     status: mode === 'logPast' ? 'completed' : 'upcoming',
   };
 }
@@ -288,14 +304,32 @@ export function SessionEntryModal({
   onClose,
   onCreated,
   preselectedClientId,
+  preselectedBillingMode,
+  preselectedPackageId,
+  preselectedClientPackageId,
+  prefilledSessionType,
+  prefilledDuration,
+  preselectedLocation,
+  forceSingleSession = false,
   initialDate,
   initialTime,
 }: SessionEntryModalProps) {
   const { packages } = usePracticePackages();
   const [formData, setFormData] = useState<SessionFormState>(() =>
-    createInitialFormState(mode, preselectedClientId, initialDate, initialTime),
+    createInitialFormState(
+      mode,
+      preselectedClientId,
+      preselectedBillingMode,
+      preselectedPackageId,
+      preselectedClientPackageId,
+      prefilledSessionType,
+      prefilledDuration,
+      preselectedLocation,
+      initialDate,
+      initialTime),
   );
   const [clients, setClients] = useState<ModalClient[]>([]);
+  const [clientPackages, setClientPackages] = useState<ClientPackageDto[]>([]);
   const [events, setEvents] = useState<AvailabilityEvent[]>([]);
   const [defaultSessionAmount, setDefaultSessionAmount] = useState('125');
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -315,14 +349,40 @@ export function SessionEntryModal({
     }
 
     setFormData(
-      createInitialFormState(mode, preselectedClientId, initialDate, initialTime),
+      createInitialFormState(
+        mode,
+        preselectedClientId,
+        preselectedBillingMode,
+        preselectedPackageId,
+        preselectedClientPackageId,
+        prefilledSessionType,
+        prefilledDuration,
+        preselectedLocation,
+        initialDate,
+        initialTime),
     );
     setSubmitError(null);
     setIsSubmitting(false);
-    setIsRecurring(false);
+    setIsRecurring(
+      !forceSingleSession &&
+        preselectedBillingMode === 'package' &&
+        !preselectedClientPackageId,
+    );
     setRecurringFrequency('weekly');
-    setRecurringCount('6');
-  }, [open, mode, preselectedClientId, initialDate, initialTime]);
+    setRecurringCount(forceSingleSession ? '1' : '6');
+  }, [
+    open,
+    mode,
+    preselectedClientId,
+    preselectedBillingMode,
+    preselectedPackageId,
+    preselectedClientPackageId,
+    prefilledSessionType,
+    prefilledDuration,
+    preselectedLocation,
+    forceSingleSession,
+    initialDate,
+    initialTime]);
 
   useEffect(() => {
     if (!open) {
@@ -375,6 +435,55 @@ export function SessionEntryModal({
     });
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !formData.clientId) {
+      setClientPackages([]);
+      return;
+    }
+
+    let isActive = true;
+    const selectedClientId = formData.clientId;
+
+    void apiClient
+      .getClientPackages(selectedClientId)
+      .then((packagesForClient) => {
+        if (!isActive) {
+          return;
+        }
+
+        setClientPackages(packagesForClient);
+        setFormData((current) => {
+          if (current.clientId !== selectedClientId) {
+            return current;
+          }
+
+          if (
+            current.clientPackageId &&
+            !packagesForClient.some((pkg) => pkg.id === current.clientPackageId)
+          ) {
+            return {
+              ...current,
+              packageId: '',
+              clientPackageId: '',
+            };
+          }
+
+          return current;
+        });
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        setClientPackages([]);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [open, formData.clientId]);
+
   const selectedDate = useMemo(
     () => parse(formData.date, 'yyyy-MM-dd', new Date()),
     [formData.date],
@@ -387,10 +496,29 @@ export function SessionEntryModal({
     () => enabledPracticePackages.find((pkg) => pkg.id === formData.packageId) ?? null,
     [enabledPracticePackages, formData.packageId],
   );
+  const selectedClientPackage = useMemo(
+    () => clientPackages.find((pkg) => pkg.id === formData.clientPackageId) ?? null,
+    [clientPackages, formData.clientPackageId],
+  );
+  const availableClientPackages = useMemo(
+    () =>
+      clientPackages.filter(
+        (pkg) =>
+          pkg.remainingSessions > 0 || pkg.id === formData.clientPackageId,
+      ),
+    [clientPackages, formData.clientPackageId],
+  );
   const packageSessionLimit =
-    formData.billingMode === 'package' && selectedPracticePackage
-      ? selectedPracticePackage.sessionCount
+    formData.billingMode === 'package'
+      ? selectedClientPackage?.remainingSessions ??
+        selectedPracticePackage?.sessionCount ??
+        null
       : null;
+  const selectedPackageValue = formData.clientPackageId
+    ? `client:${formData.clientPackageId}`
+    : formData.packageId
+      ? `new:${formData.packageId}`
+      : '';
   const recurringSessionCount = isRecurring
     ? Number.parseInt(recurringCount, 10) || 1
     : 1;
@@ -405,9 +533,25 @@ export function SessionEntryModal({
       return;
     }
 
-    if (formData.billingMode === 'package' && selectedPracticePackage) {
+    if (forceSingleSession) {
+      setIsRecurring(false);
+      setRecurringCount('1');
+      return;
+    }
+
+    if (
+      formData.billingMode === 'package' &&
+      (selectedClientPackage || selectedPracticePackage)
+    ) {
       setIsRecurring(true);
-      setRecurringCount(String(selectedPracticePackage.sessionCount));
+      setRecurringCount(
+        String(
+          packageSessionLimit ??
+            selectedPracticePackage?.sessionCount ??
+            selectedClientPackage?.remainingSessions ??
+            1,
+        ),
+      );
       return;
     }
 
@@ -417,7 +561,9 @@ export function SessionEntryModal({
   }, [
     entryMode,
     formData.billingMode,
+    packageSessionLimit,
     selectedPracticePackage,
+    forceSingleSession,
   ]);
   const previousDateDisabled =
     entryMode === 'schedule' &&
@@ -497,7 +643,7 @@ export function SessionEntryModal({
         return;
       }
 
-      if (!selectedPracticePackage) {
+      if (!selectedClientPackage && !selectedPracticePackage) {
         setSubmitError('Selected package is not available.');
         return;
       }
@@ -505,10 +651,11 @@ export function SessionEntryModal({
       if (
         entryMode === 'schedule' &&
         isRecurring &&
-        recurringSessionCount > selectedPracticePackage.sessionCount
+        packageSessionLimit != null &&
+        recurringSessionCount > packageSessionLimit
       ) {
         setSubmitError(
-          `This package includes ${formatSessionCount(selectedPracticePackage.sessionCount)}.`,
+          `Only ${formatSessionCount(packageSessionLimit)} can be scheduled from this package.`,
         );
         return;
       }
@@ -552,6 +699,10 @@ export function SessionEntryModal({
         billingMode: formData.billingMode,
         packageId:
           formData.billingMode === 'package' ? formData.packageId : undefined,
+        clientPackageId:
+          formData.billingMode === 'package' && formData.clientPackageId
+            ? formData.clientPackageId
+            : undefined,
         amount:
           formData.billingMode === 'payPerSession'
             ? Number(formData.amount)
@@ -677,16 +828,27 @@ export function SessionEntryModal({
               <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
                 Client
               </Typography>
-              <TextField
-                select
-                fullWidth
-                size="small"
-                value={formData.clientId}
-                onChange={(event) => {
-                  handleChange('clientId', event.target.value);
-                }}
-                required
-              >
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  value={formData.clientId}
+                  onChange={(event) =>
+                    setFormData((current) => ({
+                      ...current,
+                      clientId: event.target.value,
+                      packageId:
+                        event.target.value === current.clientId
+                          ? current.packageId
+                          : '',
+                      clientPackageId:
+                        event.target.value === current.clientId
+                          ? current.clientPackageId
+                          : '',
+                    }))
+                  }
+                  required
+                >
                 {clients.map((client) => (
                   <MenuItem key={client.id} value={client.id}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -720,6 +882,8 @@ export function SessionEntryModal({
                     ...current,
                     billingMode: value,
                     packageId: value === 'package' ? current.packageId : '',
+                    clientPackageId:
+                      value === 'package' ? current.clientPackageId : '',
                     amount:
                       value === 'payPerSession'
                         ? current.amount || defaultSessionAmount
@@ -790,47 +954,124 @@ export function SessionEntryModal({
                   select
                   fullWidth
                   size="small"
-                  value={formData.packageId}
-                  onChange={(event) => handleChange('packageId', event.target.value)}
-                  disabled={enabledPracticePackages.length === 0}
+                  value={selectedPackageValue}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+
+                    setFormData((current) => {
+                      if (!nextValue) {
+                        return {
+                          ...current,
+                          packageId: '',
+                          clientPackageId: '',
+                        };
+                      }
+
+                      if (nextValue.startsWith('client:')) {
+                        const nextClientPackageId = nextValue.slice('client:'.length);
+                        const existingPackage = clientPackages.find(
+                          (pkg) => pkg.id === nextClientPackageId,
+                        );
+
+                        return {
+                          ...current,
+                          packageId: existingPackage?.packageId ?? '',
+                          clientPackageId: existingPackage?.id ?? '',
+                        };
+                      }
+
+                      if (nextValue.startsWith('new:')) {
+                        return {
+                          ...current,
+                          packageId: nextValue.slice('new:'.length),
+                          clientPackageId: '',
+                        };
+                      }
+
+                      return current;
+                    });
+                  }}
+                  disabled={
+                    !formData.clientId ||
+                    (enabledPracticePackages.length === 0 &&
+                      availableClientPackages.length === 0)
+                  }
                   SelectProps={{
                     displayEmpty: true,
                     renderValue: (value) => {
                       if (!value) {
                         return (
                           <Typography sx={{ color: '#8A837D', fontSize: '14px' }}>
-                            {enabledPracticePackages.length === 0
-                              ? 'No packages available'
-                              : 'Select an enabled package from Settings.'}
+                            {!formData.clientId
+                              ? 'Select a client first.'
+                              : enabledPracticePackages.length === 0
+                                ? 'No packages available'
+                                : 'Choose an existing package or start a new one.'}
                           </Typography>
                         );
                       }
 
-                      const selectedPackage = enabledPracticePackages.find(
-                        (pkg) => pkg.id === value,
-                      );
+                      if (typeof value === 'string' && value.startsWith('client:')) {
+                        const selectedExistingPackage = clientPackages.find(
+                          (pkg) => pkg.id === value.slice('client:'.length),
+                        );
+
+                        return selectedExistingPackage
+                          ? `${selectedExistingPackage.packageName} - ${selectedExistingPackage.remainingSessions} available`
+                          : value;
+                      }
+
+                      const selectedPackage = enabledPracticePackages.find((pkg) => {
+                        const normalizedValue =
+                          typeof value === 'string' && value.startsWith('new:')
+                            ? value.slice('new:'.length)
+                            : value;
+                        return pkg.id === normalizedValue;
+                      });
 
                       return selectedPackage
-                        ? `${selectedPackage.name} - ${formatSessionCount(selectedPackage.sessionCount)}`
+                        ? `New ${selectedPackage.name} - ${formatSessionCount(selectedPackage.sessionCount)}`
                         : value;
                     },
                   }}
                 >
+                  {availableClientPackages.length > 0 ? (
+                    <MenuItem disabled value="__existing_packages">
+                      Existing client packages
+                    </MenuItem>
+                  ) : null}
+                  {availableClientPackages.map((pkg) => (
+                    <MenuItem key={`client-${pkg.id}`} value={`client:${pkg.id}`}>
+                      {pkg.packageName} - {pkg.remainingSessions} available
+                    </MenuItem>
+                  ))}
+                  {enabledPracticePackages.length > 0 ? (
+                    <MenuItem disabled value="__new_packages">
+                      Start new package purchase
+                    </MenuItem>
+                  ) : null}
                   {enabledPracticePackages.map((pkg) => (
                     <MenuItem
                       key={pkg.id}
-                      value={pkg.id}
+                      value={`new:${pkg.id}`}
                     >
                       {pkg.name} - {formatSessionCount(pkg.sessionCount)}
                     </MenuItem>
                   ))}
                 </TextField>
-                {selectedPracticePackage ? (
+                {selectedClientPackage ? (
                   <Typography
                     variant="body2"
                     sx={{ color: '#7A746F', fontSize: '12px', mt: 1 }}
                   >
-                    {`This package includes ${formatSessionCount(selectedPracticePackage.sessionCount)}.`}
+                    {`${selectedClientPackage.remainingSessions} session${selectedClientPackage.remainingSessions === 1 ? '' : 's'} still available in this purchased package.`}
+                  </Typography>
+                ) : selectedPracticePackage ? (
+                  <Typography
+                    variant="body2"
+                    sx={{ color: '#7A746F', fontSize: '12px', mt: 1 }}
+                  >
+                    {`This will start a new ${formatSessionCount(selectedPracticePackage.sessionCount)} package for this client.`}
                   </Typography>
                 ) : null}
               </Box>

@@ -77,7 +77,10 @@ export interface ClientDetailEngagementDto {
   price?: number;
   totalSessions: number;
   usedSessions: number;
-  status: string;
+  scheduledSessions: number;
+  cancelledSessions: number;
+  availableSessions: number;
+  status: 'active' | 'fullyScheduled' | 'completed' | 'paused' | string;
   sessions: SessionDto[];
 }
 
@@ -155,8 +158,11 @@ export interface ClientPackageDto {
   purchasedAt: string;
   totalSessions: number;
   remainingSessions: number;
+  scheduledSessions: number;
+  usedSessions: number;
+  cancelledSessions: number;
   price?: number;
-  status: 'active' | 'completed';
+  status: 'active' | 'fullyScheduled' | 'completed';
 }
 
 export interface PracticePackageDto {

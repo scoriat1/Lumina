@@ -467,7 +467,9 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
                 .Where(s => s.ClientPackageId == boundary.Package.Id)
                 .ToList();
 
-            var completed = CountCompletedPackageSessions(packageSessions);
+            var packageStats = GetPackageSessionStats(
+                boundary.Package.Package.SessionCount,
+                packageSessions);
             var start = packageSessions.MinBy(s => s.Date)?.Date ?? boundary.Package.PurchasedAt;
             var end = packageSessions.MaxBy(s => s.Date)?.Date;
 
@@ -481,8 +483,11 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
                 endDate = end,
                 price = boundary.Package.Package.Price,
                 totalSessions = boundary.Package.Package.SessionCount,
-                usedSessions = completed,
-                status = completed >= boundary.Package.Package.SessionCount ? "completed" : "active",
+                usedSessions = packageStats.UsedSessions,
+                scheduledSessions = packageStats.ScheduledSessions,
+                cancelledSessions = packageStats.CancelledSessions,
+                availableSessions = packageStats.AvailableSessions,
+                status = packageStats.Status,
                 sessions = packageSessions.Select(s => MapSessionDto(s, client.Name)).ToList()
             };
         })
@@ -509,6 +514,9 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
             price = (decimal?)null,
             totalSessions = singleSessions.Count,
             usedSessions = singleSessions.Count(s => s.Status == SessionStatus.Completed),
+            scheduledSessions = singleSessions.Count(s => s.Status == SessionStatus.Upcoming),
+            cancelledSessions = singleSessions.Count(s => s.Status == SessionStatus.Cancelled),
+            availableSessions = 0,
             status = "active",
             sessions = singleSessions.Select(s => MapSessionDto(s, client.Name)).ToList()
         });
@@ -1030,10 +1038,16 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
             remainingSessions = Math.Max(
                 0,
                 cp.Package.SessionCount - cp.Sessions.Count(s => s.Status == SessionStatus.Upcoming || s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow)),
+            scheduledSessions = cp.Sessions.Count(s => s.Status == SessionStatus.Upcoming),
+            usedSessions = cp.Sessions.Count(s => s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow),
+            cancelledSessions = cp.Sessions.Count(s => s.Status == SessionStatus.Cancelled),
             price = cp.Package.Price,
-            status = cp.Sessions.Count(s => s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow) >= cp.Package.SessionCount
-                ? "completed"
-                : "active"
+            status =
+                cp.Sessions.Count(s => s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow) >= cp.Package.SessionCount
+                    ? "completed"
+                    : cp.Package.SessionCount - cp.Sessions.Count(s => s.Status == SessionStatus.Upcoming || s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow) <= 0
+                        ? "fullyScheduled"
+                        : "active"
         })
         .ToListAsync())
         .OrderByDescending(cp => cp.purchasedAt)
@@ -1660,6 +1674,29 @@ static bool ConsumesPackageCapacity(SessionStatus status) =>
 static int CountCompletedPackageSessions(IEnumerable<Session> sessions) =>
     sessions.Count(session => session.Status is SessionStatus.Completed or SessionStatus.NoShow);
 
+static PackageSessionStats GetPackageSessionStats(
+    int totalSessions,
+    IEnumerable<Session> sessions)
+{
+    var sessionList = sessions.ToList();
+    var usedSessions = CountCompletedPackageSessions(sessionList);
+    var scheduledSessions = sessionList.Count(session => session.Status == SessionStatus.Upcoming);
+    var cancelledSessions = sessionList.Count(session => session.Status == SessionStatus.Cancelled);
+    var availableSessions = Math.Max(0, totalSessions - usedSessions - scheduledSessions);
+    var status = usedSessions >= totalSessions
+        ? "completed"
+        : availableSessions == 0 && (usedSessions + scheduledSessions) >= totalSessions
+            ? "fullyScheduled"
+            : "active";
+
+    return new PackageSessionStats(
+        usedSessions,
+        scheduledSessions,
+        cancelledSessions,
+        availableSessions,
+        status);
+}
+
 static int GetAvailablePackageSessions(ClientPackage clientPackage)
 {
     var totalSessions = clientPackage.Package.SessionCount;
@@ -1847,6 +1884,7 @@ public record BillingSettingsResponse(int DefaultDueDays, decimal DefaultSession
 public record NotesTemplateSettingsResponse(string TemplateMode, string? SelectedTemplateKind, int? SelectedTemplateId);
 public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
 public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);
+public record PackageSessionStats(int UsedSessions, int ScheduledSessions, int CancelledSessions, int AvailableSessions, string Status);
 public enum SessionEntryMode
 {
     Schedule = 1,

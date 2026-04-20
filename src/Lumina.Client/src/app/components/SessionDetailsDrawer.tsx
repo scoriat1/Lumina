@@ -85,11 +85,17 @@ type SessionInput = Omit<SessionDto, "date"> & {
     sessionNotes?: SessionNote[];
 };
 
+type ReplacementBookingSeed = Pick<
+    SessionDto,
+    'clientId' | 'packageId' | 'clientPackageId' | 'sessionType' | 'duration' | 'location'
+>;
+
 interface SessionDetailsDrawerProps {
     open: boolean;
     onClose: () => void;
     sessionId: string | null;
     sessions: SessionInput[];
+    onBookReplacement?: (session: ReplacementBookingSeed) => void;
     onUpdateSession?: (
         sessionId: string,
         updates: Partial<SessionLike>,
@@ -361,6 +367,7 @@ export function SessionDetailsDrawer({
     onClose,
     sessionId,
     sessions,
+    onBookReplacement,
     onUpdateSession,
     onSaved,
 }: SessionDetailsDrawerProps) {
@@ -1369,7 +1376,7 @@ export function SessionDetailsDrawer({
                                                             "package" &&
                                                             session.packageRemaining !==
                                                             undefined
-                                                            ? `Package - ${session.packageRemaining} left`
+                                                            ? `Package - ${session.packageRemaining} available`
                                                             : "Included"
                                                 }
                                                 size="small"
@@ -1674,20 +1681,16 @@ export function SessionDetailsDrawer({
                                     </Button>
                                 )}
 
-                            {/* Show Re-schedule button if cancelled */}
-                            {session.status === "cancelled" && (
+                            {/* Keep cancelled sessions in history and book a replacement separately. */}
+                            {session.status === "cancelled" &&
+                                session.billingSource === "package" && (
                                 <Button
                                     fullWidth
                                     variant="outlined"
                                     startIcon={<EventAvailableIcon />}
                                     onClick={() => {
-                                        void handleStatusChange(
-                                            "upcoming",
-                                        ).then((didUpdate) => {
-                                            if (didUpdate) {
-                                                onClose();
-                                            }
-                                        });
+                                        onBookReplacement?.(session);
+                                        onClose();
                                     }}
                                     sx={{
                                         borderColor: "#E8E5E1",
@@ -1701,7 +1704,7 @@ export function SessionDetailsDrawer({
                                         },
                                     }}
                                 >
-                                    Re-schedule Session
+                                    Book Replacement
                                 </Button>
                             )}
                         </Stack>
