@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Data.Common;
+using System.Data;
 using Lumina.Domain.Entities;
 using Lumina.Domain.Enums;
 using Lumina.Infrastructure.Data;
@@ -681,7 +682,7 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
 
     if (practice is null) return Results.NotFound();
 
-    await using var transaction = await db.Database.BeginTransactionAsync();
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
     ClientPackage? clientPackage = null;
 
     if (request.BillingMode == SessionBillingMode.Package)
@@ -778,6 +779,9 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
         }
     }
 
+    var invoiceNumbers = request.BillingMode == SessionBillingMode.PayPerSession
+        ? await GenerateInvoiceNumbersAsync(db, scope.Value.practiceId, sessionsToCreate)
+        : [];
     var createdSessions = new List<Session>();
     for (var occurrence = 0; occurrence < sessionsToCreate; occurrence++)
     {
@@ -808,7 +812,7 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
             {
                 PracticeId = scope.Value.practiceId,
                 ClientId = request.ClientId,
-                InvoiceNumber = await GenerateInvoiceNumberAsync(db, scope.Value.practiceId),
+                InvoiceNumber = invoiceNumbers[occurrence],
                 Description = string.IsNullOrWhiteSpace(session.SessionType)
                     ? $"Session for {client.Name}"
                     : $"{session.SessionType} session",
@@ -1780,8 +1784,16 @@ static string GetSessionPaymentStatus(Session session)
     return session.Invoice.Status == InvoiceStatus.Paid ? "paid" : "pending";
 }
 
-static async Task<string> GenerateInvoiceNumberAsync(LuminaDbContext db, int practiceId)
+static async Task<IReadOnlyList<string>> GenerateInvoiceNumbersAsync(
+    LuminaDbContext db,
+    int practiceId,
+    int count)
 {
+    if (count <= 0)
+    {
+        return [];
+    }
+
     var prefix = $"INV-{DateTime.UtcNow:yyyy}-";
     var invoiceNumbers = await db.Invoices
         .Where(i => i.PracticeId == practiceId && i.InvoiceNumber.StartsWith(prefix))
@@ -1795,9 +1807,11 @@ static async Task<string> GenerateInvoiceNumberAsync(LuminaDbContext db, int pra
             return int.TryParse(suffix, out var parsed) ? parsed : 0;
         })
         .DefaultIfEmpty(0)
-        .Max() + 1;
+        .Max();
 
-    return $"{prefix}{nextNumber:000}";
+    return Enumerable.Range(nextNumber + 1, count)
+        .Select(number => $"{prefix}{number:000}")
+        .ToArray();
 }
 
 static bool TryNormalizeRecurrenceFrequency(string? frequency, out string? normalized)
