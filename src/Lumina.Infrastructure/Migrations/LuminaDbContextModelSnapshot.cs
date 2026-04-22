@@ -100,6 +100,11 @@ namespace Lumina.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("BillingModel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -160,6 +165,22 @@ namespace Lumina.Infrastructure.Migrations
 
                     b.Property<int>("PackageId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("PaymentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("PaymentDate")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("PaymentStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(2);
 
                     b.Property<int>("PracticeId")
                         .HasColumnType("int");
@@ -386,6 +407,22 @@ namespace Lumina.Infrastructure.Migrations
 
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("PaymentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("PaymentDate")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("PaymentStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
 
                     b.Property<int>("PracticeId")
                         .HasColumnType("int");

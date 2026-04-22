@@ -4,6 +4,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <Target
+    Name="StopStaleLuminaApiBeforeDebugBuild"
+    BeforeTargets="PrepareForBuild"
+    Condition="'$(Configuration)' == 'Debug' and '$(DisableAutoStopLuminaApi)' != 'true'">
+    <Exec
+      Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$processes = Get-Process -Name 'Lumina.Api' -ErrorAction SilentlyContinue; if ($processes) { $processes | Stop-Process -Force }; exit 0&quot;"
+      ContinueOnError="true" />
+  </Target>
   <ItemGroup>
     <ProjectReference Include="..\Lumina.Domain\Lumina.Domain.csproj" />
     <ProjectReference Include="..\Lumina.Infrastructure\Lumina.Infrastructure.csproj" />

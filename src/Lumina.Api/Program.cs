@@ -14,6 +14,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+
 const int DefaultInvoiceDueDays = 30;
 const decimal DefaultSessionAmount = 125m;
 var repoRootPath = FindRepoRoot(builder.Environment.ContentRootPath) ?? builder.Environment.ContentRootPath;
@@ -253,6 +254,7 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
         totalSessions = c.Sessions.Count,
         status = c.Status.ToString().ToLowerInvariant(),
+        billingModel = c.BillingModel,
         email = c.Email,
         phone = c.Phone,
         startDate = c.StartDate,
@@ -284,6 +286,7 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
         client.totalSessions,
         nextSession = nextSessionByClientId.GetValueOrDefault(client.id),
         client.status,
+        billingModel = client.billingModel,
         client.email,
         client.phone,
         client.startDate,
@@ -306,6 +309,7 @@ api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext c
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
         totalSessions = c.Sessions.Count,
         status = c.Status.ToString().ToLowerInvariant(),
+        billingModel = c.BillingModel,
         email = c.Email,
         phone = c.Phone,
         startDate = c.StartDate,
@@ -333,6 +337,7 @@ api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext c
         client.totalSessions,
         nextSession,
         client.status,
+        billingModel = client.billingModel,
         client.email,
         client.phone,
         client.startDate,
@@ -354,6 +359,7 @@ api.MapPost("/clients", async (ClientUpsertRequest request, LuminaDbContext db, 
         Program = request.Program,
         StartDate = request.StartDate,
         Status = request.Status,
+        BillingModel = request.BillingModel,
         Notes = normalizedNotes
     };
     db.Clients.Add(client);
@@ -391,6 +397,7 @@ api.MapPut("/clients/{id:int}", async (int id, ClientUpsertRequest request, Lumi
     client.Program = request.Program;
     client.StartDate = request.StartDate;
     client.Status = request.Status;
+    client.BillingModel = request.BillingModel;
     client.Notes = request.Notes;
     await db.SaveChangesAsync();
     return Results.Ok();
@@ -492,6 +499,10 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
                 scheduledSessions = packageStats.ScheduledSessions,
                 cancelledSessions = packageStats.CancelledSessions,
                 availableSessions = packageStats.AvailableSessions,
+                paymentStatus = (string?)boundary.Package.PaymentStatus.ToString().ToLowerInvariant(),
+                paymentAmount = boundary.Package.PaymentAmount,
+                paymentDate = boundary.Package.PaymentDate,
+                paymentMethod = boundary.Package.PaymentMethod,
                 status = packageStats.Status,
                 sessions = packageSessions.Select(s => MapSessionDto(s, client.Name)).ToList()
             };
@@ -522,6 +533,10 @@ api.MapGet("/clients/{id:int}/detail-view", async (int id, LuminaDbContext db, H
             scheduledSessions = singleSessions.Count(s => s.Status == SessionStatus.Upcoming),
             cancelledSessions = singleSessions.Count(s => s.Status == SessionStatus.Cancelled),
             availableSessions = 0,
+            paymentStatus = (string?)null,
+            paymentAmount = (decimal?)null,
+            paymentDate = (DateTimeOffset?)null,
+            paymentMethod = (string?)null,
             status = "active",
             sessions = singleSessions.Select(s => MapSessionDto(s, client.Name)).ToList()
         });
@@ -771,11 +786,18 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
 
         clientPackage.RemainingSessions = Math.Max(0, availablePackageSessions - requiredPackageSlots);
     }
-    else
+    else if (request.BillingMode == SessionBillingMode.PayPerSession)
     {
         if (!request.Amount.HasValue || request.Amount.Value <= 0)
         {
             return Results.BadRequest(new { message = "A positive amount is required for pay-per-session billing." });
+        }
+    }
+    else if (request.BillingMode == SessionBillingMode.Monthly)
+    {
+        if (request.Amount.HasValue && request.Amount.Value <= 0)
+        {
+            return Results.BadRequest(new { message = "Monthly session amount must be positive when provided." });
         }
     }
 
@@ -806,6 +828,14 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
         {
             session.ClientPackage = clientPackage;
         }
+        else if (request.BillingMode == SessionBillingMode.Monthly)
+        {
+            session.PaymentAmount = decimal.Round(
+                request.Amount ?? practice.BillingDefaultSessionAmount,
+                2,
+                MidpointRounding.AwayFromZero);
+            session.PaymentStatus = PaymentStatus.Pending;
+        }
         else
         {
             var invoice = new Invoice
@@ -824,6 +854,8 @@ api.MapPost("/sessions", async (SessionCreateRequest request, LuminaDbContext db
 
             db.Invoices.Add(invoice);
             session.Invoice = invoice;
+            session.PaymentAmount = invoice.Amount;
+            session.PaymentStatus = PaymentStatus.Pending;
         }
 
         db.Sessions.Add(session);
@@ -886,6 +918,161 @@ api.MapPut("/sessions/{id:int}", async (int id, SessionUpdateRequest request, Lu
 
     await db.SaveChangesAsync();
     return Results.Ok();
+});
+
+api.MapPost("/sessions/{id:int}/mark-paid", async (int id, SessionPaymentRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+    var session = await db.Sessions
+        .Include(s => s.Client)
+        .Include(s => s.Invoice)
+        .FirstOrDefaultAsync(s => s.Id == id && s.PracticeId == scope.Value.practiceId);
+
+    if (session is null) return Results.NotFound();
+    if (session.ClientPackageId.HasValue)
+    {
+        return Results.BadRequest(new { message = "Package sessions are paid through the package purchase." });
+    }
+
+    var practice = await db.Practices.FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+    if (practice is null) return Results.NotFound();
+
+    var amount = decimal.Round(
+        request.Amount ?? session.PaymentAmount ?? session.Invoice?.Amount ?? practice.BillingDefaultSessionAmount,
+        2,
+        MidpointRounding.AwayFromZero);
+
+    if (amount <= 0)
+    {
+        return Results.BadRequest(new { message = "Payment amount must be greater than 0." });
+    }
+
+    if (session.Invoice is null)
+    {
+        var invoiceNumber = (await GenerateInvoiceNumbersAsync(db, scope.Value.practiceId, 1))[0];
+        var invoice = new Invoice
+        {
+            PracticeId = scope.Value.practiceId,
+            ClientId = session.ClientId,
+            InvoiceNumber = invoiceNumber,
+            Description = string.IsNullOrWhiteSpace(session.SessionType)
+                ? $"Session for {session.Client.Name}"
+                : $"{session.SessionType} session",
+            Amount = amount,
+            DueDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(practice.BillingDefaultDueDays)),
+            Status = InvoiceStatus.Paid,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.Invoices.Add(invoice);
+        session.Invoice = invoice;
+    }
+    else
+    {
+        session.Invoice.Amount = amount;
+        session.Invoice.Status = InvoiceStatus.Paid;
+    }
+
+    session.PaymentAmount = amount;
+    session.PaymentStatus = PaymentStatus.Paid;
+    session.PaymentDate = request.PaymentDate ?? DateTimeOffset.UtcNow;
+    session.PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod)
+        ? "manual"
+        : request.PaymentMethod.Trim();
+
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+
+    return Results.Ok(MapSessionDto(session, session.Client.Name));
+});
+
+api.MapPut("/sessions/{id:int}/payment", async (int id, SessionPaymentUpdateRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+    var session = await db.Sessions
+        .Include(s => s.Client)
+        .Include(s => s.Invoice)
+        .FirstOrDefaultAsync(s => s.Id == id && s.PracticeId == scope.Value.practiceId);
+
+    if (session is null) return Results.NotFound();
+    if (session.ClientPackageId.HasValue)
+    {
+        return Results.BadRequest(new { message = "Package sessions are paid through the package purchase." });
+    }
+
+    var practice = await db.Practices.FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+    if (practice is null) return Results.NotFound();
+
+    var amount = request.Amount.HasValue
+        ? decimal.Round(request.Amount.Value, 2, MidpointRounding.AwayFromZero)
+        : (decimal?)null;
+
+    if (amount <= 0)
+    {
+        return Results.BadRequest(new { message = "Payment amount must be greater than 0." });
+    }
+
+    if (request.PaymentStatus == PaymentStatus.Paid && amount is null)
+    {
+        amount = decimal.Round(
+            session.PaymentAmount ?? session.Invoice?.Amount ?? practice.BillingDefaultSessionAmount,
+            2,
+            MidpointRounding.AwayFromZero);
+    }
+
+    if (request.PaymentStatus != PaymentStatus.Unpaid && amount.HasValue && session.Invoice is null)
+    {
+        var invoiceNumber = (await GenerateInvoiceNumbersAsync(db, scope.Value.practiceId, 1))[0];
+        var invoice = new Invoice
+        {
+            PracticeId = scope.Value.practiceId,
+            ClientId = session.ClientId,
+            InvoiceNumber = invoiceNumber,
+            Description = string.IsNullOrWhiteSpace(session.SessionType)
+                ? $"Session for {session.Client.Name}"
+                : $"{session.SessionType} session",
+            Amount = amount.Value,
+            DueDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(practice.BillingDefaultDueDays)),
+            Status = request.PaymentStatus == PaymentStatus.Paid ? InvoiceStatus.Paid : InvoiceStatus.Pending,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.Invoices.Add(invoice);
+        session.Invoice = invoice;
+    }
+    else if (session.Invoice is not null)
+    {
+        if (amount.HasValue)
+        {
+            session.Invoice.Amount = amount.Value;
+        }
+
+        session.Invoice.Status = request.PaymentStatus == PaymentStatus.Paid
+            ? InvoiceStatus.Paid
+            : InvoiceStatus.Pending;
+    }
+
+    session.PaymentAmount = amount;
+    session.PaymentStatus = request.PaymentStatus;
+    session.PaymentDate = request.PaymentStatus == PaymentStatus.Paid
+        ? request.PaymentDate ?? session.PaymentDate ?? DateTimeOffset.UtcNow
+        : request.PaymentDate;
+    session.PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod)
+        ? null
+        : request.PaymentMethod.Trim();
+
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+
+    return Results.Ok(MapSessionDto(session, session.Client.Name));
 });
 
 api.MapGet("/sessions/{id:int}/note", async (int id, LuminaDbContext db, HttpContext context) =>
@@ -1053,6 +1240,10 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
             usedSessions = cp.Sessions.Count(s => s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow),
             cancelledSessions = cp.Sessions.Count(s => s.Status == SessionStatus.Cancelled),
             price = cp.Package.Price,
+            paymentAmount = cp.PaymentAmount,
+            paymentStatus = cp.PaymentStatus.ToString().ToLowerInvariant(),
+            paymentDate = cp.PaymentDate,
+            paymentMethod = cp.PaymentMethod,
             status =
                 cp.Sessions.Count(s => s.Status == SessionStatus.Completed || s.Status == SessionStatus.NoShow) >= cp.Package.SessionCount
                     ? "completed"
@@ -1067,22 +1258,220 @@ api.MapGet("/clients/{id:int}/packages", async (int id, LuminaDbContext db, Http
     return Results.Ok(packages);
 });
 
+api.MapPost("/clients/{clientId:int}/packages/{clientPackageId:int}/mark-paid", async (
+    int clientId,
+    int clientPackageId,
+    SessionPaymentRequest request,
+    LuminaDbContext db,
+    HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var clientPackage = await db.ClientPackages
+        .Include(cp => cp.Package)
+        .FirstOrDefaultAsync(cp =>
+            cp.Id == clientPackageId &&
+            cp.ClientId == clientId &&
+            cp.PracticeId == scope.Value.practiceId);
+
+    if (clientPackage is null) return Results.NotFound();
+
+    var amount = decimal.Round(
+        request.Amount ?? clientPackage.PaymentAmount ?? clientPackage.Package.Price ?? 0m,
+        2,
+        MidpointRounding.AwayFromZero);
+
+    if (amount <= 0)
+    {
+        return Results.BadRequest(new { message = "Payment amount must be greater than 0." });
+    }
+
+    clientPackage.PaymentAmount = amount;
+    clientPackage.PaymentStatus = PaymentStatus.Paid;
+    clientPackage.PaymentDate = request.PaymentDate ?? DateTimeOffset.UtcNow;
+    clientPackage.PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod)
+        ? "manual"
+        : request.PaymentMethod.Trim();
+
+    await db.SaveChangesAsync();
+    return Results.Ok();
+});
+
+api.MapPut("/clients/{clientId:int}/packages/{clientPackageId:int}/payment", async (
+    int clientId,
+    int clientPackageId,
+    SessionPaymentUpdateRequest request,
+    LuminaDbContext db,
+    HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var clientPackage = await db.ClientPackages
+        .Include(cp => cp.Package)
+        .FirstOrDefaultAsync(cp =>
+            cp.Id == clientPackageId &&
+            cp.ClientId == clientId &&
+            cp.PracticeId == scope.Value.practiceId);
+
+    if (clientPackage is null) return Results.NotFound();
+
+    var amount = request.Amount.HasValue
+        ? decimal.Round(request.Amount.Value, 2, MidpointRounding.AwayFromZero)
+        : (decimal?)null;
+
+    if (amount <= 0)
+    {
+        return Results.BadRequest(new { message = "Payment amount must be greater than 0." });
+    }
+
+    if (request.PaymentStatus == PaymentStatus.Paid && amount is null)
+    {
+        amount = decimal.Round(
+            clientPackage.PaymentAmount ?? clientPackage.Package.Price ?? 0m,
+            2,
+            MidpointRounding.AwayFromZero);
+    }
+
+    if (request.PaymentStatus == PaymentStatus.Paid && amount <= 0)
+    {
+        return Results.BadRequest(new { message = "Payment amount must be greater than 0." });
+    }
+
+    clientPackage.PaymentAmount = amount;
+    clientPackage.PaymentStatus = request.PaymentStatus;
+    clientPackage.PaymentDate = request.PaymentStatus == PaymentStatus.Paid
+        ? request.PaymentDate ?? clientPackage.PaymentDate ?? DateTimeOffset.UtcNow
+        : request.PaymentDate;
+    clientPackage.PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod)
+        ? null
+        : request.PaymentMethod.Trim();
+
+    await db.SaveChangesAsync();
+    return Results.Ok();
+});
+
 api.MapGet("/billing/summary", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
 
-    var invoices = db.Invoices.Where(i => i.PracticeId == scope.Value.practiceId);
-    var totalRevenue = await invoices.Where(i => i.Status == InvoiceStatus.Paid).SumAsync(i => i.Amount);
-    var pendingAmount = await invoices.Where(i => i.Status == InvoiceStatus.Pending).SumAsync(i => i.Amount);
-    var overdueAmount = await invoices.Where(i => i.Status == InvoiceStatus.Overdue).SumAsync(i => i.Amount);
-    return Results.Ok(new { totalRevenue, pendingAmount, overdueAmount });
+    var practice = await db.Practices.AsNoTracking().FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+    if (practice is null) return Results.NotFound();
+
+    var sessions = await db.Sessions
+        .AsNoTracking()
+        .Include(s => s.Invoice)
+        .Where(s =>
+            s.PracticeId == scope.Value.practiceId &&
+            s.ClientPackageId == null &&
+            s.Status != SessionStatus.Cancelled)
+        .ToListAsync();
+
+    var packages = await db.ClientPackages
+        .AsNoTracking()
+        .Include(cp => cp.Package)
+        .Where(cp => cp.PracticeId == scope.Value.practiceId)
+        .ToListAsync();
+
+    var sessionPayments = sessions
+        .Select(s => new
+        {
+            Amount = GetSessionPaymentAmount(s, practice.BillingDefaultSessionAmount),
+            Status = s.PaymentStatus
+        })
+        .Where(payment => payment.Amount > 0);
+
+    var packagePayments = packages
+        .Select(cp => new
+        {
+            Amount = GetPackagePaymentAmount(cp),
+            Status = cp.PaymentStatus
+        })
+        .Where(payment => payment.Amount > 0);
+
+    var allPayments = sessionPayments.Concat(packagePayments).ToList();
+    var totalRevenue = allPayments.Where(payment => payment.Status == PaymentStatus.Paid).Sum(payment => payment.Amount);
+    var pendingAmount = allPayments.Where(payment => payment.Status != PaymentStatus.Paid).Sum(payment => payment.Amount);
+
+    return Results.Ok(new
+    {
+        totalRevenue,
+        pendingAmount,
+        overdueAmount = 0m,
+        paidCount = allPayments.Count(payment => payment.Status == PaymentStatus.Paid),
+        dueCount = allPayments.Count(payment => payment.Status != PaymentStatus.Paid)
+    });
+});
+
+api.MapGet("/billing/payments", async (LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var practice = await db.Practices.AsNoTracking().FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+    if (practice is null) return Results.NotFound();
+
+    var sessionPayments = (await db.Sessions
+        .AsNoTracking()
+        .Include(s => s.Client)
+        .Include(s => s.Invoice)
+        .Where(s =>
+            s.PracticeId == scope.Value.practiceId &&
+            s.ClientPackageId == null &&
+            s.Status != SessionStatus.Cancelled)
+        .ToListAsync())
+        .Select(s => new BillingPaymentItem(
+            id: $"session-{s.Id}",
+            sourceType: "session",
+            sourceId: s.Id,
+            clientId: s.ClientId,
+            clientName: s.Client.Name,
+            description: string.IsNullOrWhiteSpace(s.SessionType) ? "Session" : s.SessionType,
+            amount: GetSessionPaymentAmount(s, practice.BillingDefaultSessionAmount),
+            paymentStatus: s.PaymentStatus.ToString().ToLowerInvariant(),
+            billingSource: GetSessionBillingSource(s),
+            serviceDate: s.Date,
+            paymentDate: s.PaymentDate,
+            paymentMethod: s.PaymentMethod))
+        .Where(payment => payment.amount > 0);
+
+    var packagePayments = (await db.ClientPackages
+        .AsNoTracking()
+        .Include(cp => cp.Client)
+        .Include(cp => cp.Package)
+        .Where(cp => cp.PracticeId == scope.Value.practiceId)
+        .ToListAsync())
+        .Select(cp => new BillingPaymentItem(
+            id: $"package-{cp.Id}",
+            sourceType: "package",
+            sourceId: cp.Id,
+            clientId: cp.ClientId,
+            clientName: cp.Client.Name,
+            description: cp.Package.Name,
+            amount: GetPackagePaymentAmount(cp),
+            paymentStatus: cp.PaymentStatus.ToString().ToLowerInvariant(),
+            billingSource: "package",
+            serviceDate: cp.PurchasedAt,
+            paymentDate: cp.PaymentDate,
+            paymentMethod: cp.PaymentMethod))
+        .Where(payment => payment.amount > 0);
+
+    var payments = sessionPayments
+        .Concat(packagePayments)
+        .OrderBy(payment => payment.paymentStatus == "paid" ? 1 : 0)
+        .ThenByDescending(payment => payment.serviceDate)
+        .ToList();
+
+    return Results.Ok(payments);
 });
 
 api.MapGet("/billing/invoices", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
     if (scope is null) return Results.Unauthorized();
+    await MarkOverdueInvoicesAsync(db, scope.Value.practiceId);
 
     var invoices = await db.Invoices.Where(i => i.PracticeId == scope.Value.practiceId).Include(i => i.Client).OrderByDescending(i => i.CreatedAt).Select(i => new
     {
@@ -1101,6 +1490,99 @@ api.MapGet("/billing/invoices", async (LuminaDbContext db, HttpContext context) 
     return Results.Ok(invoices);
 });
 
+api.MapPost("/billing/monthly-invoices", async (MonthlyInvoiceRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var year = request.Year ?? DateTime.UtcNow.AddMonths(-1).Year;
+    var month = request.Month ?? DateTime.UtcNow.AddMonths(-1).Month;
+    if (year < 2000 || month is < 1 or > 12)
+    {
+        return Results.BadRequest(new { message = "Provide a valid billing year and month." });
+    }
+
+    var periodStart = new DateTimeOffset(year, month, 1, 0, 0, 0, TimeSpan.Zero);
+    var periodEnd = periodStart.AddMonths(1);
+    var dueDate = request.DueDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(DefaultInvoiceDueDays));
+
+    await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+    var practice = await db.Practices.AsNoTracking().FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+    if (practice is null) return Results.NotFound();
+
+    if (request.DueDate is null)
+    {
+        dueDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(practice.BillingDefaultDueDays));
+    }
+
+    var eligibleSessions = await db.Sessions
+        .Include(s => s.Client)
+        .Where(s =>
+            s.PracticeId == scope.Value.practiceId &&
+            s.Client.BillingModel == BillingModel.Monthly &&
+            (!request.ClientId.HasValue || s.ClientId == request.ClientId.Value) &&
+            s.ClientPackageId == null &&
+            s.InvoiceId == null &&
+            s.Date >= periodStart &&
+            s.Date < periodEnd &&
+            s.Status != SessionStatus.Cancelled &&
+            s.PaymentStatus != PaymentStatus.Paid)
+        .ToListAsync();
+
+    var sessionsByClient = eligibleSessions
+        .GroupBy(s => s.ClientId)
+        .Where(group => group.Any())
+        .ToList();
+
+    var invoiceNumbers = await GenerateInvoiceNumbersAsync(db, scope.Value.practiceId, sessionsByClient.Count);
+    var createdInvoices = new List<Invoice>();
+    var invoiceIndex = 0;
+
+    foreach (var group in sessionsByClient)
+    {
+        var client = group.First().Client;
+        var sessions = group.ToList();
+        var amount = sessions.Sum(session => session.PaymentAmount ?? practice.BillingDefaultSessionAmount);
+
+        if (amount <= 0)
+        {
+            continue;
+        }
+
+        var invoice = new Invoice
+        {
+            PracticeId = scope.Value.practiceId,
+            ClientId = client.Id,
+            InvoiceNumber = invoiceNumbers[invoiceIndex++],
+            Description = $"{periodStart:MMMM yyyy} coaching sessions",
+            Amount = decimal.Round(amount, 2, MidpointRounding.AwayFromZero),
+            DueDate = dueDate,
+            Status = InvoiceStatus.Pending,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.Invoices.Add(invoice);
+        foreach (var session in sessions)
+        {
+            session.Invoice = invoice;
+            session.PaymentStatus = PaymentStatus.Pending;
+            session.PaymentAmount ??= practice.BillingDefaultSessionAmount;
+        }
+
+        createdInvoices.Add(invoice);
+    }
+
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+
+    return Results.Ok(new
+    {
+        createdCount = createdInvoices.Count,
+        invoiceIds = createdInvoices.Select(invoice => invoice.Id).ToList()
+    });
+});
+
 api.MapPost("/billing/invoices/{id:int}/mark-paid", async (int id, LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
@@ -1112,6 +1594,18 @@ api.MapPost("/billing/invoices/{id:int}/mark-paid", async (int id, LuminaDbConte
     if (invoice is null) return Results.NotFound();
 
     invoice.Status = InvoiceStatus.Paid;
+    var invoiceSessions = await db.Sessions
+        .Where(session => session.InvoiceId == invoice.Id && session.PracticeId == scope.Value.practiceId)
+        .ToListAsync();
+
+    foreach (var session in invoiceSessions)
+    {
+        session.PaymentStatus = PaymentStatus.Paid;
+        session.PaymentDate ??= DateTimeOffset.UtcNow;
+        session.PaymentMethod ??= "manual";
+        session.PaymentAmount ??= invoice.Amount / Math.Max(1, invoiceSessions.Count);
+    }
+
     await db.SaveChangesAsync();
     return Results.Ok();
 });
@@ -1602,7 +2096,50 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
     var monthStart = new DateTimeOffset(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, TimeSpan.Zero);
     var nextMonth = monthStart.AddMonths(1);
     var sessionsThisMonth = await db.Sessions.CountAsync(s => s.PracticeId == scope.Value.practiceId && s.Date >= monthStart && s.Date < nextMonth);
-    var revenueMtd = await db.Invoices.Where(i => i.PracticeId == scope.Value.practiceId && i.Status == InvoiceStatus.Paid && i.CreatedAt >= monthStart && i.CreatedAt < nextMonth).SumAsync(i => i.Amount);
+    var practice = await db.Practices.AsNoTracking().FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
+    if (practice is null) return Results.NotFound();
+
+    var billableSessionsThisMonth = await db.Sessions
+        .AsNoTracking()
+        .Include(s => s.Invoice)
+        .Where(s =>
+            s.PracticeId == scope.Value.practiceId &&
+            s.ClientPackageId == null &&
+            s.Status != SessionStatus.Cancelled &&
+            s.Date >= monthStart &&
+            s.Date < nextMonth)
+        .ToListAsync();
+
+    var packagesThisMonth = await db.ClientPackages
+        .AsNoTracking()
+        .Include(cp => cp.Package)
+        .Where(cp =>
+            cp.PracticeId == scope.Value.practiceId &&
+            cp.PurchasedAt >= monthStart &&
+            cp.PurchasedAt < nextMonth)
+        .ToListAsync();
+
+    var revenueMtd =
+        billableSessionsThisMonth
+            .Where(session =>
+                session.PaymentStatus == PaymentStatus.Paid &&
+                session.PaymentDate >= monthStart &&
+                session.PaymentDate < nextMonth)
+            .Sum(session => GetSessionPaymentAmount(session, practice.BillingDefaultSessionAmount)) +
+        packagesThisMonth
+            .Where(package =>
+                package.PaymentStatus == PaymentStatus.Paid &&
+                package.PaymentDate >= monthStart &&
+                package.PaymentDate < nextMonth)
+            .Sum(GetPackagePaymentAmount);
+
+    var unpaidMtd =
+        billableSessionsThisMonth
+            .Where(session => session.PaymentStatus != PaymentStatus.Paid)
+            .Sum(session => GetSessionPaymentAmount(session, practice.BillingDefaultSessionAmount)) +
+        packagesThisMonth
+            .Where(package => package.PaymentStatus != PaymentStatus.Paid)
+            .Sum(GetPackagePaymentAmount);
 
     var upcomingSessions = await db.Sessions.Where(s => s.PracticeId == scope.Value.practiceId && s.Date >= DateTimeOffset.UtcNow).Include(s => s.Client).OrderBy(s => s.Date).Take(4).Select(s => new
     {
@@ -1632,7 +2169,7 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
         notes = c.Notes
     }).ToListAsync();
 
-    return Results.Ok(new { activeClients, sessionsThisMonth, revenueMtd, calendarFilledPercent = 15, upcomingSessions, activeClientPreview });
+    return Results.Ok(new { activeClients, sessionsThisMonth, revenueMtd, unpaidMtd, calendarFilledPercent = 15, upcomingSessions, activeClientPreview });
 });
 
 var seedEnabled = app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Seed:Enabled");
@@ -1763,11 +2300,18 @@ static ApiSessionItem MapSessionDto(Session session, string clientName)
         session.ClientPackageId,
         session.ClientPackage?.Package.Name,
         session.ClientPackage?.Package.Price,
-        session.InvoiceId);
+        session.InvoiceId,
+        session.PaymentAmount,
+        session.PaymentDate,
+        session.PaymentMethod);
 }
 
 static string GetSessionBillingSource(Session session) =>
-    session.ClientPackageId.HasValue ? "package" : "pay-per-session";
+    session.ClientPackageId.HasValue
+        ? "package"
+        : session.InvoiceId.HasValue
+            ? "pay-per-session"
+            : "monthly";
 
 static string GetSessionPaymentStatus(Session session)
 {
@@ -1776,12 +2320,52 @@ static string GetSessionPaymentStatus(Session session)
         return "paid";
     }
 
-    if (session.Invoice is null)
+    if (session.PaymentStatus == PaymentStatus.Paid)
     {
         return "paid";
     }
 
-    return session.Invoice.Status == InvoiceStatus.Paid ? "paid" : "pending";
+    if (session.PaymentStatus == PaymentStatus.Pending)
+    {
+        return "pending";
+    }
+
+    return session.Invoice?.Status == InvoiceStatus.Paid ? "paid" : "unpaid";
+}
+
+static decimal GetSessionPaymentAmount(Session session, decimal defaultSessionAmount)
+{
+    var amount = session.PaymentAmount ?? session.Invoice?.Amount ?? defaultSessionAmount;
+    return decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
+}
+
+static decimal GetPackagePaymentAmount(ClientPackage clientPackage)
+{
+    var amount = clientPackage.PaymentAmount ?? clientPackage.Package.Price ?? 0m;
+    return decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
+}
+
+static async Task MarkOverdueInvoicesAsync(LuminaDbContext db, int practiceId)
+{
+    var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+    var overdueInvoices = await db.Invoices
+        .Where(invoice =>
+            invoice.PracticeId == practiceId &&
+            invoice.Status == InvoiceStatus.Pending &&
+            invoice.DueDate < today)
+        .ToListAsync();
+
+    if (overdueInvoices.Count == 0)
+    {
+        return;
+    }
+
+    foreach (var invoice in overdueInvoices)
+    {
+        invoice.Status = InvoiceStatus.Overdue;
+    }
+
+    await db.SaveChangesAsync();
 }
 
 static async Task<IReadOnlyList<string>> GenerateInvoiceNumbersAsync(
@@ -1918,11 +2502,15 @@ public record CreatePackageRequest(string Name, int SessionCount, decimal Price,
 public record UpdatePackageRequest(string Name, int SessionCount, decimal Price, bool Enabled = true);
 public record BillingSettingsRequest(int DefaultDueDays, decimal DefaultSessionAmount);
 public record NotesTemplateSettingsRequest(string TemplateMode, string? SelectedTemplateKind = null, int? SelectedTemplateId = null);
-public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, string? Notes);
+public record ClientUpsertRequest(string Name, string Email, string Phone, string Program, DateOnly StartDate, ClientStatus Status, BillingModel BillingModel = BillingModel.PayPerSession, string? Notes = null);
+public record SessionPaymentRequest(decimal? Amount = null, string? PaymentMethod = null, DateTimeOffset? PaymentDate = null);
+public record SessionPaymentUpdateRequest(PaymentStatus PaymentStatus, decimal? Amount = null, string? PaymentMethod = null, DateTimeOffset? PaymentDate = null);
+public record MonthlyInvoiceRequest(int? Year = null, int? Month = null, int? ClientId = null, DateOnly? DueDate = null);
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
 public record TemplateUpdateRequest(int PracticeId, string Name, string? Description, IReadOnlyList<TemplateUpdateFieldRequest> Fields);
 public record TemplateUpdateFieldRequest(int Id, string Label, int SortOrder, string? FieldType);
-public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes, int? packageId = null, int? clientPackageId = null, string? packageName = null, decimal? packagePrice = null, int? invoiceId = null);
+public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes, int? packageId = null, int? clientPackageId = null, string? packageName = null, decimal? packagePrice = null, int? invoiceId = null, decimal? paymentAmount = null, DateTimeOffset? paymentDate = null, string? paymentMethod = null);
+public record BillingPaymentItem(string id, string sourceType, int sourceId, int clientId, string clientName, string description, decimal amount, string paymentStatus, string billingSource, DateTimeOffset serviceDate, DateTimeOffset? paymentDate, string? paymentMethod);
 public record SessionStructuredNoteRequest(int? TemplateId, string Content, string LegacyNotes, string? NoteType = null);
 public record ClientNoteCreateRequest(string Content, string? Type = null, string? Source = null);
 public record BillingSettingsResponse(int DefaultDueDays, decimal DefaultSessionAmount);
@@ -1938,5 +2526,6 @@ public enum SessionEntryMode
 public enum SessionBillingMode
 {
     PayPerSession = 1,
-    Package = 2
+    Monthly = 2,
+    Package = 3
 }

@@ -19,6 +19,10 @@ public class Session
     public int Duration { get; set; }
     public SessionLocation Location { get; set; }
     public SessionStatus Status { get; set; }
+    public decimal? PaymentAmount { get; set; }
+    public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Unpaid;
+    public DateTimeOffset? PaymentDate { get; set; }
+    public string? PaymentMethod { get; set; }
     public string SessionType { get; set; } = string.Empty;
     public string Focus { get; set; } = string.Empty;
     public string? Notes { get; set; }

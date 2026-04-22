@@ -57,6 +57,9 @@ public class ClientPackageConfiguration : IEntityTypeConfiguration<ClientPackage
         builder.Property(x => x.Id).ValueGeneratedOnAdd().UseIdentityColumn();
 
         builder.HasIndex(x => new { x.PracticeId, x.ClientId, x.PackageId });
+        builder.Property(x => x.PaymentAmount).HasPrecision(18, 2);
+        builder.Property(x => x.PaymentStatus).HasDefaultValue(Lumina.Domain.Enums.PaymentStatus.Pending).IsRequired();
+        builder.Property(x => x.PaymentMethod).HasMaxLength(80);
 
         builder.HasOne(x => x.Client)
             .WithMany()

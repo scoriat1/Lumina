@@ -1,7 +1,9 @@
 export type SessionLocationValue = 'zoom' | 'phone' | 'office';
 export type SessionStatusValue = 'upcoming' | 'completed' | 'cancelled' | 'noShow';
 export type SessionEntryMode = 'schedule' | 'logPast';
-export type SessionBillingModeValue = 'payPerSession' | 'package';
+export type BillingModelValue = 'payPerSession' | 'monthly' | 'package';
+export type SessionBillingModeValue = BillingModelValue;
+export type PaymentStatusValue = 'paid' | 'pending' | 'unpaid';
 
 export interface ClientDto {
   id: string;
@@ -14,6 +16,7 @@ export interface ClientDto {
   totalSessions: number;
   nextSession?: string;
   status: 'active' | 'paused' | 'completed';
+  billingModel: BillingModelValue;
   email: string;
   phone: string;
   startDate: string;
@@ -32,8 +35,11 @@ export interface SessionDto {
   location: SessionLocationValue;
   status: SessionStatusValue;
   payment?: string;
-  paymentStatus?: 'paid' | 'pending';
-  billingSource?: 'pay-per-session' | 'package';
+  paymentStatus?: PaymentStatusValue;
+  billingSource?: 'pay-per-session' | 'monthly' | 'package';
+  paymentAmount?: number;
+  paymentDate?: string;
+  paymentMethod?: string;
   packageRemaining?: number;
   focus: string;
   notes?: string;
@@ -80,6 +86,10 @@ export interface ClientDetailEngagementDto {
   scheduledSessions: number;
   cancelledSessions: number;
   availableSessions: number;
+  paymentStatus?: PaymentStatusValue;
+  paymentAmount?: number;
+  paymentDate?: string;
+  paymentMethod?: string;
   status: 'active' | 'fullyScheduled' | 'completed' | 'paused' | string;
   sessions: SessionDto[];
 }
@@ -110,6 +120,7 @@ export interface DashboardDto {
   activeClients: number;
   sessionsThisMonth: number;
   revenueMtd: number;
+  unpaidMtd: number;
   calendarFilledPercent: number;
   upcomingSessions: SessionDto[];
   activeClientPreview: ClientDto[];
@@ -129,6 +140,8 @@ export interface BillingSummaryDto {
   totalRevenue: number;
   pendingAmount: number;
   overdueAmount: number;
+  paidCount?: number;
+  dueCount?: number;
 }
 
 export interface BillingSettingsDto {
@@ -151,6 +164,23 @@ export interface InvoiceDto {
   description: string;
 }
 
+export interface BillingPaymentDto {
+  id: string;
+  sourceType: 'session' | 'package';
+  sourceId: string;
+  clientId: string;
+  clientName: string;
+  clientInitials: string;
+  clientColor: string;
+  description: string;
+  amount: number;
+  paymentStatus: PaymentStatusValue;
+  billingSource: 'pay-per-session' | 'monthly' | 'package';
+  serviceDate: string;
+  paymentDate?: string;
+  paymentMethod?: string;
+}
+
 export interface ClientPackageDto {
   id: string;
   packageId: string;
@@ -161,6 +191,10 @@ export interface ClientPackageDto {
   scheduledSessions: number;
   usedSessions: number;
   cancelledSessions: number;
+  paymentAmount?: number;
+  paymentStatus?: PaymentStatusValue;
+  paymentDate?: string;
+  paymentMethod?: string;
   price?: number;
   status: 'active' | 'fullyScheduled' | 'completed';
 }

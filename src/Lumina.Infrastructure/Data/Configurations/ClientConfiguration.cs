@@ -14,6 +14,7 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
         builder.Property(x => x.Email).HasMaxLength(200).IsRequired();
         builder.Property(x => x.Phone).HasMaxLength(60).IsRequired();
         builder.Property(x => x.Program).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.BillingModel).HasDefaultValue(Lumina.Domain.Enums.BillingModel.PayPerSession).IsRequired();
         builder.Property(x => x.ExternalSource).HasMaxLength(100);
         builder.Property(x => x.ExternalId).HasMaxLength(100);
         builder.HasIndex(x => new { x.PracticeId, x.Name });

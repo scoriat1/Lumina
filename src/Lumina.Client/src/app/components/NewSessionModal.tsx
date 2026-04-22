@@ -5,7 +5,7 @@ interface NewSessionModalProps {
   onClose: () => void;
   onCreated?: (sessionId: string) => void | Promise<void>;
   preselectedClientId?: string;
-  preselectedBillingMode?: 'payPerSession' | 'package';
+  preselectedBillingMode?: 'payPerSession' | 'monthly' | 'package';
   preselectedPackageId?: string;
   preselectedClientPackageId?: string;
   prefilledSessionType?: string;

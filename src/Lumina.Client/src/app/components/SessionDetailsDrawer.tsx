@@ -37,6 +37,7 @@ import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { apiClient } from "../api/client";
 import type {
+    PaymentStatusValue,
     SessionDto,
     SessionStructuredNoteDto,
 } from "../api/types";
@@ -119,6 +120,24 @@ const createEditFormData = (session: SessionLike) => ({
     duration: session.duration || 60,
     method: session.location || ("zoom" as const),
     status: session.status || ("upcoming" as const),
+});
+
+const getSessionPaymentStatusValue = (
+    session: SessionLike,
+): PaymentStatusValue =>
+    session.paymentStatus ??
+    (session.billingSource === "package" ? "paid" : "unpaid");
+
+const createPaymentFormData = (session: SessionLike) => ({
+    paymentStatus: getSessionPaymentStatusValue(session),
+    amount:
+        session.paymentAmount != null
+            ? String(session.paymentAmount)
+            : "",
+    paymentMethod: session.paymentMethod ?? "",
+    paymentDate: session.paymentDate
+        ? format(new Date(session.paymentDate), "yyyy-MM-dd")
+        : "",
 });
 
 const createLegacyNote = (
@@ -374,6 +393,8 @@ export function SessionDetailsDrawer({
     const { customTemplates, presetTemplates } = useNotesTemplate();
     const [isCancelDialogOpen, setIsCancelDialogOpen] =
         useState(false);
+    const [isPaymentDialogOpen, setIsPaymentDialogOpen] =
+        useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [sessionDetail, setSessionDetail] =
         useState<SessionLike | null>(null);
@@ -429,6 +450,14 @@ export function SessionDetailsDrawer({
         method: "zoom" as "zoom" | "phone" | "office",
         status: "upcoming" as SessionLike["status"],
     });
+    const [paymentFormData, setPaymentFormData] = useState<
+        ReturnType<typeof createPaymentFormData>
+    >({
+        paymentStatus: "unpaid",
+        amount: "",
+        paymentMethod: "",
+        paymentDate: "",
+    });
 
     useEffect(() => {
         if (!open || !sessionId) {
@@ -454,6 +483,7 @@ export function SessionDetailsDrawer({
 
         if (normalizedFallback) {
             setEditFormData(createEditFormData(normalizedFallback));
+            setPaymentFormData(createPaymentFormData(normalizedFallback));
         }
 
         setIsEditMode(false);
@@ -488,6 +518,9 @@ export function SessionDetailsDrawer({
                 setEditFormData(
                     createEditFormData(normalizedDetail),
                 );
+                setPaymentFormData(
+                    createPaymentFormData(normalizedDetail),
+                );
             })
             .catch((error) => {
                 if (!isActive) {
@@ -510,6 +543,17 @@ export function SessionDetailsDrawer({
             isActive = false;
         };
     }, [open, sessionId, sessions, templateNameLookup]);
+
+    useEffect(() => {
+        if (!session || isPaymentDialogOpen) {
+            return;
+        }
+
+        setPaymentFormData(createPaymentFormData(session));
+    }, [
+        session,
+        isPaymentDialogOpen,
+    ]);
 
     const previousSession = useMemo(() => {
         if (!session) {
@@ -712,6 +756,78 @@ export function SessionDetailsDrawer({
                     : "Failed to update session status.",
             );
             return false;
+        }
+    };
+
+    const handleMarkSessionPaid = async () => {
+        try {
+            const updatedSession = await apiClient.markSessionPaid(session.id, {
+                amount: session.paymentAmount,
+                paymentMethod: "manual",
+            });
+            const normalizedSession = normalizeSession(updatedSession);
+            setSessionDetail(normalizedSession);
+            await onSaved?.();
+            toast.success("Session marked paid");
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to mark session paid.",
+            );
+        }
+    };
+
+    const handlePaymentChange = <
+        TField extends keyof ReturnType<typeof createPaymentFormData>,
+    >(
+        field: TField,
+        value: ReturnType<typeof createPaymentFormData>[TField],
+    ) => {
+        setPaymentFormData((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleOpenPaymentDialog = () => {
+        setPaymentFormData(createPaymentFormData(session));
+        setIsPaymentDialogOpen(true);
+    };
+
+    const handleSavePayment = async () => {
+        const amountText = paymentFormData.amount.trim();
+        const amount = amountText ? Number(amountText) : null;
+
+        if (amountText && (!Number.isFinite(amount) || amount <= 0)) {
+            toast.error("Enter a payment amount greater than 0.");
+            return;
+        }
+
+        try {
+            const updatedSession = await apiClient.updateSessionPayment(
+                session.id,
+                {
+                    paymentStatus: paymentFormData.paymentStatus,
+                    amount,
+                    paymentMethod:
+                        paymentFormData.paymentMethod.trim() || null,
+                    paymentDate: paymentFormData.paymentDate
+                        ? new Date(
+                              `${paymentFormData.paymentDate}T12:00:00`,
+                          ).toISOString()
+                        : null,
+                },
+            );
+            const normalizedSession = normalizeSession(updatedSession);
+            setSessionDetail(normalizedSession);
+            setPaymentFormData(createPaymentFormData(normalizedSession));
+            setIsPaymentDialogOpen(false);
+            await onSaved?.();
+            toast.success("Payment updated");
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to update payment.",
+            );
         }
     };
 
@@ -1321,7 +1437,7 @@ export function SessionDetailsDrawer({
                                     </Box>
                                 </Box>
 
-                                {/* Billing & Payment - Read-only */}
+                                {/* Billing & Payment */}
                                 <Box
                                     sx={{
                                         display: "flex",
@@ -1372,6 +1488,9 @@ export function SessionDetailsDrawer({
                                                     session.billingSource ===
                                                         "pay-per-session"
                                                         ? "Pay per session"
+                                                        : session.billingSource ===
+                                                            "monthly"
+                                                            ? "Monthly"
                                                         : session.billingSource ===
                                                             "package" &&
                                                             session.packageRemaining !==
@@ -1428,6 +1547,56 @@ export function SessionDetailsDrawer({
                                                     height: 24,
                                                 }}
                                             />
+                                            {session.paymentAmount ? (
+                                                <Chip
+                                                    label={`$${session.paymentAmount}`}
+                                                    size="small"
+                                                    sx={{
+                                                        bgcolor: "rgba(122, 116, 111, 0.06)",
+                                                        color: "#7A746F",
+                                                        fontWeight: 600,
+                                                        fontSize: "11px",
+                                                        height: 24,
+                                                    }}
+                                                />
+                                            ) : null}
+                                            {isEditMode &&
+                                                session.billingSource !== "package" &&
+                                                session.paymentStatus !== "paid" ? (
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    onClick={() => {
+                                                        void handleMarkSessionPaid();
+                                                    }}
+                                                    sx={{
+                                                        textTransform: "none",
+                                                        borderRadius: "999px",
+                                                        fontWeight: 600,
+                                                        fontSize: "11px",
+                                                        py: 0.25,
+                                                    }}
+                                                >
+                                                    Mark paid
+                                                </Button>
+                                            ) : null}
+                                            {isEditMode && session.billingSource !== "package" ? (
+                                                <Button
+                                                    size="small"
+                                                    variant="text"
+                                                    onClick={handleOpenPaymentDialog}
+                                                    sx={{
+                                                        textTransform: "none",
+                                                        borderRadius: "999px",
+                                                        fontWeight: 600,
+                                                        fontSize: "11px",
+                                                        py: 0.25,
+                                                        color: "#7A746F",
+                                                    }}
+                                                >
+                                                    Edit payment
+                                                </Button>
+                                            ) : null}
                                         </Box>
                                     </Box>
                                 </Box>
@@ -1711,6 +1880,132 @@ export function SessionDetailsDrawer({
                     )}
                 </Box>
             </Box>
+
+            <Dialog
+                open={isPaymentDialogOpen}
+                onClose={() => setIsPaymentDialogOpen(false)}
+                PaperProps={{
+                    sx: {
+                        width: { xs: "100%", sm: 420 },
+                        bgcolor: "#FDFCFB",
+                    },
+                }}
+            >
+                <DialogTitle
+                    sx={{
+                        color: "#2C2825",
+                        fontSize: "18px",
+                        fontWeight: 600,
+                        p: 2.5,
+                    }}
+                >
+                    Edit Payment
+                </DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2.25} sx={{ pt: 0.5 }}>
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="Payment status"
+                            value={paymentFormData.paymentStatus}
+                            onChange={(event) =>
+                                handlePaymentChange(
+                                    "paymentStatus",
+                                    event.target.value as PaymentStatusValue,
+                                )
+                            }
+                        >
+                            <MenuItem value="paid">Paid</MenuItem>
+                            <MenuItem value="pending">Pending</MenuItem>
+                            <MenuItem value="unpaid">Unpaid</MenuItem>
+                        </TextField>
+                        <TextField
+                            fullWidth
+                            size="small"
+                            label="Amount"
+                            type="number"
+                            value={paymentFormData.amount}
+                            onChange={(event) =>
+                                handlePaymentChange(
+                                    "amount",
+                                    event.target.value,
+                                )
+                            }
+                            inputProps={{ min: 0, step: "0.01" }}
+                            InputProps={{
+                                startAdornment: (
+                                    <Typography
+                                        sx={{
+                                            color: "#7A746F",
+                                            mr: 0.75,
+                                            fontSize: "14px",
+                                        }}
+                                    >
+                                        $
+                                    </Typography>
+                                ),
+                            }}
+                        />
+                        <TextField
+                            fullWidth
+                            size="small"
+                            label="Payment method"
+                            value={paymentFormData.paymentMethod}
+                            onChange={(event) =>
+                                handlePaymentChange(
+                                    "paymentMethod",
+                                    event.target.value,
+                                )
+                            }
+                            placeholder="Card, cash, ACH..."
+                        />
+                        <TextField
+                            fullWidth
+                            size="small"
+                            label="Payment date"
+                            type="date"
+                            value={paymentFormData.paymentDate}
+                            onChange={(event) =>
+                                handlePaymentChange(
+                                    "paymentDate",
+                                    event.target.value,
+                                )
+                            }
+                            InputLabelProps={{ shrink: true }}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ px: 2.5, pb: 2.5 }}>
+                    <Button
+                        onClick={() => setIsPaymentDialogOpen(false)}
+                        sx={{
+                            color: "#4A4542",
+                            fontWeight: 600,
+                            textTransform: "none",
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            void handleSavePayment();
+                        }}
+                        sx={{
+                            bgcolor: "#9B8B9E",
+                            color: "#FFFFFF",
+                            fontWeight: 600,
+                            textTransform: "none",
+                            "&:hover": {
+                                bgcolor: "#8A7A8D",
+                            },
+                        }}
+                    >
+                        Save Payment
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Cancel Dialog */}
             <Dialog

@@ -935,6 +935,7 @@ export function ClientsPage() {
             program: '',
             startDate: clientData.startDate,
             status: clientData.status,
+            billingModel: clientData.billingModel,
             notes: clientData.notes.trim() ? clientData.notes : null,
           });
 

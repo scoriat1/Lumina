@@ -246,6 +246,7 @@ function createClientDraft(client: ClientDto) {
         email: client.email ?? '',
         phone: client.phone ?? '',
         status: client.status,
+        billingModel: client.billingModel,
         startDate: format(new Date(client.startDate), 'yyyy-MM-dd'),
     };
 }
@@ -281,6 +282,7 @@ export function ClientDetailPage() {
         email: '',
         phone: '',
         status: 'active' as ClientDto['status'],
+        billingModel: 'payPerSession' as ClientDto['billingModel'],
         startDate: '',
     });
     const [savingClient, setSavingClient] = useState(false);
@@ -563,6 +565,7 @@ export function ClientDetailPage() {
                 program: client.program,
                 startDate: clientDraft.startDate,
                 status: clientDraft.status,
+                billingModel: clientDraft.billingModel,
                 notes: client.notes ?? null,
                 email,
                 phone: clientDraft.phone.trim(),
@@ -1006,6 +1009,25 @@ export function ClientDetailPage() {
                                                                         engagementValue
                                                                     }
                                                                 </Typography>
+                                                            ) : null}
+                                                            {engagement.paymentStatus ? (
+                                                                <Chip
+                                                                    label={`Payment ${engagement.paymentStatus}`}
+                                                                    size="small"
+                                                                    sx={{
+                                                                        bgcolor:
+                                                                            engagement.paymentStatus === 'paid'
+                                                                                ? 'rgba(168, 181, 160, 0.12)'
+                                                                                : 'rgba(212, 184, 138, 0.12)',
+                                                                        color:
+                                                                            engagement.paymentStatus === 'paid'
+                                                                                ? '#5B7052'
+                                                                                : '#8B7444',
+                                                                        fontWeight: 600,
+                                                                        fontSize: '11px',
+                                                                        height: '22px',
+                                                                    }}
+                                                                />
                                                             ) : null}
                                                         </Box>
                                                     </Box>
@@ -1525,6 +1547,35 @@ export function ClientDetailPage() {
                                                     <MenuItem value="active">Active</MenuItem>
                                                     <MenuItem value="paused">Paused</MenuItem>
                                                     <MenuItem value="completed">Completed</MenuItem>
+                                                </TextField>
+                                                <TextField
+                                                    select
+                                                    label="Billing Model"
+                                                    fullWidth
+                                                    value={clientDraft.billingModel}
+                                                    onChange={(event) =>
+                                                        setClientDraft((current) => ({
+                                                            ...current,
+                                                            billingModel: event.target.value as ClientDto['billingModel'],
+                                                        }))
+                                                    }
+                                                    sx={{
+                                                        '& .MuiInputLabel-root': {
+                                                            fontSize: '15px',
+                                                            fontWeight: 600,
+                                                            color: 'rgba(44, 39, 36, 0.82)',
+                                                        },
+                                                        '& .MuiOutlinedInput-root': {
+                                                            fontSize: '16px',
+                                                            borderRadius: '12px',
+                                                            minHeight: 62,
+                                                            bgcolor: '#FCFBFA',
+                                                        },
+                                                    }}
+                                                >
+                                                    <MenuItem value="payPerSession">Pay per session</MenuItem>
+                                                    <MenuItem value="monthly">Monthly billing</MenuItem>
+                                                    <MenuItem value="package">Package billing</MenuItem>
                                                 </TextField>
                                                 <TextField
                                                     label="Start Date"

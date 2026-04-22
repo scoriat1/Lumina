@@ -1,6 +1,7 @@
 import type {
   AuthMeDto,
   BillingSettingsDto,
+  BillingPaymentDto,
   BillingSummaryDto,
   ClientPackageDto,
   ClientDetailViewDto,
@@ -88,6 +89,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 type ClientApiDto = Omit<ClientDto, 'initials'> & { initials?: string };
 type SessionApiDto = Omit<SessionDto, 'initials'> & { initials?: string };
 type InvoiceApiDto = Omit<InvoiceDto, 'clientInitials'> & { clientInitials?: string };
+type BillingPaymentApiDto = Omit<BillingPaymentDto, 'clientInitials' | 'sourceId' | 'clientId'> & {
+  clientInitials?: string;
+  sourceId: string | number;
+  clientId: string | number;
+};
 type ProviderApiDto = Omit<ProviderDto, 'initials'> & { initials?: string };
 type NotesTemplateSettingsApiDto = Omit<NotesTemplateSettingsDto, 'selectedTemplateId'> & {
   selectedTemplateId?: number | null;
@@ -100,6 +106,7 @@ type DashboardApiDto = Omit<DashboardDto, 'upcomingSessions' | 'activeClientPrev
 
 const mapClientDto = (client: ClientApiDto): ClientDto => ({
   ...client,
+  billingModel: client.billingModel ?? 'payPerSession',
   avatarColor: client.avatarColor ?? computeAvatarColor(client.id),
   initials: client.initials ?? computeInitials(client.name),
 });
@@ -119,6 +126,14 @@ const mapInvoiceDto = (invoice: InvoiceApiDto): InvoiceDto => ({
   ...invoice,
   clientColor: invoice.clientColor ?? computeAvatarColor(invoice.clientId ?? 0),
   clientInitials: invoice.clientInitials ?? computeInitials(invoice.clientName),
+});
+
+const mapBillingPaymentDto = (payment: BillingPaymentApiDto): BillingPaymentDto => ({
+  ...payment,
+  sourceId: String(payment.sourceId),
+  clientId: String(payment.clientId),
+  clientColor: payment.clientColor ?? computeAvatarColor(payment.clientId),
+  clientInitials: payment.clientInitials ?? computeInitials(payment.clientName),
 });
 
 const mapProviderDto = (provider: ProviderApiDto): ProviderDto => ({
@@ -205,6 +220,7 @@ export const apiClient = {
     program: string;
     startDate: string;
     status: 'active' | 'paused' | 'completed';
+    billingModel?: SessionBillingModeValue;
     notes: string | null;
   }) => request<{ id: string }>('/api/clients', {
     method: 'POST',
@@ -217,6 +233,7 @@ export const apiClient = {
     program: string;
     startDate: string;
     status: 'active' | 'paused' | 'completed';
+    billingModel?: SessionBillingModeValue;
     notes: string | null;
   }) => request<void>(`/api/clients/${id}`, {
     method: 'PUT',
@@ -277,6 +294,10 @@ export const apiClient = {
     body: JSON.stringify(payload),
   }),
   getBillingSummary: () => request<BillingSummaryDto>('/api/billing/summary'),
+  getBillingPayments: async () => {
+    const payments = await request<BillingPaymentApiDto[]>('/api/billing/payments');
+    return payments.map(mapBillingPaymentDto);
+  },
   getBillingSettings: () => request<BillingSettingsDto>('/api/settings/billing'),
   updateBillingSettings: (payload: BillingSettingsDto) => request<BillingSettingsDto>('/api/settings/billing', {
     method: 'PUT',
@@ -289,6 +310,52 @@ export const apiClient = {
   markInvoicePaid: (id: string) => request<void>(`/api/billing/invoices/${id}/mark-paid`, {
     method: 'POST',
   }),
+  markSessionPaid: (id: string, payload: { amount?: number; paymentMethod?: string; paymentDate?: string } = {}) =>
+    request<SessionDto>(`/api/sessions/${id}/mark-paid`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateSessionPayment: (id: string, payload: {
+    paymentStatus: 'paid' | 'pending' | 'unpaid';
+    amount?: number | null;
+    paymentMethod?: string | null;
+    paymentDate?: string | null;
+  }) =>
+    request<SessionDto>(`/api/sessions/${id}/payment`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  generateMonthlyInvoices: (payload: { year?: number; month?: number; clientId?: string | number; dueDate?: string } = {}) =>
+    request<{ createdCount: number; invoiceIds: string[] }>('/api/billing/monthly-invoices', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        clientId: payload.clientId != null ? Number(payload.clientId) : null,
+      }),
+    }),
+  markClientPackagePaid: (
+    clientId: string | number,
+    clientPackageId: string | number,
+    payload: { amount?: number; paymentMethod?: string; paymentDate?: string } = {},
+  ) =>
+    request<void>(`/api/clients/${clientId}/packages/${clientPackageId}/mark-paid`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateClientPackagePayment: (
+    clientId: string | number,
+    clientPackageId: string | number,
+    payload: {
+      paymentStatus: 'paid' | 'pending' | 'unpaid';
+      amount?: number | null;
+      paymentMethod?: string | null;
+      paymentDate?: string | null;
+    },
+  ) =>
+    request<void>(`/api/clients/${clientId}/packages/${clientPackageId}/payment`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
   getPracticePackages: async () => {
     const packages = await request<PracticePackageDto[]>('/api/settings/packages');
     return packages.map(mapPracticePackageDto);

@@ -13,6 +13,7 @@ public class Client
     public string Program { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public ClientStatus Status { get; set; } = ClientStatus.Active;
+    public BillingModel BillingModel { get; set; } = BillingModel.PayPerSession;
     public string? Notes { get; set; }
     public string? ExternalSource { get; set; }
     public string? ExternalId { get; set; }

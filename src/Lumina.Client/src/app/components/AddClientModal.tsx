@@ -35,6 +35,7 @@ export interface ClientFormData {
   email: string;
   phone: string;
   status: 'active' | 'paused' | 'completed';
+  billingModel: 'payPerSession' | 'monthly' | 'package';
   startDate: string;
   notes: string;
 }
@@ -46,6 +47,7 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
     email: '',
     phone: '',
     status: 'active',
+    billingModel: 'payPerSession',
     startDate: format(new Date(), 'yyyy-MM-dd'),
     notes: '',
   });
@@ -63,6 +65,7 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
         email: '',
         phone: '',
         status: 'active',
+        billingModel: 'payPerSession',
         startDate: format(new Date(), 'yyyy-MM-dd'),
         notes: '',
       });
@@ -337,6 +340,19 @@ export function AddClientModal({ open, onClose, onSave }: AddClientModalProps) {
                   <Typography sx={{ fontSize: '15px', color: '#4A4542' }}>Completed</Typography>
                 </Box>
               </MenuItem>
+            </TextField>
+
+            <TextField
+              label="Billing Model"
+              select
+              value={formData.billingModel}
+              onChange={(e) => handleChange('billingModel', e.target.value)}
+              fullWidth
+              sx={inputStyles}
+            >
+              <MenuItem value="payPerSession">Pay per session</MenuItem>
+              <MenuItem value="monthly">Monthly billing</MenuItem>
+              <MenuItem value="package">Package billing</MenuItem>
             </TextField>
 
             <TextField

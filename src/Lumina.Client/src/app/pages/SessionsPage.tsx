@@ -296,6 +296,12 @@ export function SessionsPage() {
     }
   };
 
+  const getPaymentStatusLabel = (paymentStatus?: SessionDto['paymentStatus']) => (
+    paymentStatus
+      ? paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1)
+      : 'Unpaid'
+  );
+
   const getLocationIcon = (location: string) => {
     switch (location) {
       case 'zoom':
@@ -1049,11 +1055,26 @@ export function SessionsPage() {
                     >
                       Status
                     </TableCell>
+                    <TableCell
+                      sx={{
+                        bgcolor: '#FDFCFB',
+                        borderBottom: '1.5px solid #E8E5E1',
+                        fontWeight: 600,
+                        color: '#7A746F',
+                        fontSize: '13px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        py: 2,
+                      }}
+                    >
+                      Payment
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {pastSessions.map((session) => {
                     const statusStyles = getStatusStyles(session.status);
+                    const paymentStyles = getPaymentStyles(session.paymentStatus ?? 'unpaid');
                     const isHighlighted = session.id === selectedSessionId;
 
                     return (
@@ -1117,6 +1138,19 @@ export function SessionsPage() {
                             }}
                           />
                         </TableCell>
+                        <TableCell sx={{ py: 2.5, borderBottom: '1px solid #F5F3F1' }}>
+                          <Chip
+                            label={getPaymentStatusLabel(session.paymentStatus)}
+                            size="small"
+                            sx={{
+                              ...paymentStyles,
+                              fontWeight: 600,
+                              fontSize: '12px',
+                              height: 26,
+                              borderRadius: '6px',
+                            }}
+                          />
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -1163,6 +1197,7 @@ export function SessionsPage() {
         sessions={sessionsData}
         onBookReplacement={handleOpenReplacementBooking}
         onUpdateSession={handleUpdateSession}
+        onSaved={loadSessions}
       />
 
       {/* New Session Modal */}

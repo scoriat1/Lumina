@@ -69,6 +69,7 @@ type ModalClient = {
   name: string;
   initials: string;
   avatarColor: string;
+  billingModel: SessionBillingModeValue;
 };
 
 type AvailabilityEvent = Pick<
@@ -401,6 +402,7 @@ export function SessionEntryModal({
             name: client.name,
             initials: client.initials,
             avatarColor: client.avatarColor,
+            billingModel: client.billingModel,
           })),
         );
       } else {
@@ -661,10 +663,10 @@ export function SessionEntryModal({
       }
     }
 
-    if (formData.billingMode === 'payPerSession') {
+    if (formData.billingMode === 'payPerSession' || formData.billingMode === 'monthly') {
       const amount = Number(formData.amount);
       if (!Number.isFinite(amount) || amount <= 0) {
-        setSubmitError('Enter a positive amount for pay-per-session billing.');
+        setSubmitError('Enter a positive amount for this billing model.');
         return;
       }
     }
@@ -704,7 +706,7 @@ export function SessionEntryModal({
             ? formData.clientPackageId
             : undefined,
         amount:
-          formData.billingMode === 'payPerSession'
+          formData.billingMode === 'payPerSession' || formData.billingMode === 'monthly'
             ? Number(formData.amount)
             : undefined,
         recurrenceFrequency:
@@ -833,10 +835,19 @@ export function SessionEntryModal({
                   fullWidth
                   size="small"
                   value={formData.clientId}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const selectedClient = clients.find(
+                      (client) => client.id === event.target.value,
+                    );
+                    const clientChanged = event.target.value !== formData.clientId;
+
                     setFormData((current) => ({
                       ...current,
                       clientId: event.target.value,
+                      billingMode:
+                        clientChanged && selectedClient
+                          ? selectedClient.billingModel
+                          : current.billingMode,
                       packageId:
                         event.target.value === current.clientId
                           ? current.packageId
@@ -845,8 +856,8 @@ export function SessionEntryModal({
                         event.target.value === current.clientId
                           ? current.clientPackageId
                           : '',
-                    }))
-                  }
+                    }));
+                  }}
                   required
                 >
                 {clients.map((client) => (
@@ -923,14 +934,17 @@ export function SessionEntryModal({
                 }}
               >
                 <ToggleButton value="payPerSession">Pay per session</ToggleButton>
+                <ToggleButton value="monthly">Monthly</ToggleButton>
                 <ToggleButton value="package">Package</ToggleButton>
               </ToggleButtonGroup>
             </Box>
 
-            {formData.billingMode === 'payPerSession' ? (
+            {formData.billingMode === 'payPerSession' || formData.billingMode === 'monthly' ? (
               <Box>
                 <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 600, mb: 0.75, display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                  Invoice Amount
+                  {formData.billingMode === 'monthly'
+                    ? 'Monthly Session Rate'
+                    : 'Invoice Amount'}
                 </Typography>
                 <TextField
                   fullWidth
@@ -940,6 +954,11 @@ export function SessionEntryModal({
                   onChange={(event) => handleChange('amount', event.target.value)}
                   inputProps={{ min: 0, step: '0.01' }}
                   placeholder={defaultSessionAmount}
+                  helperText={
+                    formData.billingMode === 'monthly'
+                      ? 'Used when monthly invoices are generated.'
+                      : undefined
+                  }
                   InputProps={{
                     startAdornment: <InputAdornment position="start">$</InputAdornment>,
                   }}
