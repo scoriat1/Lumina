@@ -6,6 +6,7 @@ import { colors, themeLayout, borderRadius, transitions } from '../../theme';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router';
+import { useNotificationCount } from '../../notifications/useNotificationCount';
 
 interface AppTopBarProps {
   onMenuClick?: () => void;
@@ -15,6 +16,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const notificationCount = useNotificationCount();
 
   return (
     <AppBar position="static" elevation={0} sx={{ bgcolor: colors.surface.card, borderBottom: `1px solid ${colors.border.subtle}`, height: themeLayout.headerHeight }}>
@@ -31,7 +33,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             onClick={() => navigate('/notifications')}
             sx={{ color: colors.text.secondary, transition: transitions.base, '&:hover': { bgcolor: colors.surface.elevated } }}
           >
-            <Badge badgeContent={3} sx={{ '& .MuiBadge-badge': { bgcolor: colors.brand.purple, color: '#FFFFFF', fontWeight: 600, fontSize: '11px', minWidth: '18px', height: '18px' } }}>
+            <Badge badgeContent={notificationCount} max={99} invisible={notificationCount === 0} sx={{ '& .MuiBadge-badge': { bgcolor: colors.brand.purple, color: '#FFFFFF', fontWeight: 600, fontSize: '11px', minWidth: '18px', height: '18px' } }}>
               <NotificationsIcon sx={{ fontSize: 22 }} />
             </Badge>
           </IconButton>

@@ -8,6 +8,11 @@ import { NotesTemplateSettings } from '../components/NotesTemplateSettings';
 import { apiClient } from '../api/client';
 import { usePracticePackages } from '../contexts/PracticePackagesContext';
 import type { BillingSettingsDto, PracticePackageDto, ProviderDto } from '../api/types';
+import {
+  loadNotificationPreferences,
+  saveNotificationPreferences,
+  type NotificationPreferences,
+} from '../notifications/preferences';
 
 type SettingsTab = 
   | 'practice'
@@ -98,11 +103,10 @@ export function SettingsPage() {
   const [bufferTime, setBufferTime] = useState('15');
 
   // Notification settings state
-  const [sessionReminders, setSessionReminders] = useState(true);
-  const [invoiceReminders, setInvoiceReminders] = useState(true);
-  const [overdueAlerts, setOverdueAlerts] = useState(false);
-  const [weeklySummary, setWeeklySummary] = useState(true);
-  const [providerReminderCopy, setProviderReminderCopy] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] =
+    useState<NotificationPreferences>(() => loadNotificationPreferences());
+  const [initialNotificationPreferences, setInitialNotificationPreferences] =
+    useState<NotificationPreferences>(() => loadNotificationPreferences());
 
   // Billing settings state
   const [stripeConnected, setStripeConnected] = useState(false);
@@ -123,6 +127,13 @@ export function SettingsPage() {
   const [applyToAllProviders, setApplyToAllProviders] = useState(true);
 
   const handleSave = async () => {
+    if (activeTab === 'notifications') {
+      saveNotificationPreferences(notificationPreferences);
+      setInitialNotificationPreferences(notificationPreferences);
+      setIsDirty(false);
+      return;
+    }
+
     if (activeTab !== 'billing') {
       setIsDirty(false);
       return;
@@ -153,6 +164,10 @@ export function SettingsPage() {
       setDefaultDueDays(String(initialBillingSettings.defaultDueDays));
       setDefaultSessionAmount(String(initialBillingSettings.defaultSessionAmount));
       setBillingSaveError(null);
+    }
+
+    if (activeTab === 'notifications') {
+      setNotificationPreferences(initialNotificationPreferences);
     }
 
     setIsDirty(false);
@@ -384,16 +399,8 @@ export function SettingsPage() {
 
           {activeTab === 'notifications' && (
             <NotificationsSettings
-              sessionReminders={sessionReminders}
-              setSessionReminders={setSessionReminders}
-              invoiceReminders={invoiceReminders}
-              setInvoiceReminders={setInvoiceReminders}
-              overdueAlerts={overdueAlerts}
-              setOverdueAlerts={setOverdueAlerts}
-              weeklySummary={weeklySummary}
-              setWeeklySummary={setWeeklySummary}
-              providerReminderCopy={providerReminderCopy}
-              setProviderReminderCopy={setProviderReminderCopy}
+              preferences={notificationPreferences}
+              setPreferences={setNotificationPreferences}
               isDirty={isDirty}
               setIsDirty={setIsDirty}
               onSave={handleSave}
@@ -1421,81 +1428,41 @@ function AvailabilitySettings({ timeZone, applyToAllProviders, setApplyToAllProv
 
 // Notifications Settings Section
 function NotificationsSettings({
-  sessionReminders,
-  setSessionReminders,
-  invoiceReminders,
-  setInvoiceReminders,
-  overdueAlerts,
-  setOverdueAlerts,
-  weeklySummary,
-  setWeeklySummary,
-  providerReminderCopy,
-  setProviderReminderCopy,
+  preferences,
+  setPreferences,
   isDirty,
   setIsDirty,
   onSave,
   onCancel,
 }: any) {
+  const updatePreference = (key: keyof NotificationPreferences, checked: boolean) => {
+    setPreferences((current: NotificationPreferences) => ({
+      ...current,
+      [key]: checked,
+    }));
+    setIsDirty(true);
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {/* Client Notifications */}
       <ContentCard>
-        <SectionHeader title="Client Notifications" />
+        <SectionHeader title="In-App Notifications" />
+        <Typography sx={{ fontSize: '13px', color: colors.text.secondary, mt: 1, lineHeight: 1.6 }}>
+          These settings control the notification bell and Notifications page. Client email/SMS reminders are not shown here until a delivery integration exists.
+        </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 3 }}>
           <ToggleRow
             label="Session reminders"
-            description="Send reminders 24 hours before scheduled sessions"
-            checked={sessionReminders}
-            onChange={(checked) => {
-              setSessionReminders(checked);
-              setIsDirty(true);
-            }}
+            description="Show sessions scheduled in the next 24 hours"
+            checked={preferences.sessionReminders}
+            onChange={(checked) => updatePreference('sessionReminders', checked)}
           />
 
           <ToggleRow
-            label="Invoice reminders"
-            description="Remind clients of upcoming invoice due dates"
-            checked={invoiceReminders}
-            onChange={(checked) => {
-              setInvoiceReminders(checked);
-              setIsDirty(true);
-            }}
-          />
-
-          <ToggleRow
-            label="Overdue alerts"
-            description="Notify clients when invoices become overdue"
-            checked={overdueAlerts}
-            onChange={(checked) => {
-              setOverdueAlerts(checked);
-              setIsDirty(true);
-            }}
-          />
-        </Box>
-      </ContentCard>
-
-      {/* Internal Notifications */}
-      <ContentCard>
-        <SectionHeader title="Internal Notifications" />
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 3 }}>
-          <ToggleRow
-            label="Weekly summary report"
-            description="Receive a weekly summary of your practice activity"
-            checked={weeklySummary}
-            onChange={(checked) => {
-              setWeeklySummary(checked);
-              setIsDirty(true);
-            }}
-          />
-
-          <ToggleRow
-            label="Provider receives reminder copy"
-            description="Send providers a copy of client session reminders"
-            checked={providerReminderCopy}
-            onChange={(checked) => {
-              setProviderReminderCopy(checked);
-              setIsDirty(true);
-            }}
+            label="Billing reminders"
+            description="Show unpaid and pending session or package payments"
+            checked={preferences.billingReminders}
+            onChange={(checked) => updatePreference('billingReminders', checked)}
           />
         </Box>
       </ContentCard>

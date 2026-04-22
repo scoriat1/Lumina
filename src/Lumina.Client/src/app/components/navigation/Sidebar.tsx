@@ -9,6 +9,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { colors, themeLayout, borderRadius, transitions } from '../../theme';
+import { useNotificationCount } from '../../notifications/useNotificationCount';
 
 const navigationItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
@@ -32,6 +33,7 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const notificationCount = useNotificationCount();
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -86,6 +88,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 <ListItemButton
                   onClick={() => handleNavigation(item.path)}
                   sx={{
+                    position: 'relative',
                     borderRadius: borderRadius.xl,
                     py: 1.5,
                     px: 0,
@@ -99,7 +102,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                       bgcolor: isActive ? colors.brand.purpleDark : 'rgba(110, 91, 206, 0.2)',
                     },
                   }}
-                >
+                  >
                   <ListItemIcon
                     sx={{
                       minWidth: 'auto',
@@ -110,6 +113,31 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   >
                     {item.icon}
                   </ListItemIcon>
+                  {item.path === '/notifications' && notificationCount > 0 ? (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 5,
+                        right: 7,
+                        minWidth: 18,
+                        height: 18,
+                        px: 0.5,
+                        borderRadius: '999px',
+                        bgcolor: isActive ? '#FDFCFB' : colors.brand.purple,
+                        color: isActive ? colors.brand.purple : '#FFFFFF',
+                        border: '2px solid #4A433F',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        lineHeight: 1,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      {notificationCount > 99 ? '99+' : notificationCount}
+                    </Box>
+                  ) : null}
                 </ListItemButton>
               </Tooltip>
             </ListItem>
