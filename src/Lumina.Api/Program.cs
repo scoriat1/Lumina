@@ -282,6 +282,7 @@ api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
         client.id,
         client.name,
         client.program,
+        progress = CalculateProgressPercentage(client.sessionsCompleted, client.totalSessions),
         client.sessionsCompleted,
         client.totalSessions,
         nextSession = nextSessionByClientId.GetValueOrDefault(client.id),
@@ -333,6 +334,7 @@ api.MapGet("/clients/{id:int}", async (int id, LuminaDbContext db, HttpContext c
         client.id,
         client.name,
         client.program,
+        progress = CalculateProgressPercentage(client.sessionsCompleted, client.totalSessions),
         client.sessionsCompleted,
         client.totalSessions,
         nextSession,
@@ -2154,12 +2156,11 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
         focus = s.Focus
     }).ToListAsync();
 
-    var activeClientPreview = await db.Clients.Where(c => c.PracticeId == scope.Value.practiceId && c.Status == ClientStatus.Active).Take(4).Select(c => new
+    var activeClientPreviewData = await db.Clients.Where(c => c.PracticeId == scope.Value.practiceId && c.Status == ClientStatus.Active).Take(4).Select(c => new
     {
         id = c.Id,
         name = c.Name,
         program = c.Program,
-        progress = 0,
         sessionsCompleted = c.Sessions.Count(s => s.Status == SessionStatus.Completed),
         totalSessions = c.Sessions.Count,
         status = c.Status.ToString().ToLowerInvariant(),
@@ -2168,6 +2169,21 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
         startDate = c.StartDate,
         notes = c.Notes
     }).ToListAsync();
+
+    var activeClientPreview = activeClientPreviewData.Select(client => new
+    {
+        client.id,
+        client.name,
+        client.program,
+        progress = CalculateProgressPercentage(client.sessionsCompleted, client.totalSessions),
+        client.sessionsCompleted,
+        client.totalSessions,
+        client.status,
+        client.email,
+        client.phone,
+        client.startDate,
+        client.notes
+    });
 
     return Results.Ok(new { activeClients, sessionsThisMonth, revenueMtd, unpaidMtd, calendarFilledPercent = 15, upcomingSessions, activeClientPreview });
 });
@@ -2343,6 +2359,16 @@ static decimal GetPackagePaymentAmount(ClientPackage clientPackage)
 {
     var amount = clientPackage.PaymentAmount ?? clientPackage.Package.Price ?? 0m;
     return decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
+}
+
+static int CalculateProgressPercentage(int completed, int total)
+{
+    if (total <= 0)
+    {
+        return 0;
+    }
+
+    return Math.Clamp((int)Math.Round((double)completed / total * 100, MidpointRounding.AwayFromZero), 0, 100);
 }
 
 static async Task MarkOverdueInvoicesAsync(LuminaDbContext db, int practiceId)

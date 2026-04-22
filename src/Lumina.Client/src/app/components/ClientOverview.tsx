@@ -21,6 +21,8 @@ interface ClientOverviewProps {
   clients: Client[];
 }
 
+const clampProgress = (value: number) => Math.min(100, Math.max(0, value));
+
 export function ClientOverview({ clients }: ClientOverviewProps) {
   const getStatusColor = (status: Client['status']) => {
     switch (status) {
@@ -80,6 +82,7 @@ export function ClientOverview({ clients }: ClientOverviewProps) {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}> {/* Increased gap between items */}
           {clients.map((client) => {
             const statusColors = getStatusColor(client.status);
+            const progress = clampProgress(client.progress);
             return (
               <Box
                 key={client.id}
@@ -182,7 +185,7 @@ export function ClientOverview({ clients }: ClientOverviewProps) {
                   
                   <LinearProgress
                     variant="determinate"
-                    value={client.progress}
+                    value={progress}
                     sx={{
                       height: 8,
                       borderRadius: 4,

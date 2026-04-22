@@ -41,6 +41,11 @@ const computeInitials = (name: string): string =>
     .map((part) => part.charAt(0).toUpperCase())
     .join('');
 
+const calculateProgress = (completed: number, total: number): number => {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((completed / total) * 100)));
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
@@ -109,6 +114,7 @@ const mapClientDto = (client: ClientApiDto): ClientDto => ({
   billingModel: client.billingModel ?? 'payPerSession',
   avatarColor: client.avatarColor ?? computeAvatarColor(client.id),
   initials: client.initials ?? computeInitials(client.name),
+  progress: client.progress ?? calculateProgress(client.sessionsCompleted, client.totalSessions),
 });
 
 const mapSessionDto = (session: SessionApiDto): SessionDto => ({

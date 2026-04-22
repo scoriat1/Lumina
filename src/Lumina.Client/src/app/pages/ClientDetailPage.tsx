@@ -825,10 +825,16 @@ export function ClientDetailPage() {
                                     engagement.status === 'active';
                                 const progress =
                                     engagement.totalSessions > 0
-                                        ? Math.round(
-                                              (engagement.usedSessions /
-                                                  engagement.totalSessions) *
-                                                  100,
+                                        ? Math.min(
+                                              100,
+                                              Math.max(
+                                                  0,
+                                                  Math.round(
+                                                      (engagement.usedSessions /
+                                                          engagement.totalSessions) *
+                                                          100,
+                                                  ),
+                                              ),
                                           )
                                         : 0;
                                 const engagementValue = formatCurrency(

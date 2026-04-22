@@ -53,6 +53,8 @@ interface Client {
   notes?: string;
 }
 
+const clampProgress = (value?: number) => Math.min(100, Math.max(0, value ?? 0));
+
 export function ClientsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -449,6 +451,7 @@ export function ClientsPage() {
             {filteredClients.map((client) => {
               const statusColors = getStatusColor(client.status);
               const isHighlighted = selectedClientId === client.id;
+              const progress = clampProgress(client.progress);
 
               return (
                 <Box
@@ -544,7 +547,7 @@ export function ClientsPage() {
                     </Box>
                     <LinearProgress
                       variant="determinate"
-                      value={client.progress}
+                      value={progress}
                       sx={{
                         height: 6,
                         borderRadius: 3,
@@ -787,7 +790,7 @@ export function ClientsPage() {
                       </Box>
                       <LinearProgress
                         variant="determinate"
-                        value={clients.find((c) => c.id === selectedClientId)?.progress}
+                        value={clampProgress(clients.find((c) => c.id === selectedClientId)?.progress)}
                         sx={{
                           height: 8,
                           borderRadius: 4,
