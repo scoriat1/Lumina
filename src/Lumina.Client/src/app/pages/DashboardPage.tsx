@@ -39,7 +39,7 @@ export function DashboardPage() {
       value: `$${dashboard?.revenueMtd?.toLocaleString() ?? '0'}`,
       icon: <AttachMoneyIcon />,
       color: '#0288D1',
-      subtitle: `$${(dashboard?.unpaidMtd ?? 0).toLocaleString()} unpaid`,
+      subtitle: `$${(dashboard?.unpaidMtd ?? 0).toLocaleString()} due / unpaid`,
     },
     {
       title: 'Calendar Filled',

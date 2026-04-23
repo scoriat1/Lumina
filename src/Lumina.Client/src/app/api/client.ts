@@ -91,6 +91,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(responseText) as T;
 }
 
+const withQuery = (
+  path: string,
+  query?: Record<string, string | number | null | undefined>,
+) => {
+  if (!query) {
+    return path;
+  }
+
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== null && value !== undefined && value !== '') {
+      params.set(key, String(value));
+    }
+  }
+
+  const queryString = params.toString();
+  return queryString ? `${path}?${queryString}` : path;
+};
+
 type ClientApiDto = Omit<ClientDto, 'initials'> & { initials?: string };
 type SessionApiDto = Omit<SessionDto, 'initials'> & { initials?: string };
 type InvoiceApiDto = Omit<InvoiceDto, 'clientInitials'> & { clientInitials?: string };
@@ -126,6 +145,7 @@ const mapSessionDto = (session: SessionApiDto): SessionDto => ({
   packageId: session.packageId ? String(session.packageId) : undefined,
   clientPackageId: session.clientPackageId ? String(session.clientPackageId) : undefined,
   invoiceId: session.invoiceId ? String(session.invoiceId) : undefined,
+  providerId: session.providerId ? String(session.providerId) : undefined,
 });
 
 const mapInvoiceDto = (invoice: InvoiceApiDto): InvoiceDto => ({
@@ -299,9 +319,10 @@ export const apiClient = {
     method: 'PUT',
     body: JSON.stringify(payload),
   }),
-  getBillingSummary: () => request<BillingSummaryDto>('/api/billing/summary'),
-  getBillingPayments: async () => {
-    const payments = await request<BillingPaymentApiDto[]>('/api/billing/payments');
+  getBillingSummary: (filters?: { clientId?: string; startDate?: string; endDate?: string }) =>
+    request<BillingSummaryDto>(withQuery('/api/billing/summary', filters)),
+  getBillingPayments: async (filters?: { clientId?: string; startDate?: string; endDate?: string }) => {
+    const payments = await request<BillingPaymentApiDto[]>(withQuery('/api/billing/payments', filters));
     return payments.map(mapBillingPaymentDto);
   },
   getBillingSettings: () => request<BillingSettingsDto>('/api/settings/billing'),

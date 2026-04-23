@@ -40,6 +40,8 @@ export interface SessionDto {
   paymentAmount?: number;
   paymentDate?: string;
   paymentMethod?: string;
+  providerId?: string;
+  providerName?: string;
   packageRemaining?: number;
   focus: string;
   notes?: string;

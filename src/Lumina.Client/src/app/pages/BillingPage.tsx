@@ -7,8 +7,13 @@ import {
   CardContent,
   Chip,
   Drawer,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -19,10 +24,10 @@ import ErrorIcon from '@mui/icons-material/Error';
 import MoneyOffIcon from '@mui/icons-material/MoneyOff';
 import PaymentIcon from '@mui/icons-material/Payment';
 import PendingIcon from '@mui/icons-material/Pending';
-import { format } from 'date-fns';
+import { format, endOfMonth, startOfMonth } from 'date-fns';
 import { PageHeader } from '../components/PageHeader';
 import { apiClient } from '../api/client';
-import type { BillingPaymentDto, BillingSummaryDto, PaymentStatusValue } from '../api/types';
+import type { BillingPaymentDto, BillingSummaryDto, ClientDto, PaymentStatusValue } from '../api/types';
 
 const emptySummary: BillingSummaryDto = {
   totalRevenue: 0,
@@ -41,6 +46,12 @@ const formatCurrency = (amount: number) =>
 
 const formatDate = (value?: string) =>
   value ? format(new Date(value), 'MMM d, yyyy') : 'Not recorded';
+
+const formatDateInput = (value: Date) => format(value, 'yyyy-MM-dd');
+const currentMonthStart = formatDateInput(startOfMonth(new Date()));
+const currentMonthEnd = formatDateInput(endOfMonth(new Date()));
+
+type DateFilterValue = 'thisMonth' | 'allTime' | 'custom';
 
 const getPaymentStatusStyles = (status: PaymentStatusValue) => {
   switch (status) {
@@ -82,16 +93,61 @@ export function BillingPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [payments, setPayments] = useState<BillingPaymentDto[]>([]);
+  const [clients, setClients] = useState<ClientDto[]>([]);
   const [summary, setSummary] = useState<BillingSummaryDto>(emptySummary);
   const [billingMessage, setBillingMessage] = useState<string | null>(null);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
   const [isMarkingUnpaid, setIsMarkingUnpaid] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('all');
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>('thisMonth');
+  const [customStartDate, setCustomStartDate] = useState(currentMonthStart);
+  const [customEndDate, setCustomEndDate] = useState(currentMonthEnd);
+
+  const billingFilters = useMemo(() => {
+    const baseFilters = {
+      clientId: selectedClientId === 'all' ? undefined : selectedClientId,
+      startDate: undefined as string | undefined,
+      endDate: undefined as string | undefined,
+    };
+
+    if (dateFilter === 'thisMonth') {
+      return {
+        ...baseFilters,
+        startDate: currentMonthStart,
+        endDate: currentMonthEnd,
+      };
+    }
+
+    if (dateFilter === 'custom') {
+      const normalizedStartDate =
+        customStartDate && customEndDate && customStartDate > customEndDate
+          ? customEndDate
+          : customStartDate;
+      const normalizedEndDate =
+        customStartDate && customEndDate && customStartDate > customEndDate
+          ? customStartDate
+          : customEndDate;
+
+      return {
+        ...baseFilters,
+        startDate: normalizedStartDate || undefined,
+        endDate: normalizedEndDate || undefined,
+      };
+    }
+
+    return baseFilters;
+  }, [customEndDate, customStartDate, dateFilter, selectedClientId]);
 
   const loadBilling = () =>
-    Promise.all([apiClient.getBillingSummary(), apiClient.getBillingPayments()])
-      .then(([billingSummary, billingPayments]) => {
+    Promise.all([
+      apiClient.getBillingSummary(billingFilters),
+      apiClient.getBillingPayments(billingFilters),
+      apiClient.getClients(),
+    ])
+      .then(([billingSummary, billingPayments, clientList]) => {
         setSummary(billingSummary);
         setPayments(billingPayments);
+        setClients(clientList);
       })
       .catch((error) => {
         setBillingMessage(
@@ -101,7 +157,7 @@ export function BillingPage() {
 
   useEffect(() => {
     void loadBilling();
-  }, []);
+  }, [billingFilters]);
 
   const selectedPayment = useMemo(
     () => payments.find((payment) => payment.id === selectedPaymentId) ?? null,
@@ -312,7 +368,71 @@ export function BillingPage() {
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Billing" />
+      <PageHeader title="Billing" subtitle="Paid and due amounts by service date." />
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(220px, 280px) minmax(220px, 240px) minmax(180px, 220px) minmax(180px, 220px)' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <FormControl size="small" fullWidth>
+          <InputLabel id="billing-client-filter-label">Client</InputLabel>
+          <Select
+            labelId="billing-client-filter-label"
+            value={selectedClientId}
+            label="Client"
+            onChange={(event) => setSelectedClientId(event.target.value)}
+            sx={{ bgcolor: '#FFFFFF' }}
+          >
+            <MenuItem value="all">All clients</MenuItem>
+            {clients.map((client) => (
+              <MenuItem key={client.id} value={client.id}>
+                {client.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" fullWidth>
+          <InputLabel id="billing-date-filter-label">Date range</InputLabel>
+          <Select
+            labelId="billing-date-filter-label"
+            value={dateFilter}
+            label="Date range"
+            onChange={(event) => setDateFilter(event.target.value as DateFilterValue)}
+            sx={{ bgcolor: '#FFFFFF' }}
+          >
+            <MenuItem value="thisMonth">Current month</MenuItem>
+            <MenuItem value="allTime">All time</MenuItem>
+            <MenuItem value="custom">Custom range</MenuItem>
+          </Select>
+        </FormControl>
+
+        <TextField
+          size="small"
+          type="date"
+          label="Start date"
+          value={customStartDate}
+          onChange={(event) => setCustomStartDate(event.target.value)}
+          InputLabelProps={{ shrink: true }}
+          disabled={dateFilter !== 'custom'}
+          sx={{ bgcolor: '#FFFFFF' }}
+        />
+
+        <TextField
+          size="small"
+          type="date"
+          label="End date"
+          value={customEndDate}
+          onChange={(event) => setCustomEndDate(event.target.value)}
+          InputLabelProps={{ shrink: true }}
+          disabled={dateFilter !== 'custom'}
+          sx={{ bgcolor: '#FFFFFF' }}
+        />
+      </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3, mb: 3 }}>
         <Card sx={{ bgcolor: '#FDFCFB', border: '1px solid #E8E5E1', borderRadius: '16px' }}>

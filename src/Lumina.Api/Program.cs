@@ -414,6 +414,7 @@ api.MapGet("/clients/{id:int}/sessions", async (int id, LuminaDbContext db, Http
     var sessions = (await db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId && s.ClientId == id)
         .Include(s => s.Client)
+        .Include(s => s.Provider)
         .Include(s => s.ClientPackage)
             .ThenInclude(cp => cp!.Package)
         .Include(s => s.Invoice)
@@ -605,6 +606,7 @@ api.MapGet("/sessions", async (int? clientId, LuminaDbContext db, HttpContext co
         .Where(s => s.PracticeId == scope.Value.practiceId)
         .Where(s => !clientId.HasValue || s.ClientId == clientId.Value)
         .Include(s => s.Client)
+        .Include(s => s.Provider)
         .Include(s => s.ClientPackage)
             .ThenInclude(cp => cp!.Package)
         .Include(s => s.Invoice);
@@ -625,6 +627,7 @@ api.MapGet("/sessions/{id:int}", async (int id, LuminaDbContext db, HttpContext 
     var session = await db.Sessions
         .Where(s => s.PracticeId == scope.Value.practiceId && s.Id == id)
         .Include(s => s.Client)
+        .Include(s => s.Provider)
         .Include(s => s.ClientPackage)
             .ThenInclude(cp => cp!.Package)
         .Include(s => s.Invoice)
@@ -1361,6 +1364,7 @@ api.MapGet("/billing/summary", async (LuminaDbContext db, HttpContext context) =
 
     var practice = await db.Practices.AsNoTracking().FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
     if (practice is null) return Results.NotFound();
+    var billingFilters = GetBillingFilters(context);
 
     var sessions = await db.Sessions
         .AsNoTracking()
@@ -1368,30 +1372,41 @@ api.MapGet("/billing/summary", async (LuminaDbContext db, HttpContext context) =
         .Where(s =>
             s.PracticeId == scope.Value.practiceId &&
             s.ClientPackageId == null &&
-            s.Status != SessionStatus.Cancelled)
+            s.Status != SessionStatus.Cancelled &&
+            (!billingFilters.ClientId.HasValue || s.ClientId == billingFilters.ClientId.Value))
         .ToListAsync();
 
     var packages = await db.ClientPackages
         .AsNoTracking()
         .Include(cp => cp.Package)
-        .Where(cp => cp.PracticeId == scope.Value.practiceId)
+        .Where(cp =>
+            cp.PracticeId == scope.Value.practiceId &&
+            (!billingFilters.ClientId.HasValue || cp.ClientId == billingFilters.ClientId.Value))
         .ToListAsync();
 
     var sessionPayments = sessions
         .Select(s => new
         {
             Amount = GetSessionPaymentAmount(s, practice.BillingDefaultSessionAmount),
-            Status = s.PaymentStatus
+            Status = s.PaymentStatus,
+            ServiceDate = s.Date,
+            PaymentDate = s.PaymentDate
         })
-        .Where(payment => payment.Amount > 0);
+        .Where(payment =>
+            payment.Amount > 0 &&
+            IsBillingServiceDateInRange(payment.ServiceDate, billingFilters));
 
     var packagePayments = packages
         .Select(cp => new
         {
             Amount = GetPackagePaymentAmount(cp),
-            Status = cp.PaymentStatus
+            Status = cp.PaymentStatus,
+            ServiceDate = cp.PurchasedAt,
+            PaymentDate = cp.PaymentDate
         })
-        .Where(payment => payment.Amount > 0);
+        .Where(payment =>
+            payment.Amount > 0 &&
+            IsBillingServiceDateInRange(payment.ServiceDate, billingFilters));
 
     var allPayments = sessionPayments.Concat(packagePayments).ToList();
     var totalRevenue = allPayments.Where(payment => payment.Status == PaymentStatus.Paid).Sum(payment => payment.Amount);
@@ -1414,6 +1429,7 @@ api.MapGet("/billing/payments", async (LuminaDbContext db, HttpContext context) 
 
     var practice = await db.Practices.AsNoTracking().FirstOrDefaultAsync(p => p.Id == scope.Value.practiceId);
     if (practice is null) return Results.NotFound();
+    var billingFilters = GetBillingFilters(context);
 
     var sessionPayments = (await db.Sessions
         .AsNoTracking()
@@ -1422,7 +1438,8 @@ api.MapGet("/billing/payments", async (LuminaDbContext db, HttpContext context) 
         .Where(s =>
             s.PracticeId == scope.Value.practiceId &&
             s.ClientPackageId == null &&
-            s.Status != SessionStatus.Cancelled)
+            s.Status != SessionStatus.Cancelled &&
+            (!billingFilters.ClientId.HasValue || s.ClientId == billingFilters.ClientId.Value))
         .ToListAsync())
         .Select(s => new BillingPaymentItem(
             id: $"session-{s.Id}",
@@ -1437,13 +1454,17 @@ api.MapGet("/billing/payments", async (LuminaDbContext db, HttpContext context) 
             serviceDate: s.Date,
             paymentDate: s.PaymentDate,
             paymentMethod: s.PaymentMethod))
-        .Where(payment => payment.amount > 0);
+        .Where(payment =>
+            payment.amount > 0 &&
+            IsBillingServiceDateInRange(payment.serviceDate, billingFilters));
 
     var packagePayments = (await db.ClientPackages
         .AsNoTracking()
         .Include(cp => cp.Client)
         .Include(cp => cp.Package)
-        .Where(cp => cp.PracticeId == scope.Value.practiceId)
+        .Where(cp =>
+            cp.PracticeId == scope.Value.practiceId &&
+            (!billingFilters.ClientId.HasValue || cp.ClientId == billingFilters.ClientId.Value))
         .ToListAsync())
         .Select(cp => new BillingPaymentItem(
             id: $"package-{cp.Id}",
@@ -1458,7 +1479,9 @@ api.MapGet("/billing/payments", async (LuminaDbContext db, HttpContext context) 
             serviceDate: cp.PurchasedAt,
             paymentDate: cp.PaymentDate,
             paymentMethod: cp.PaymentMethod))
-        .Where(payment => payment.amount > 0);
+        .Where(payment =>
+            payment.amount > 0 &&
+            IsBillingServiceDateInRange(payment.serviceDate, billingFilters));
 
     var payments = sessionPayments
         .Concat(packagePayments)
@@ -2124,15 +2147,11 @@ api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
     var revenueMtd =
         billableSessionsThisMonth
             .Where(session =>
-                session.PaymentStatus == PaymentStatus.Paid &&
-                session.PaymentDate >= monthStart &&
-                session.PaymentDate < nextMonth)
+                session.PaymentStatus == PaymentStatus.Paid)
             .Sum(session => GetSessionPaymentAmount(session, practice.BillingDefaultSessionAmount)) +
         packagesThisMonth
             .Where(package =>
-                package.PaymentStatus == PaymentStatus.Paid &&
-                package.PaymentDate >= monthStart &&
-                package.PaymentDate < nextMonth)
+                package.PaymentStatus == PaymentStatus.Paid)
             .Sum(GetPackagePaymentAmount);
 
     var unpaidMtd =
@@ -2319,7 +2338,9 @@ static ApiSessionItem MapSessionDto(Session session, string clientName)
         session.InvoiceId,
         session.PaymentAmount,
         session.PaymentDate,
-        session.PaymentMethod);
+        session.PaymentMethod,
+        session.ProviderId,
+        session.Provider?.DisplayName);
 }
 
 static string GetSessionBillingSource(Session session) =>
@@ -2347,6 +2368,46 @@ static string GetSessionPaymentStatus(Session session)
     }
 
     return session.Invoice?.Status == InvoiceStatus.Paid ? "paid" : "unpaid";
+}
+
+static BillingFilters GetBillingFilters(HttpContext context)
+{
+    int? clientId = null;
+    if (int.TryParse(context.Request.Query["clientId"], out var parsedClientId))
+    {
+        clientId = parsedClientId;
+    }
+
+    DateTimeOffset? start = null;
+    if (DateOnly.TryParse(context.Request.Query["startDate"], out var parsedStartDate))
+    {
+        start = parsedStartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    }
+
+    DateTimeOffset? endExclusive = null;
+    if (DateOnly.TryParse(context.Request.Query["endDate"], out var parsedEndDate))
+    {
+        endExclusive = parsedEndDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+    }
+
+    return new BillingFilters(clientId, start, endExclusive);
+}
+
+static bool IsBillingServiceDateInRange(
+    DateTimeOffset serviceDate,
+    BillingFilters filters)
+{
+    if (filters.Start.HasValue && serviceDate < filters.Start.Value)
+    {
+        return false;
+    }
+
+    if (filters.EndExclusive.HasValue && serviceDate >= filters.EndExclusive.Value)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 static decimal GetSessionPaymentAmount(Session session, decimal defaultSessionAmount)
@@ -2535,7 +2596,8 @@ public record MonthlyInvoiceRequest(int? Year = null, int? Month = null, int? Cl
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
 public record TemplateUpdateRequest(int PracticeId, string Name, string? Description, IReadOnlyList<TemplateUpdateFieldRequest> Fields);
 public record TemplateUpdateFieldRequest(int Id, string Label, int SortOrder, string? FieldType);
-public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes, int? packageId = null, int? clientPackageId = null, string? packageName = null, decimal? packagePrice = null, int? invoiceId = null, decimal? paymentAmount = null, DateTimeOffset? paymentDate = null, string? paymentMethod = null);
+public readonly record struct BillingFilters(int? ClientId, DateTimeOffset? Start, DateTimeOffset? EndExclusive);
+public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes, int? packageId = null, int? clientPackageId = null, string? packageName = null, decimal? packagePrice = null, int? invoiceId = null, decimal? paymentAmount = null, DateTimeOffset? paymentDate = null, string? paymentMethod = null, int? providerId = null, string? providerName = null);
 public record BillingPaymentItem(string id, string sourceType, int sourceId, int clientId, string clientName, string description, decimal amount, string paymentStatus, string billingSource, DateTimeOffset serviceDate, DateTimeOffset? paymentDate, string? paymentMethod);
 public record SessionStructuredNoteRequest(int? TemplateId, string Content, string LegacyNotes, string? NoteType = null);
 public record ClientNoteCreateRequest(string Content, string? Type = null, string? Source = null);

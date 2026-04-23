@@ -1,13 +1,15 @@
-import { Drawer, Box, List, ListItem, ListItemButton, ListItemIcon, Tooltip } from '@mui/material';
+import { Drawer, Box, List, ListItem, ListItemButton, ListItemIcon, Tooltip, Badge } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import FolderIcon from '@mui/icons-material/Folder';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import type { ReactNode } from 'react';
 import { colors, themeLayout, borderRadius, transitions } from '../../theme';
 import { useNotificationCount } from '../../notifications/useNotificationCount';
 
@@ -17,6 +19,7 @@ const navigationItems = [
   { text: 'Calendar', icon: <CalendarMonthIcon />, path: '/calendar' },
   { text: 'Sessions', icon: <EventNoteIcon />, path: '/sessions' },
   { text: 'Billing', icon: <ReceiptLongIcon />, path: '/billing' },
+  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
   { text: 'Resources', icon: <FolderIcon />, path: '/resources' },
 ];
 
@@ -40,6 +43,33 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     if (onMobileClose) {
       onMobileClose();
     }
+  };
+
+  const renderNavIcon = (path: string, icon: ReactNode, isActive: boolean) => {
+    if (path !== '/notifications') {
+      return icon;
+    }
+
+    return (
+      <Badge
+        badgeContent={notificationCount}
+        max={99}
+        invisible={notificationCount === 0}
+        sx={{
+          '& .MuiBadge-badge': {
+            bgcolor: isActive ? '#FDFCFB' : colors.brand.purple,
+            color: isActive ? colors.brand.purple : '#FFFFFF',
+            fontWeight: 700,
+            fontSize: '10px',
+            minWidth: '18px',
+            height: '18px',
+            border: '2px solid #4A433F',
+          },
+        }}
+      >
+        {icon}
+      </Badge>
+    );
   };
 
   const drawerContent = (
@@ -111,33 +141,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                       justifyContent: 'center',
                     }}
                   >
-                    {item.icon}
-                  </ListItemIcon>
-                  {item.path === '/notifications' && notificationCount > 0 ? (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: 5,
-                        right: 7,
-                        minWidth: 18,
-                        height: 18,
-                        px: 0.5,
-                        borderRadius: '999px',
-                        bgcolor: isActive ? '#FDFCFB' : colors.brand.purple,
-                        color: isActive ? colors.brand.purple : '#FFFFFF',
-                        border: '2px solid #4A433F',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '10px',
-                        fontWeight: 800,
-                        lineHeight: 1,
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      {notificationCount > 99 ? '99+' : notificationCount}
-                    </Box>
-                  ) : null}
+                  {renderNavIcon(item.path, item.icon, isActive)}
+                </ListItemIcon>
                 </ListItemButton>
               </Tooltip>
             </ListItem>
@@ -177,7 +182,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                       justifyContent: 'center',
                     }}
                   >
-                    {item.icon}
+                    {renderNavIcon(item.path, item.icon, isActive)}
                   </ListItemIcon>
                 </ListItemButton>
               </Tooltip>
