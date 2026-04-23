@@ -2111,6 +2111,112 @@ api.MapDelete("/templates/{templateId:int}", async (int templateId, LuminaDbCont
     return Results.NoContent();
 });
 
+api.MapGet("/reports/custom", async (LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var reports = await db.SavedReports
+        .AsNoTracking()
+        .Where(report =>
+            report.PracticeId == scope.Value.practiceId &&
+            report.ProviderId == scope.Value.providerId)
+        .OrderBy(report => report.Name)
+        .ToListAsync();
+
+    return Results.Ok(reports.Select(MapSavedReportResponse));
+});
+
+api.MapPost("/reports/custom", async (SavedReportUpsertRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var validationError = await ValidateSavedReportRequestAsync(request, db, scope.Value.practiceId);
+    if (validationError is not null)
+    {
+        return Results.BadRequest(new { message = validationError });
+    }
+
+    var now = DateTimeOffset.UtcNow;
+    var report = new SavedReport
+    {
+        PracticeId = scope.Value.practiceId,
+        ProviderId = scope.Value.providerId,
+        Name = request.Name.Trim(),
+        ReportType = request.ReportType.Trim(),
+        TemplateId = request.TemplateId,
+        TemplateFieldId = request.TemplateFieldId,
+        FieldKey = string.IsNullOrWhiteSpace(request.FieldKey) ? null : request.FieldKey.Trim(),
+        AnalysisType = string.IsNullOrWhiteSpace(request.AnalysisType) ? null : request.AnalysisType.Trim(),
+        FiltersJson = NormalizeReportJson(request.FiltersJson),
+        DisplayOptionsJson = NormalizeReportJson(request.DisplayOptionsJson),
+        CreatedAt = now,
+        UpdatedAt = now
+    };
+
+    db.SavedReports.Add(report);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(MapSavedReportResponse(report));
+});
+
+api.MapPut("/reports/custom/{id:int}", async (int id, SavedReportUpsertRequest request, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var report = await db.SavedReports.FirstOrDefaultAsync(savedReport =>
+        savedReport.Id == id &&
+        savedReport.PracticeId == scope.Value.practiceId &&
+        savedReport.ProviderId == scope.Value.providerId);
+
+    if (report is null)
+    {
+        return Results.NotFound(new { message = "Saved report not found." });
+    }
+
+    var validationError = await ValidateSavedReportRequestAsync(request, db, scope.Value.practiceId);
+    if (validationError is not null)
+    {
+        return Results.BadRequest(new { message = validationError });
+    }
+
+    report.Name = request.Name.Trim();
+    report.ReportType = request.ReportType.Trim();
+    report.TemplateId = request.TemplateId;
+    report.TemplateFieldId = request.TemplateFieldId;
+    report.FieldKey = string.IsNullOrWhiteSpace(request.FieldKey) ? null : request.FieldKey.Trim();
+    report.AnalysisType = string.IsNullOrWhiteSpace(request.AnalysisType) ? null : request.AnalysisType.Trim();
+    report.FiltersJson = NormalizeReportJson(request.FiltersJson);
+    report.DisplayOptionsJson = NormalizeReportJson(request.DisplayOptionsJson);
+    report.UpdatedAt = DateTimeOffset.UtcNow;
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(MapSavedReportResponse(report));
+});
+
+api.MapDelete("/reports/custom/{id:int}", async (int id, LuminaDbContext db, HttpContext context) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var report = await db.SavedReports.FirstOrDefaultAsync(savedReport =>
+        savedReport.Id == id &&
+        savedReport.PracticeId == scope.Value.practiceId &&
+        savedReport.ProviderId == scope.Value.providerId);
+
+    if (report is null)
+    {
+        return Results.NotFound(new { message = "Saved report not found." });
+    }
+
+    db.SavedReports.Remove(report);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
 api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>
 {
     var scope = await ResolveScopeAsync(context, db);
@@ -2243,6 +2349,78 @@ static NotesTemplateSettingsResponse MapNotesTemplateSettingsResponse(Practice p
             : practice.NotesTemplateMode,
         practice.NotesSelectedTemplateKind,
         practice.NotesSelectedTemplateId);
+}
+
+static SavedReportResponse MapSavedReportResponse(SavedReport report) =>
+    new(
+        report.Id,
+        report.Name,
+        report.ReportType,
+        report.TemplateId,
+        report.TemplateFieldId,
+        report.FieldKey,
+        report.AnalysisType,
+        report.FiltersJson,
+        report.DisplayOptionsJson,
+        report.CreatedAt,
+        report.UpdatedAt,
+        report.PracticeId,
+        report.ProviderId);
+
+static async Task<string?> ValidateSavedReportRequestAsync(
+    SavedReportUpsertRequest request,
+    LuminaDbContext db,
+    int practiceId)
+{
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return "Report name is required.";
+    }
+
+    if (string.IsNullOrWhiteSpace(request.ReportType))
+    {
+        return "Report type is required.";
+    }
+
+    if (request.TemplateId.HasValue)
+    {
+        var templateExists = await db.Templates.AnyAsync(template =>
+            template.Id == request.TemplateId.Value &&
+            template.PracticeId == practiceId);
+
+        if (!templateExists)
+        {
+            return "Selected template was not found.";
+        }
+    }
+
+    if (!IsValidReportJson(request.FiltersJson))
+    {
+        return "Filters JSON must be valid JSON.";
+    }
+
+    if (!IsValidReportJson(request.DisplayOptionsJson))
+    {
+        return "Display options JSON must be valid JSON.";
+    }
+
+    return null;
+}
+
+static string NormalizeReportJson(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? "{}" : value.Trim();
+
+static bool IsValidReportJson(string? value)
+{
+    try
+    {
+        JsonDocument.Parse(NormalizeReportJson(value));
+        return true;
+    }
+    catch (JsonException)
+    {
+        return false;
+    }
 }
 
 static BillingSettingsResponse MapBillingSettingsResponse(Practice practice)
@@ -2596,6 +2774,7 @@ public record MonthlyInvoiceRequest(int? Year = null, int? Month = null, int? Cl
 public record FromPresetRequest(int SourcePresetId, int? PracticeId = null, string? Name = null);
 public record TemplateUpdateRequest(int PracticeId, string Name, string? Description, IReadOnlyList<TemplateUpdateFieldRequest> Fields);
 public record TemplateUpdateFieldRequest(int Id, string Label, int SortOrder, string? FieldType);
+public record SavedReportUpsertRequest(string Name, string ReportType, int? TemplateId = null, int? TemplateFieldId = null, string? FieldKey = null, string? AnalysisType = null, string? FiltersJson = null, string? DisplayOptionsJson = null);
 public readonly record struct BillingFilters(int? ClientId, DateTimeOffset? Start, DateTimeOffset? EndExclusive);
 public record ApiSessionItem(int id, int clientId, string client, string sessionType, DateTimeOffset date, int duration, string location, string status, string payment, string paymentStatus, string billingSource, int? packageRemaining, string focus, string? notes, int? packageId = null, int? clientPackageId = null, string? packageName = null, decimal? packagePrice = null, int? invoiceId = null, decimal? paymentAmount = null, DateTimeOffset? paymentDate = null, string? paymentMethod = null, int? providerId = null, string? providerName = null);
 public record BillingPaymentItem(string id, string sourceType, int sourceId, int clientId, string clientName, string description, decimal amount, string paymentStatus, string billingSource, DateTimeOffset serviceDate, DateTimeOffset? paymentDate, string? paymentMethod);
@@ -2605,6 +2784,7 @@ public record BillingSettingsResponse(int DefaultDueDays, decimal DefaultSession
 public record NotesTemplateSettingsResponse(string TemplateMode, string? SelectedTemplateKind, int? SelectedTemplateId);
 public record TemplateResponse(int Id, string Name, string Description, int PracticeId, int? SourcePresetId, DateTimeOffset CreatedAt, IReadOnlyList<TemplateFieldResponse> FieldsDetail, IReadOnlyList<string> Fields, bool Custom);
 public record TemplateFieldResponse(int Id, string Label, int SortOrder, string? FieldType);
+public record SavedReportResponse(int Id, string Name, string ReportType, int? TemplateId, int? TemplateFieldId, string? FieldKey, string? AnalysisType, string FiltersJson, string DisplayOptionsJson, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, int PracticeId, int ProviderId);
 public record PackageSessionStats(int UsedSessions, int ScheduledSessions, int CancelledSessions, int AvailableSessions, string Status);
 public enum SessionEntryMode
 {

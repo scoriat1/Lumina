@@ -18,6 +18,7 @@ import type {
   SessionLocationValue,
   SessionStatusValue,
   SessionStructuredNoteDto,
+  SavedReportDto,
   TemplateDto,
   TemplateFieldDto,
 } from './types';
@@ -123,6 +124,12 @@ type NotesTemplateSettingsApiDto = Omit<NotesTemplateSettingsDto, 'selectedTempl
   selectedTemplateId?: number | null;
   selectedTemplateKind?: 'preset' | 'custom' | null;
 };
+type SavedReportApiDto = Omit<SavedReportDto, 'id' | 'templateId' | 'practiceId' | 'providerId'> & {
+  id: string | number;
+  templateId?: number | null;
+  practiceId: string | number;
+  providerId: string | number;
+};
 type DashboardApiDto = Omit<DashboardDto, 'upcomingSessions' | 'activeClientPreview'> & {
   upcomingSessions: SessionApiDto[];
   activeClientPreview: ClientApiDto[];
@@ -220,6 +227,14 @@ const mapNotesTemplateSettingsDto = (
     settings.selectedTemplateId != null
       ? String(settings.selectedTemplateId)
       : undefined,
+});
+
+const mapSavedReportDto = (report: SavedReportApiDto): SavedReportDto => ({
+  ...report,
+  id: String(report.id),
+  templateId: report.templateId != null ? String(report.templateId) : undefined,
+  practiceId: String(report.practiceId),
+  providerId: String(report.providerId),
 });
 
 export const apiClient = {
@@ -489,6 +504,53 @@ export const apiClient = {
   },
 
   deleteTemplate: (templateId: string | number) => request<void>(`/api/templates/${templateId}`, { method: 'DELETE' }),
+  getSavedReports: async () => {
+    const reports = await request<SavedReportApiDto[]>('/api/reports/custom');
+    return reports.map(mapSavedReportDto);
+  },
+  createSavedReport: async (payload: {
+    name: string;
+    reportType: string;
+    templateId?: string | number;
+    templateFieldId?: number;
+    fieldKey?: string;
+    analysisType?: string;
+    filtersJson?: string;
+    displayOptionsJson?: string;
+  }) => {
+    const report = await request<SavedReportApiDto>('/api/reports/custom', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...payload,
+        templateId: payload.templateId != null ? Number(payload.templateId) : null,
+      }),
+    });
+
+    return mapSavedReportDto(report);
+  },
+  updateSavedReport: async (id: string | number, payload: {
+    name: string;
+    reportType: string;
+    templateId?: string | number;
+    templateFieldId?: number;
+    fieldKey?: string;
+    analysisType?: string;
+    filtersJson?: string;
+    displayOptionsJson?: string;
+  }) => {
+    const report = await request<SavedReportApiDto>(`/api/reports/custom/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...payload,
+        templateId: payload.templateId != null ? Number(payload.templateId) : null,
+      }),
+    });
+
+    return mapSavedReportDto(report);
+  },
+  deleteSavedReport: (id: string | number) => request<void>(`/api/reports/custom/${id}`, {
+    method: 'DELETE',
+  }),
   getClientDetailView: async (id: string) => {
     const detail = await request<ClientDetailViewDto>(`/api/clients/${id}/detail-view`);
     return {

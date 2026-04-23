@@ -16,6 +16,7 @@ public class LuminaDbContext(DbContextOptions<LuminaDbContext> options)
     public DbSet<TemplatePresetField> TemplatePresetFields => Set<TemplatePresetField>();
     public DbSet<Template> Templates => Set<Template>();
     public DbSet<TemplateField> TemplateFields => Set<TemplateField>();
+    public DbSet<SavedReport> SavedReports => Set<SavedReport>();
     public DbSet<SessionNote> SessionNotes => Set<SessionNote>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Package> Packages => Set<Package>();

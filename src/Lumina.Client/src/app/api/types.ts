@@ -244,3 +244,19 @@ export interface NotesTemplateSettingsDto {
   selectedTemplateKind?: 'preset' | 'custom';
   selectedTemplateId?: string;
 }
+
+export interface SavedReportDto {
+  id: string;
+  name: string;
+  reportType: string;
+  templateId?: string;
+  templateFieldId?: number;
+  fieldKey?: string;
+  analysisType?: string;
+  filtersJson: string;
+  displayOptionsJson: string;
+  createdAt: string;
+  updatedAt: string;
+  practiceId: string;
+  providerId: string;
+}

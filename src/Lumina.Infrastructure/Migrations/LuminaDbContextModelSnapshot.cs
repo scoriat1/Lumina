@@ -374,6 +374,69 @@ namespace Lumina.Infrastructure.Migrations
                     b.ToTable("Providers");
                 });
 
+            modelBuilder.Entity("Lumina.Domain.Entities.SavedReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AnalysisType")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DisplayOptionsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FieldKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FiltersJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("PracticeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProviderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("TemplateFieldId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PracticeId", "ReportType");
+
+                    b.HasIndex("ProviderId", "Name");
+
+                    b.HasIndex("TemplateId");
+
+                    b.ToTable("SavedReports");
+                });
+
             modelBuilder.Entity("Lumina.Domain.Entities.Session", b =>
                 {
                     b.Property<int>("Id")
@@ -851,6 +914,32 @@ namespace Lumina.Infrastructure.Migrations
                     b.Navigation("Practice");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lumina.Domain.Entities.SavedReport", b =>
+                {
+                    b.HasOne("Lumina.Domain.Entities.Practice", "Practice")
+                        .WithMany()
+                        .HasForeignKey("PracticeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lumina.Domain.Entities.Provider", "Provider")
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Lumina.Domain.Entities.Template", "Template")
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Practice");
+
+                    b.Navigation("Provider");
+
+                    b.Navigation("Template");
                 });
 
             modelBuilder.Entity("Lumina.Domain.Entities.Session", b =>
