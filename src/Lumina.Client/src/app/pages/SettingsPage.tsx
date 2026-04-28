@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router';
-import { Alert, Box, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Switch, Typography, Select, MenuItem, InputAdornment, Avatar, Chip, IconButton } from '@mui/material';
-import { Add, Edit, MoreVert, CloudUpload } from '@mui/icons-material';
+import { Alert, Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Switch, Typography, Select, MenuItem, InputAdornment, Avatar, Chip, IconButton } from '@mui/material';
+import { Add, Edit, MoreVert, CloudUpload, Download } from '@mui/icons-material';
 import { PageHeader } from '../components/PageHeader';
 import { colors } from '../styles/colors';
 import { NotesTemplateSettings } from '../components/NotesTemplateSettings';
@@ -22,7 +22,8 @@ type SettingsTab =
   | 'availability'
   | 'notifications'
   | 'notes'
-  | 'roles';
+  | 'roles'
+  | 'data-management';
 
 const mockRoles = [
   { 
@@ -66,7 +67,7 @@ export function SettingsPage() {
   // Handle URL hash navigation (e.g., /settings#notes)
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    if (hash && ['practice', 'providers', 'packages', 'billing', 'availability', 'notifications', 'notes', 'roles'].includes(hash)) {
+    if (hash && ['practice', 'providers', 'packages', 'billing', 'availability', 'notifications', 'notes', 'roles', 'data-management'].includes(hash)) {
       setActiveTab(hash as SettingsTab);
     }
   }, [location.hash]);
@@ -312,6 +313,11 @@ export function SettingsPage() {
             isActive={activeTab === 'roles'}
             onClick={() => setActiveTab('roles')}
           />
+          <SettingsNavItem
+            label="Data Management"
+            isActive={activeTab === 'data-management'}
+            onClick={() => setActiveTab('data-management')}
+          />
         </Box>
 
         {/* Right Content Panel */}
@@ -414,6 +420,10 @@ export function SettingsPage() {
 
           {activeTab === 'roles' && (
             <RolesSettings roles={mockRoles} />
+          )}
+
+          {activeTab === 'data-management' && (
+            <DataManagementSettings />
           )}
         </Box>
       </Box>
@@ -1553,6 +1563,146 @@ function RolesSettings({ roles }: any) {
   );
 }
 
+// Data Management Settings Section
+function DataManagementSettings() {
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      setSuccessMessage(null);
+      setErrorMessage(null);
+      await apiClient.exportPracticeData();
+      setSuccessMessage('Your export is ready.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to export data.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsDownloadingTemplate(true);
+      setSuccessMessage(null);
+      setErrorMessage(null);
+      await apiClient.downloadImportTemplate();
+      setSuccessMessage('Import template downloaded.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to download the import template.');
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  };
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <ContentCard>
+        <SectionHeader title="Data Management" />
+        <Typography sx={{ fontSize: '13px', color: colors.text.secondary, mt: 1.25, lineHeight: 1.6 }}>
+          Export a copy of your practice data or prepare for a future import.
+        </Typography>
+
+        <Alert severity="warning" sx={{ mt: 3, borderRadius: '10px' }}>
+          Exports may contain private client information. Store downloaded files carefully.
+        </Alert>
+
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, mt: 3 }}>
+          <Box
+            sx={{
+              p: 3,
+              border: `1px solid ${colors.neutral.gray200}`,
+              borderRadius: '12px',
+              bgcolor: colors.surface.card,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: '15px', fontWeight: 600, color: colors.text.primary, mb: 0.75 }}>
+                Export Data
+              </Typography>
+              <Typography sx={{ fontSize: '13px', color: colors.text.secondary, lineHeight: 1.6 }}>
+                Download a copy of your clients, sessions, notes, billing records, packages, and templates.
+              </Typography>
+            </Box>
+            <Button
+              variant="contained"
+              startIcon={isExporting ? <CircularProgress size={16} color="inherit" /> : <Download sx={{ fontSize: '18px' }} />}
+              disabled={isExporting}
+              onClick={handleExport}
+              sx={{ ...saveButtonStyles, alignSelf: 'flex-start' }}
+            >
+              {isExporting ? 'Preparing export...' : 'Export all practice data'}
+            </Button>
+          </Box>
+
+          <Box
+            sx={{
+              p: 3,
+              border: `1px solid ${colors.neutral.gray200}`,
+              borderRadius: '12px',
+              bgcolor: colors.neutral.gray50,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
+                <Typography sx={{ fontSize: '15px', fontWeight: 600, color: colors.text.primary }}>
+                  Import Data
+                </Typography>
+                <Chip
+                  label="Coming Soon"
+                  size="small"
+                  sx={{
+                    bgcolor: colors.neutral.gray100,
+                    color: colors.text.secondary,
+                    fontWeight: 500,
+                    fontSize: '11px',
+                    height: '20px',
+                    borderRadius: '4px',
+                  }}
+                />
+              </Box>
+              <Typography sx={{ fontSize: '13px', color: colors.text.secondary, lineHeight: 1.6 }}>
+                Import clients, sessions, and notes from a prepared CSV template.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                startIcon={<CloudUpload sx={{ fontSize: '18px' }} />}
+                disabled
+                sx={outlinedButtonStyles}
+              >
+                Upload CSV
+              </Button>
+              <Button
+                variant="text"
+                startIcon={isDownloadingTemplate ? <CircularProgress size={16} color="inherit" /> : <Download sx={{ fontSize: '18px' }} />}
+                disabled={isDownloadingTemplate}
+                onClick={handleDownloadTemplate}
+                sx={cancelButtonStyles}
+              >
+                {isDownloadingTemplate ? 'Downloading...' : 'Download Import Template'}
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      </ContentCard>
+
+      {successMessage ? <Alert severity="success">{successMessage}</Alert> : null}
+      {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+    </Box>
+  );
+}
+
 // Helper Components
 function ContentCard({ children }: { children: React.ReactNode }) {
   return (
@@ -1675,6 +1825,19 @@ const cancelButtonStyles = {
   px: 2.5,
   py: 1,
   '&:hover': { bgcolor: colors.neutral.gray100 },
+};
+
+const outlinedButtonStyles = {
+  borderColor: colors.neutral.gray200,
+  color: colors.text.primary,
+  textTransform: 'none' as const,
+  fontWeight: 500,
+  px: 2.5,
+  py: 1,
+  '&:hover': {
+    borderColor: colors.neutral.gray300,
+    bgcolor: colors.neutral.gray100,
+  },
 };
 
 const saveButtonStyles = {

@@ -92,6 +92,44 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(responseText) as T;
 }
 
+async function downloadFile(path: string): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+    try {
+      const errorBody = await response.json() as { message?: string; title?: string };
+      errorMessage = errorBody.message ?? errorBody.title ?? errorMessage;
+    } catch {
+      // Ignore JSON parsing failures and fall back to status-based message.
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const filenameMatch = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : 'lumina-download.zip';
+
+  return {
+    blob: await response.blob(),
+    filename,
+  };
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 const withQuery = (
   path: string,
   query?: Record<string, string | number | null | undefined>,
@@ -553,6 +591,14 @@ export const apiClient = {
   deleteSavedReport: (id: string | number) => request<void>(`/api/reports/custom/${id}`, {
     method: 'DELETE',
   }),
+  exportPracticeData: async () => {
+    const file = await downloadFile('/api/data-export');
+    saveBlob(file.blob, file.filename);
+  },
+  downloadImportTemplate: async () => {
+    const file = await downloadFile('/api/data-export/import-template');
+    saveBlob(file.blob, file.filename);
+  },
   getClientDetailView: async (id: string) => {
     const detail = await request<ClientDetailViewDto>(`/api/clients/${id}/detail-view`);
     return {

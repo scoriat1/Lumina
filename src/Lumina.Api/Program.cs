@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Data.Common;
 using System.Data;
+using Lumina.Api.Repositories;
+using Lumina.Api.Services;
 using Lumina.Domain.Entities;
 using Lumina.Domain.Enums;
 using Lumina.Infrastructure.Data;
@@ -87,6 +89,8 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
 }
 
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<IPracticeDataExportRepository, PracticeDataExportRepository>();
+builder.Services.AddScoped<IDataExportService, DataExportService>();
 
 builder.Services.AddCors(options =>
 {
@@ -2215,6 +2219,21 @@ api.MapDelete("/reports/custom/{id:int}", async (int id, LuminaDbContext db, Htt
     db.SavedReports.Remove(report);
     await db.SaveChangesAsync();
     return Results.NoContent();
+});
+
+api.MapGet("/data-export", async (IDataExportService exportService, LuminaDbContext db, HttpContext context, CancellationToken cancellationToken) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    var export = await exportService.ExportPracticeDataAsync(scope.Value.practiceId, cancellationToken);
+    return Results.File(export.Content, export.ContentType, export.FileName);
+});
+
+api.MapGet("/data-export/import-template", (IDataExportService exportService) =>
+{
+    var template = exportService.CreateImportTemplate();
+    return Results.File(template.Content, template.ContentType, template.FileName);
 });
 
 api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>

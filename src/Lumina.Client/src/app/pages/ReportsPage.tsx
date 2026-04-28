@@ -25,6 +25,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
+import ClearIcon from '@mui/icons-material/Clear';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadIcon from '@mui/icons-material/Download';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
@@ -1519,75 +1520,113 @@ function StandardFilterBar({
   const setFilter = (key: keyof ReportFilters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
+  const clearFilters = () => {
+    setFilters({
+      ...emptyFilters,
+      dateRange: 'all',
+    });
+  };
+  const hasActiveFilters = filters.dateRange !== 'all'
+    || filters.providerId !== 'all'
+    || filters.clientId !== 'all'
+    || filters.sessionStatus !== 'all'
+    || filters.paymentStatus !== 'all'
+    || Boolean(filters.customStartDate)
+    || Boolean(filters.customEndDate);
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-      <Typography sx={{ color: '#A8A29E', fontSize: '12px', mr: 0.5 }}>
-        Filters
-      </Typography>
-      <FilterPill
-        label="Date range"
-        value={filters.dateRange}
-        onChange={(value) => setFilter('dateRange', value)}
-        options={[
-          { value: 'thisMonth', label: 'This month' },
-          { value: 'lastMonth', label: 'Last month' },
-          { value: 'last90Days', label: 'Last 90 days' },
-          { value: 'yearToDate', label: 'Year to date' },
-          { value: 'all', label: 'All time' },
-          { value: 'custom', label: 'Custom range' },
-        ]}
-      />
-      <FilterPill
-        label="Provider"
-        value={filters.providerId}
-        onChange={(value) => setFilter('providerId', value)}
-        options={[
-          { value: 'all', label: 'All providers' },
-          ...filterOptions.providers.map((provider) => ({ value: provider.id, label: provider.name })),
-        ]}
-      />
-      <FilterPill
-        label="Client"
-        value={filters.clientId}
-        onChange={(value) => setFilter('clientId', value)}
-        options={[
-          { value: 'all', label: 'All clients' },
-          ...filterOptions.clients.map((client) => ({ value: client.id, label: client.name })),
-        ]}
-      />
-      <FilterPill
-        label="Session status"
-        value={filters.sessionStatus}
-        onChange={(value) => setFilter('sessionStatus', value)}
-        options={[
-          { value: 'all', label: 'All session statuses' },
-          ...filterOptions.sessionStatuses.map((status) => ({ value: status, label: formatStatusLabel(status) })),
-        ]}
-      />
-      <FilterPill
-        label="Payment status"
-        value={filters.paymentStatus}
-        onChange={(value) => setFilter('paymentStatus', value)}
-        options={[
-          { value: 'all', label: 'All payment statuses' },
-          ...filterOptions.paymentStatuses.map((status) => ({ value: status, label: formatStatusLabel(status) })),
-        ]}
-      />
-      {filters.dateRange === 'custom' ? (
-        <>
-          <FilterDateInput
-            label="Start date"
-            value={filters.customStartDate}
-            onChange={(value) => setFilter('customStartDate', value)}
-          />
-          <FilterDateInput
-            label="End date"
-            value={filters.customEndDate}
-            onChange={(value) => setFilter('customEndDate', value)}
-          />
-        </>
-      ) : null}
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'nowrap', overflowX: 'auto', pb: 0.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'nowrap', minWidth: 0, flex: 1 }}>
+        <FilterPill
+          label="Date range"
+          value={filters.dateRange}
+          onChange={(value) => setFilter('dateRange', value)}
+          minWidth={116}
+          options={[
+            { value: 'thisMonth', label: 'This month' },
+            { value: 'lastMonth', label: 'Last month' },
+            { value: 'last90Days', label: 'Last 90 days' },
+            { value: 'yearToDate', label: 'Year to date' },
+            { value: 'all', label: 'All time' },
+            { value: 'custom', label: 'Custom range' },
+          ]}
+        />
+        <FilterPill
+          label="Provider"
+          value={filters.providerId}
+          onChange={(value) => setFilter('providerId', value)}
+          minWidth={120}
+          options={[
+            { value: 'all', label: 'All providers' },
+            ...filterOptions.providers.map((provider) => ({ value: provider.id, label: provider.name })),
+          ]}
+        />
+        <FilterPill
+          label="Client"
+          value={filters.clientId}
+          onChange={(value) => setFilter('clientId', value)}
+          minWidth={112}
+          options={[
+            { value: 'all', label: 'All clients' },
+            ...filterOptions.clients.map((client) => ({ value: client.id, label: client.name })),
+          ]}
+        />
+        <FilterPill
+          label="Session status"
+          value={filters.sessionStatus}
+          onChange={(value) => setFilter('sessionStatus', value)}
+          minWidth={144}
+          options={[
+            { value: 'all', label: 'All session statuses' },
+            ...filterOptions.sessionStatuses.map((status) => ({ value: status, label: formatStatusLabel(status) })),
+          ]}
+        />
+        <FilterPill
+          label="Payment status"
+          value={filters.paymentStatus}
+          onChange={(value) => setFilter('paymentStatus', value)}
+          minWidth={148}
+          options={[
+            { value: 'all', label: 'All payment statuses' },
+            ...filterOptions.paymentStatuses.map((status) => ({ value: status, label: formatStatusLabel(status) })),
+          ]}
+        />
+        {filters.dateRange === 'custom' ? (
+          <>
+            <FilterDateInput
+              label="Start date"
+              value={filters.customStartDate}
+              onChange={(value) => setFilter('customStartDate', value)}
+            />
+            <FilterDateInput
+              label="End date"
+              value={filters.customEndDate}
+              onChange={(value) => setFilter('customEndDate', value)}
+            />
+          </>
+        ) : null}
+      </Box>
+      <Button
+        size="small"
+        startIcon={<ClearIcon />}
+        disabled={!hasActiveFilters}
+        onClick={clearFilters}
+        sx={{
+          borderRadius: '10px',
+          color: '#7A5C80',
+          flexShrink: 0,
+          fontSize: '13px',
+          fontWeight: 700,
+          minHeight: 40,
+          px: 1.25,
+          textTransform: 'none',
+          '&.Mui-disabled': {
+            color: '#C7C2BE',
+          },
+        }}
+      >
+        Clear
+      </Button>
     </Box>
   );
 }
@@ -1597,14 +1636,16 @@ function FilterPill({
   value,
   onChange,
   options,
+  minWidth,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+  minWidth?: number;
 }) {
   return (
-    <FormControl size="small" sx={{ minWidth: 0 }}>
+    <FormControl size="small" sx={{ flex: `1 1 ${minWidth ?? 120}px`, minWidth: minWidth ?? 120 }}>
       <Select
         value={value}
         displayEmpty
@@ -1622,8 +1663,11 @@ function FilterPill({
             borderColor: '#A8A29E',
           },
           '& .MuiSelect-select': {
+            overflow: 'hidden',
             py: 1,
             pr: 4,
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           },
         }}
       >
