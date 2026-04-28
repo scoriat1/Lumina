@@ -137,6 +137,7 @@ type DashboardApiDto = Omit<DashboardDto, 'upcomingSessions' | 'activeClientPrev
 
 const mapClientDto = (client: ClientApiDto): ClientDto => ({
   ...client,
+  id: String(client.id),
   billingModel: client.billingModel ?? 'payPerSession',
   avatarColor: client.avatarColor ?? computeAvatarColor(client.id),
   initials: client.initials ?? computeInitials(client.name),
@@ -171,6 +172,7 @@ const mapBillingPaymentDto = (payment: BillingPaymentApiDto): BillingPaymentDto 
 
 const mapProviderDto = (provider: ProviderApiDto): ProviderDto => ({
   ...provider,
+  id: String(provider.id),
   initials: provider.initials ?? computeInitials(provider.name),
 });
 
@@ -204,7 +206,7 @@ const mapTemplateDto = (template: TemplateDto): TemplateDto => {
   const normalizedFields = template.fieldsDetail?.length
     ? [...template.fieldsDetail].sort((a, b) => a.sortOrder - b.sortOrder)
     : (template.fields || []).map((label, index) => ({
-      id: 0,
+      id: index + 1,
       label,
       sortOrder: index + 1,
       fieldType: undefined,
