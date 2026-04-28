@@ -6,7 +6,6 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import FolderIcon from '@mui/icons-material/Folder';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import type { ReactNode } from 'react';
@@ -20,7 +19,6 @@ const navigationItems = [
   { text: 'Sessions', icon: <EventNoteIcon />, path: '/sessions' },
   { text: 'Billing', icon: <ReceiptLongIcon />, path: '/billing' },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
-  { text: 'Resources', icon: <FolderIcon />, path: '/resources' },
 ];
 
 const bottomNavItems = [
