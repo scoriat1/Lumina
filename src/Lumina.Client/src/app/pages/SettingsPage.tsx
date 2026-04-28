@@ -817,7 +817,7 @@ function DataManagementSettings() {
       <ContentCard>
         <SectionHeader title="Data Management" />
         <Typography sx={{ fontSize: '13px', color: colors.text.secondary, mt: 1.25, lineHeight: 1.6 }}>
-          Export a copy of your practice data or prepare for a future import.
+          Export a copy of your practice data as one Excel workbook or prepare for a future import.
         </Typography>
 
         <Alert severity="warning" sx={{ mt: 3, borderRadius: '10px' }}>
@@ -841,7 +841,7 @@ function DataManagementSettings() {
                 Export Data
               </Typography>
               <Typography sx={{ fontSize: '13px', color: colors.text.secondary, lineHeight: 1.6 }}>
-                Download a copy of your clients, sessions, notes, billing records, packages, and templates.
+                Download one Excel workbook with clients, sessions, notes, billing records, packages, providers, and settings.
               </Typography>
             </Box>
             <Button
@@ -851,7 +851,7 @@ function DataManagementSettings() {
               onClick={handleExport}
               sx={{ ...saveButtonStyles, alignSelf: 'flex-start' }}
             >
-              {isExporting ? 'Preparing export...' : 'Export all practice data'}
+              {isExporting ? 'Preparing export...' : 'Export all data as one Excel workbook'}
             </Button>
           </Box>
 
@@ -869,7 +869,7 @@ function DataManagementSettings() {
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
                 <Typography sx={{ fontSize: '15px', fontWeight: 600, color: colors.text.primary }}>
-                  Import Data
+                  Import data from Excel
                 </Typography>
                 <Chip
                   label="Coming Soon"
@@ -885,7 +885,7 @@ function DataManagementSettings() {
                 />
               </Box>
               <Typography sx={{ fontSize: '13px', color: colors.text.secondary, lineHeight: 1.6 }}>
-                Import clients, sessions, and notes from a prepared CSV template.
+                Import data from Excel — coming soon
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
@@ -895,7 +895,7 @@ function DataManagementSettings() {
                 disabled
                 sx={outlinedButtonStyles}
               >
-                Upload CSV
+                Upload Excel
               </Button>
               <Button
                 variant="text"
@@ -904,7 +904,7 @@ function DataManagementSettings() {
                 onClick={handleDownloadTemplate}
                 sx={cancelButtonStyles}
               >
-                {isDownloadingTemplate ? 'Downloading...' : 'Download Import Template'}
+                {isDownloadingTemplate ? 'Downloading...' : 'Download Excel import template'}
               </Button>
             </Box>
           </Box>

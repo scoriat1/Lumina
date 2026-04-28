@@ -111,7 +111,7 @@ async function downloadFile(path: string): Promise<{ blob: Blob; filename: strin
 
   const disposition = response.headers.get('content-disposition') ?? '';
   const filenameMatch = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : 'lumina-download.zip';
+  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : 'lumina-download.xlsx';
 
   return {
     blob: await response.blob(),

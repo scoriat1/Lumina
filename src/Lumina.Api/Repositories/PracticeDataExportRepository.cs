@@ -13,10 +13,21 @@ public sealed class PracticeDataExportRepository(LuminaDbContext db) : IPractice
 {
     public async Task<PracticeDataExportSnapshot> GetSnapshotAsync(int practiceId, CancellationToken cancellationToken)
     {
+        var practice = await db.Practices
+            .AsNoTracking()
+            .FirstOrDefaultAsync(practice => practice.Id == practiceId, cancellationToken);
+
         var clients = await db.Clients
             .AsNoTracking()
             .Where(client => client.PracticeId == practiceId)
             .OrderBy(client => client.Id)
+            .ToListAsync(cancellationToken);
+
+        var providers = await db.Providers
+            .AsNoTracking()
+            .Include(provider => provider.User)
+            .Where(provider => provider.PracticeId == practiceId)
+            .OrderBy(provider => provider.DisplayName)
             .ToListAsync(cancellationToken);
 
         var sessions = await db.Sessions
@@ -64,7 +75,9 @@ public sealed class PracticeDataExportRepository(LuminaDbContext db) : IPractice
             .ToListAsync(cancellationToken);
 
         return new PracticeDataExportSnapshot(
+            practice,
             clients,
+            providers,
             sessions,
             sessionNotes,
             invoices,
@@ -76,7 +89,9 @@ public sealed class PracticeDataExportRepository(LuminaDbContext db) : IPractice
 }
 
 public sealed record PracticeDataExportSnapshot(
+    Practice? Practice,
     IReadOnlyList<Client> Clients,
+    IReadOnlyList<Provider> Providers,
     IReadOnlyList<Session> Sessions,
     IReadOnlyList<SessionNote> SessionNotes,
     IReadOnlyList<Invoice> Invoices,
