@@ -11,6 +11,12 @@ import {
   loadNotificationPreferences,
   notificationPreferencesChangedEvent,
 } from '../notifications/preferences';
+import {
+  filterUnreadNotifications,
+  markNotificationRead,
+  markNotificationsRead,
+  readNotificationsChangedEvent,
+} from '../notifications/readNotifications';
 
 export function NotificationsPage() {
   const navigate = useNavigate();
@@ -25,11 +31,11 @@ export function NotificationsPage() {
           apiClient.getBillingPayments(),
         ]);
 
-        setNotifications(buildNotifications({
+        setNotifications(filterUnreadNotifications(buildNotifications({
           sessions,
           payments,
           preferences: loadNotificationPreferences(),
-        }));
+        })));
         setLoadError(null);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : 'Unable to load notifications.');
@@ -49,11 +55,16 @@ export function NotificationsPage() {
       if (event.key === 'lumina.notificationPreferences') {
         void loadNotifications();
       }
+
+      if (event.key === 'lumina.readNotifications') {
+        void loadNotifications();
+      }
     };
 
     window.addEventListener('focus', loadNotifications);
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener(notificationPreferencesChangedEvent, loadNotifications);
+    window.addEventListener(readNotificationsChangedEvent, loadNotifications);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
@@ -61,13 +72,40 @@ export function NotificationsPage() {
       window.removeEventListener('focus', loadNotifications);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener(notificationPreferencesChangedEvent, loadNotifications);
+      window.removeEventListener(readNotificationsChangedEvent, loadNotifications);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
+  const handleMarkRead = (notificationId: string) => {
+    markNotificationRead(notificationId);
+    setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+  };
+
+  const handleMarkAllRead = () => {
+    markNotificationsRead(notifications.map((notification) => notification.id));
+    setNotifications([]);
+  };
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <PageHeader title="Notifications" />
+
+      {!loadError && notifications.length > 0 ? (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+          <Button
+            size="small"
+            onClick={handleMarkAllRead}
+            sx={{
+              color: '#7A5C80',
+              fontWeight: 650,
+              textTransform: 'none',
+            }}
+          >
+            Mark all as read
+          </Button>
+        </Box>
+      ) : null}
 
       {loadError ? (
         <Typography variant="body1" sx={{ color: '#C62828' }}>
@@ -157,7 +195,27 @@ export function NotificationsPage() {
 
             <Button
               size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleMarkRead(notification.id);
+              }}
+              sx={{
+                color: '#7A746F',
+                fontWeight: 650,
+                textTransform: 'none',
+                flexShrink: 0,
+              }}
+            >
+              Mark as read
+            </Button>
+
+            <Button
+              size="small"
               endIcon={<ArrowForwardIcon />}
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(notification.href);
+              }}
               sx={{
                 color: '#9B8B9E',
                 fontWeight: 650,

@@ -5,6 +5,10 @@ import {
   loadNotificationPreferences,
   notificationPreferencesChangedEvent,
 } from './preferences';
+import {
+  filterUnreadNotifications,
+  readNotificationsChangedEvent,
+} from './readNotifications';
 
 export function useNotificationCount() {
   const [notificationCount, setNotificationCount] = useState(0);
@@ -17,11 +21,11 @@ export function useNotificationCount() {
           apiClient.getBillingPayments(),
         ]);
 
-        setNotificationCount(buildNotifications({
+        setNotificationCount(filterUnreadNotifications(buildNotifications({
           sessions,
           payments,
           preferences: loadNotificationPreferences(),
-        }).length);
+        })).length);
       } catch {
         setNotificationCount(0);
       }
@@ -40,11 +44,16 @@ export function useNotificationCount() {
       if (event.key === 'lumina.notificationPreferences') {
         void loadNotificationCount();
       }
+
+      if (event.key === 'lumina.readNotifications') {
+        void loadNotificationCount();
+      }
     };
 
     window.addEventListener('focus', loadNotificationCount);
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener(notificationPreferencesChangedEvent, loadNotificationCount);
+    window.addEventListener(readNotificationsChangedEvent, loadNotificationCount);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
@@ -52,6 +61,7 @@ export function useNotificationCount() {
       window.removeEventListener('focus', loadNotificationCount);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener(notificationPreferencesChangedEvent, loadNotificationCount);
+      window.removeEventListener(readNotificationsChangedEvent, loadNotificationCount);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
