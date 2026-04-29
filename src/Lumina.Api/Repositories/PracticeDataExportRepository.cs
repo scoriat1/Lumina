@@ -9,8 +9,15 @@ public interface IPracticeDataExportRepository
     Task<PracticeDataExportSnapshot> GetSnapshotAsync(int practiceId, CancellationToken cancellationToken);
 }
 
-public sealed class PracticeDataExportRepository(LuminaDbContext db) : IPracticeDataExportRepository
+public sealed class PracticeDataExportRepository : IPracticeDataExportRepository
 {
+    private readonly LuminaDbContext db;
+
+    public PracticeDataExportRepository(LuminaDbContext db)
+    {
+        this.db = db;
+    }
+
     public async Task<PracticeDataExportSnapshot> GetSnapshotAsync(int practiceId, CancellationToken cancellationToken)
     {
         var practice = await db.Practices
@@ -88,14 +95,49 @@ public sealed class PracticeDataExportRepository(LuminaDbContext db) : IPractice
     }
 }
 
-public sealed record PracticeDataExportSnapshot(
-    Practice? Practice,
-    IReadOnlyList<Client> Clients,
-    IReadOnlyList<Provider> Providers,
-    IReadOnlyList<Session> Sessions,
-    IReadOnlyList<SessionNote> SessionNotes,
-    IReadOnlyList<Invoice> Invoices,
-    IReadOnlyList<Package> Packages,
-    IReadOnlyList<ClientPackage> ClientPackages,
-    IReadOnlyList<Template> Templates,
-    IReadOnlyList<TemplateField> TemplateFields);
+public sealed class PracticeDataExportSnapshot
+{
+    public PracticeDataExportSnapshot(
+        Practice? practice,
+        IReadOnlyList<Client> clients,
+        IReadOnlyList<Provider> providers,
+        IReadOnlyList<Session> sessions,
+        IReadOnlyList<SessionNote> sessionNotes,
+        IReadOnlyList<Invoice> invoices,
+        IReadOnlyList<Package> packages,
+        IReadOnlyList<ClientPackage> clientPackages,
+        IReadOnlyList<Template> templates,
+        IReadOnlyList<TemplateField> templateFields)
+    {
+        Practice = practice;
+        Clients = clients;
+        Providers = providers;
+        Sessions = sessions;
+        SessionNotes = sessionNotes;
+        Invoices = invoices;
+        Packages = packages;
+        ClientPackages = clientPackages;
+        Templates = templates;
+        TemplateFields = templateFields;
+    }
+
+    public Practice? Practice { get; }
+
+    public IReadOnlyList<Client> Clients { get; }
+
+    public IReadOnlyList<Provider> Providers { get; }
+
+    public IReadOnlyList<Session> Sessions { get; }
+
+    public IReadOnlyList<SessionNote> SessionNotes { get; }
+
+    public IReadOnlyList<Invoice> Invoices { get; }
+
+    public IReadOnlyList<Package> Packages { get; }
+
+    public IReadOnlyList<ClientPackage> ClientPackages { get; }
+
+    public IReadOnlyList<Template> Templates { get; }
+
+    public IReadOnlyList<TemplateField> TemplateFields { get; }
+}

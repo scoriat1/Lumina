@@ -869,7 +869,7 @@ function DataManagementSettings() {
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
                 <Typography sx={{ fontSize: '15px', fontWeight: 600, color: colors.text.primary }}>
-                  Import data from Excel
+                  Simple Excel import
                 </Typography>
                 <Chip
                   label="Coming Soon"
@@ -885,7 +885,7 @@ function DataManagementSettings() {
                 />
               </Box>
               <Typography sx={{ fontSize: '13px', color: colors.text.secondary, lineHeight: 1.6 }}>
-                Import data from Excel — coming soon
+                Simple Excel import (Clients + Sessions) — coming soon
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
