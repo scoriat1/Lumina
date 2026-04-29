@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 import { Alert, Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button, Switch, Typography, InputAdornment, Avatar, Chip, IconButton } from '@mui/material';
 import { Add, Edit, CloudUpload, Download } from '@mui/icons-material';
@@ -781,8 +781,10 @@ function NotesSettings() {
 function DataManagementSettings() {
   const [isExporting, setIsExporting] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleExport = async () => {
     try {
@@ -809,6 +811,27 @@ function DataManagementSettings() {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to download the import template.');
     } finally {
       setIsDownloadingTemplate(false);
+    }
+  };
+
+  const handleImportFile = async (file: File | null | undefined) => {
+    if (!file) return;
+
+    try {
+      setIsImporting(true);
+      setSuccessMessage(null);
+      setErrorMessage(null);
+      const result = await apiClient.importPracticeData(file);
+      setSuccessMessage(
+        `Imported ${result.clientsImported} client${result.clientsImported === 1 ? '' : 's'}, ${result.sessionsImported} session${result.sessionsImported === 1 ? '' : 's'}, and ${result.notesImported} note${result.notesImported === 1 ? '' : 's'}.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to import data.');
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) {
+        importInputRef.current.value = '';
+      }
     }
   };
 
@@ -872,7 +895,7 @@ function DataManagementSettings() {
                   Simple Excel import
                 </Typography>
                 <Chip
-                  label="Coming Soon"
+                  label="Excel"
                   size="small"
                   sx={{
                     bgcolor: colors.neutral.gray100,
@@ -885,17 +908,25 @@ function DataManagementSettings() {
                 />
               </Box>
               <Typography sx={{ fontSize: '13px', color: colors.text.secondary, lineHeight: 1.6 }}>
-                Simple Excel import (Clients + Sessions) — coming soon
+                Import clients, sessions, and notes from the Lumina Excel template.
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                hidden
+                onChange={(event) => void handleImportFile(event.target.files?.[0])}
+              />
               <Button
                 variant="outlined"
-                startIcon={<CloudUpload sx={{ fontSize: '18px' }} />}
-                disabled
+                startIcon={isImporting ? <CircularProgress size={16} color="inherit" /> : <CloudUpload sx={{ fontSize: '18px' }} />}
+                disabled={isImporting}
+                onClick={() => importInputRef.current?.click()}
                 sx={outlinedButtonStyles}
               >
-                Upload Excel
+                {isImporting ? 'Importing...' : 'Import Excel'}
               </Button>
               <Button
                 variant="text"

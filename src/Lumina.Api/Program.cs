@@ -91,6 +91,7 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IPracticeDataExportRepository, PracticeDataExportRepository>();
 builder.Services.AddScoped<IDataExportService, DataExportService>();
+builder.Services.AddScoped<IDataImportService, DataImportService>();
 
 builder.Services.AddCors(options =>
 {
@@ -2234,6 +2235,53 @@ api.MapGet("/data-export/import-template", (IDataExportService exportService) =>
 {
     var template = exportService.CreateImportTemplate();
     return Results.File(template.Content, template.ContentType, template.FileName);
+});
+
+api.MapPost("/data-export/import", async (IDataImportService importService, LuminaDbContext db, HttpContext context, CancellationToken cancellationToken) =>
+{
+    var scope = await ResolveScopeAsync(context, db);
+    if (scope is null) return Results.Unauthorized();
+
+    if (!context.Request.HasFormContentType)
+    {
+        return Results.BadRequest(new { message = "Please upload the Excel import template." });
+    }
+
+    var form = await context.Request.ReadFormAsync(cancellationToken);
+    var file = form.Files.GetFile("file");
+    if (file is null || file.Length == 0)
+    {
+        return Results.BadRequest(new { message = "Please choose an Excel file to import." });
+    }
+
+    var extension = Path.GetExtension(file.FileName);
+    if (!string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.BadRequest(new { message = "Please upload the Lumina Excel import template (.xlsx)." });
+    }
+
+    await using var stream = file.OpenReadStream();
+    var result = await importService.ImportPracticeDataAsync(
+        scope.Value.practiceId,
+        scope.Value.providerId,
+        stream,
+        cancellationToken);
+
+    if (!result.Success)
+    {
+        return Results.BadRequest(new
+        {
+            message = "Please fix the import template and try again.",
+            errors = result.Errors
+        });
+    }
+
+    return Results.Ok(new
+    {
+        clientsImported = result.ClientsImported,
+        sessionsImported = result.SessionsImported,
+        notesImported = result.NotesImported
+    });
 });
 
 api.MapGet("/dashboard", async (LuminaDbContext db, HttpContext context) =>

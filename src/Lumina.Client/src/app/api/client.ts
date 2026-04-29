@@ -119,6 +119,44 @@ async function downloadFile(path: string): Promise<{ blob: Blob; filename: strin
   };
 }
 
+async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+    try {
+      const errorBody = await response.json() as {
+        message?: string;
+        title?: string;
+        errors?: string[] | Record<string, string[]>;
+      };
+      const errorDetails = Array.isArray(errorBody.errors)
+        ? errorBody.errors
+        : errorBody.errors
+          ? Object.values(errorBody.errors).flat()
+          : [];
+      const detailMessage = errorDetails.filter(Boolean).slice(0, 5).join('\n');
+      errorMessage = [errorBody.message ?? errorBody.title ?? errorMessage, detailMessage]
+        .filter(Boolean)
+        .join('\n');
+    } catch {
+      // Ignore JSON parsing failures and fall back to status-based message.
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  const responseText = await response.text();
+  return responseText ? JSON.parse(responseText) as T : {} as T;
+}
+
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -599,6 +637,11 @@ export const apiClient = {
     const file = await downloadFile('/api/data-export/import-template');
     saveBlob(file.blob, file.filename);
   },
+  importPracticeData: (file: File) => uploadFile<{
+    clientsImported: number;
+    sessionsImported: number;
+    notesImported: number;
+  }>('/api/data-export/import', file),
   getClientDetailView: async (id: string) => {
     const detail = await request<ClientDetailViewDto>(`/api/clients/${id}/detail-view`);
     return {
