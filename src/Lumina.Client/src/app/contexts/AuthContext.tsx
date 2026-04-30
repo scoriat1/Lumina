@@ -11,6 +11,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const logoutRedirectFlagKey = 'lumina:logoutRedirect';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthMeDto | null>(null);
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiClient.logout();
     } finally {
+      sessionStorage.setItem(logoutRedirectFlagKey, '1');
       setUser(null);
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');

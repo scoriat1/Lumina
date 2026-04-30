@@ -18,6 +18,15 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const notificationCount = useNotificationCount();
 
+  const handleLogout = async () => {
+    setAnchorEl(null);
+    try {
+      await logout();
+    } finally {
+      navigate('/login?loggedOut=1', { replace: true });
+    }
+  };
+
   return (
     <AppBar position="static" elevation={0} sx={{ bgcolor: colors.surface.card, borderBottom: `1px solid ${colors.border.subtle}`, height: themeLayout.headerHeight }}>
       <Toolbar sx={{ minHeight: `${themeLayout.headerHeight}px !important`, px: { xs: 2, sm: 3, md: 4 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -45,7 +54,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             <KeyboardArrowDownIcon sx={{ display: { xs: 'none', sm: 'block' }, fontSize: 20, color: colors.text.muted }} />
           </Box>
           <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-            <MenuItem onClick={async () => { try { await logout(); } finally { navigate('/login'); } }}>Logout</MenuItem>
+            <MenuItem onClick={handleLogout}>Logout</MenuItem>
           </Menu>
         </Box>
       </Toolbar>

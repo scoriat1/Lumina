@@ -2,6 +2,7 @@ import { Box, Button, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router';
 import { CTASection, PricingSection } from '../components/landing/LandingSections';
 import { Seo } from '../components/landing/Seo';
+import { publicTopSectionSx } from '../components/landing/publicPageStyles';
 import { colors } from '../theme';
 
 export function PricingPage() {
@@ -12,7 +13,7 @@ export function PricingPage() {
         description="Simple Lumina pricing for client-based practices that need client profiles, sessions, notes, packages, scheduling, and payments."
         path="/pricing"
       />
-      <Box component="section" sx={{ py: { xs: 8, md: 12 }, textAlign: 'center' }}>
+      <Box component="section" sx={{ ...publicTopSectionSx, textAlign: 'center' }}>
         <Container maxWidth="md">
           <Typography component="h1" sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '42px', sm: '56px', md: '64px' }, fontWeight: 700, lineHeight: 1.08, mb: 3 }}>
             What it costs

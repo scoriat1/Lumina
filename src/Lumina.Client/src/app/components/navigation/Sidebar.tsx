@@ -11,6 +11,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import type { ReactNode } from 'react';
 import { colors, themeLayout, borderRadius, transitions } from '../../theme';
 import { useNotificationCount } from '../../notifications/useNotificationCount';
+import { LuminaBrand } from '../brand/LuminaBrand';
 
 const navigationItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/app' },
@@ -88,22 +89,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           justifyContent: 'center',
         }}
       >
-        <Box
-          sx={{
-            width: 40,
-            height: 40,
-            borderRadius: borderRadius.xl,
-            bgcolor: colors.brand.purple,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: 700,
-            fontSize: '18px',
-          }}
-        >
-          C
-        </Box>
+        <LuminaBrand to="/" showWordmark={false} markSize={40} inverse />
       </Box>
 
       {/* Main navigation */}

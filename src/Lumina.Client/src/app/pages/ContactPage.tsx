@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Box, Button, Card, Container, TextField, Typography } from '@mui/material';
 import { Seo } from '../components/landing/Seo';
+import { publicCenteredSectionSx } from '../components/landing/publicPageStyles';
 import { colors } from '../theme';
 
 export function ContactPage() {
@@ -24,7 +25,7 @@ export function ContactPage() {
         description="Contact Lumina with questions about practice management software for session-based and client-based practices."
         path="/contact"
       />
-      <Box component="section" sx={{ minHeight: 'calc(100vh - 220px)', display: 'flex', alignItems: 'center', py: { xs: 7, md: 10 } }}>
+      <Box component="section" sx={publicCenteredSectionSx}>
         <Container maxWidth="sm">
           <Box sx={{ textAlign: 'center', mb: 4 }}>
             <Typography component="h1" sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '38px', sm: '48px' }, fontWeight: 700, lineHeight: 1.12, mb: 2 }}>

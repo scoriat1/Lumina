@@ -8,6 +8,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { colors } from '../styles/colors';
+import { LuminaBrand } from './brand/LuminaBrand';
 
 const DRAWER_WIDTH = 72; // Icon-only navigation rail
 
@@ -43,21 +44,7 @@ export function Sidebar({ mobileOpen, onDrawerToggle }: SidebarProps) {
     }}>
       {/* Logo icon only */}
       <Box sx={{ px: 2, mb: 4, display: 'flex', justifyContent: 'center' }}>
-        <Box sx={{
-          width: 40,
-          height: 40,
-          borderRadius: '10px',
-          bgcolor: colors.brand.purple,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'white',
-          fontWeight: 700,
-          fontSize: '18px',
-          mb: 6,
-        }}>
-          L
-        </Box>
+        <LuminaBrand to="/" showWordmark={false} markSize={40} inverse sx={{ mb: 6 }} />
       </Box>
 
       {/* Main navigation - icon only */}

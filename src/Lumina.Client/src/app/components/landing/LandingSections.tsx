@@ -9,6 +9,7 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import PeopleIcon from '@mui/icons-material/People';
 import { motion } from 'motion/react';
 import { colors } from '../../theme';
+import { publicTopSectionSx } from './publicPageStyles';
 
 const MotionBox = motion.create(Box);
 const MotionTypography = motion.create(Typography);
@@ -37,7 +38,7 @@ export const landingButtonSx = {
 
 export function Hero() {
   return (
-    <Box component="section" sx={{ position: 'relative', pt: { xs: 8, md: 13 }, pb: { xs: 8, md: 12 }, overflow: 'hidden' }}>
+    <Box component="section" sx={{ position: 'relative', ...publicTopSectionSx, overflow: 'hidden' }}>
       <Container maxWidth="lg">
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 0.9fr' }, gap: { xs: 6, lg: 8 }, alignItems: 'center' }}>
           <Box sx={{ textAlign: { xs: 'center', lg: 'left' } }}>

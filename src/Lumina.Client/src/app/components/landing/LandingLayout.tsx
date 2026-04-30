@@ -15,6 +15,7 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
 import { colors } from '../../theme';
+import { LuminaBrand } from '../brand/LuminaBrand';
 
 const navItems = [
   { label: 'Pricing', to: '/pricing' },
@@ -84,20 +85,7 @@ export function LandingLayout() {
       >
         <Container maxWidth="lg">
           <Toolbar component="nav" aria-label="Main navigation" disableGutters sx={{ minHeight: 72, gap: 3 }}>
-            <Link
-              component={RouterLink}
-              to="/"
-              underline="none"
-              sx={{
-                color: colors.text.primary,
-                fontFamily: '"Crimson Pro", Georgia, serif',
-                fontSize: '28px',
-                fontWeight: 700,
-                mr: 'auto',
-              }}
-            >
-              Lumina
-            </Link>
+            <LuminaBrand to="/" markSize={34} sx={{ mr: 'auto' }} />
 
             <Stack direction="row" spacing={3.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', ml: 2 }}>
               {navLinks}
@@ -166,9 +154,7 @@ export function LandingLayout() {
         PaperProps={{ sx: { width: 'min(86vw, 340px)', p: 3 } }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
-          <Typography sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: '26px', fontWeight: 700 }}>
-            Lumina
-          </Typography>
+          <LuminaBrand to="/" markSize={34} onClick={() => setMobileOpen(false)} />
           <IconButton aria-label="Close navigation menu" onClick={() => setMobileOpen(false)}>
             <CloseIcon />
           </IconButton>

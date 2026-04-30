@@ -3,6 +3,7 @@ import { Box, Button, Card, Container, Divider, Stack, TextField, Typography } f
 import { Link as RouterLink } from 'react-router';
 import GoogleIcon from '@mui/icons-material/Google';
 import { Seo } from '../components/landing/Seo';
+import { publicCenteredSectionSx } from '../components/landing/publicPageStyles';
 import { colors } from '../theme';
 
 export function SignupPage() {
@@ -31,7 +32,7 @@ export function SignupPage() {
         description="Start a free Lumina trial for session-based practice management, including clients, scheduling, notes, packages, and payments."
         path="/signup"
       />
-      <Box component="section" sx={{ minHeight: 'calc(100vh - 220px)', display: 'flex', alignItems: 'center', py: { xs: 7, md: 10 } }}>
+      <Box component="section" sx={publicCenteredSectionSx}>
         <Container maxWidth="sm">
           <Box sx={{ textAlign: 'center', mb: 4 }}>
             <Typography component="h1" sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '38px', sm: '48px' }, fontWeight: 700, lineHeight: 1.12, mb: 2 }}>
