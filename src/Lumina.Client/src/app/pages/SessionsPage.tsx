@@ -58,14 +58,16 @@ type ReplacementDraft = Pick<
   'clientId' | 'packageId' | 'clientPackageId' | 'sessionType' | 'duration' | 'location'
 >;
 const toSession = (session: SessionDto): Session => ({ ...session, date: new Date(session.date) });
+const defaultDateRangeFilter = 'today';
+const defaultStatusFilter: StatusFilter = 'all';
 
 export function SessionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sessionsData, setSessionsData] = useState<Session[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('upcoming');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(defaultStatusFilter);
   const [clientFilter, setClientFilter] = useState<string>('all');
-  const [dateRangeFilter, setDateRangeFilter] = useState<string>('all');
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>(defaultDateRangeFilter);
   const [customDateFilter, setCustomDateFilter] = useState<string>('');
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
@@ -105,9 +107,15 @@ export function SessionsPage() {
   }, [qParam]);
 
   useEffect(() => {
-    if (!rangeParam || rangeParam === 'all') {
+    if (!rangeParam) {
+      setDateRangeFilter(defaultDateRangeFilter);
+      setStatusFilter(defaultStatusFilter);
+      return;
+    }
+
+    if (rangeParam === 'all') {
       setDateRangeFilter('all');
-      setStatusFilter('all');
+      setStatusFilter(defaultStatusFilter);
       return;
     }
 
@@ -197,20 +205,20 @@ export function SessionsPage() {
   const handleClearFilters = () => {
     setSearchQuery('');
     setClientFilter('all');
-    setDateRangeFilter('all');
+    setDateRangeFilter(defaultDateRangeFilter);
     setCustomDateFilter('');
     setLocationFilter('all');
     setPaymentFilter('all');
-    setStatusFilter('upcoming');
+    setStatusFilter(defaultStatusFilter);
   };
 
   const hasActiveFilters = 
     searchQuery !== '' || 
     clientFilter !== 'all' || 
-    dateRangeFilter !== 'all' || 
+    dateRangeFilter !== defaultDateRangeFilter || 
     locationFilter !== 'all' || 
     paymentFilter !== 'all' || 
-    statusFilter !== 'upcoming';
+    statusFilter !== defaultStatusFilter;
 
   // Filter sessions
   const dateRange = getDateRange();
@@ -459,7 +467,7 @@ export function SessionsPage() {
           )}
 
           <Badge
-            badgeContent={(clientFilter !== 'all' ? 1 : 0) + (statusFilter !== 'upcoming' ? 1 : 0) + (locationFilter !== 'all' ? 1 : 0) + (paymentFilter !== 'all' ? 1 : 0)}
+            badgeContent={(clientFilter !== 'all' ? 1 : 0) + (statusFilter !== defaultStatusFilter ? 1 : 0) + (locationFilter !== 'all' ? 1 : 0) + (paymentFilter !== 'all' ? 1 : 0)}
             color="primary"
             sx={{
               flexShrink: 0,
