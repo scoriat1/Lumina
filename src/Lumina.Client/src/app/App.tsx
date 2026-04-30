@@ -1,5 +1,6 @@
 import { ThemeProvider as MuiThemeProvider, CssBaseline, Box } from '@mui/material';
 import { RouterProvider } from 'react-router';
+import { HelmetProvider } from 'react-helmet-async';
 import { theme } from './theme';
 import { router } from './routes';
 import { NotesTemplateProvider } from './contexts/NotesTemplateContext';
@@ -16,21 +17,23 @@ function AppContent() {
   return (
     <CleanThemeProvider>
       <CssBaseline />
-      <AuthProvider>
-        <PracticePackagesProvider>
-          <NotesTemplateProvider>
-            <Box sx={{ height: '100%', width: '100%' }}>
-              <RouterProvider router={router} />
-            </Box>
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                duration: 2000,
-              }}
-            />
-          </NotesTemplateProvider>
-        </PracticePackagesProvider>
-      </AuthProvider>
+      <HelmetProvider>
+        <AuthProvider>
+          <PracticePackagesProvider>
+            <NotesTemplateProvider>
+              <Box sx={{ height: '100%', width: '100%' }}>
+                <RouterProvider router={router} />
+              </Box>
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  duration: 2000,
+                }}
+              />
+            </NotesTemplateProvider>
+          </PracticePackagesProvider>
+        </AuthProvider>
+      </HelmetProvider>
     </CleanThemeProvider>
   );
 }

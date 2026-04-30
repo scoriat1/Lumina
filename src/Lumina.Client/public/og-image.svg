@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Lumina</title>
+  <desc id="desc">Practice management for client sessions</desc>
+  <rect width="1200" height="630" fill="#FAF9F7"/>
+  <rect x="110" y="90" width="980" height="450" rx="28" fill="#FFFFFF" stroke="#DDD9D2" stroke-width="2"/>
+  <text x="170" y="230" fill="#1F1C1A" font-family="Georgia, serif" font-size="86" font-weight="700">Lumina</text>
+  <text x="174" y="298" fill="#5A524A" font-family="Arial, sans-serif" font-size="34">Client profiles, calendar, notes, and billing in one calm system.</text>
+  <rect x="170" y="365" width="260" height="64" rx="12" fill="#9B8B9E"/>
+  <text x="216" y="407" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="700">Start Free Trial</text>
+  <rect x="690" y="180" width="300" height="270" rx="18" fill="#F5F3F0"/>
+  <rect x="720" y="220" width="240" height="42" rx="10" fill="#FFFFFF"/>
+  <rect x="720" y="286" width="240" height="42" rx="10" fill="#FFFFFF"/>
+  <rect x="720" y="352" width="240" height="42" rx="10" fill="#FFFFFF"/>
+</svg>

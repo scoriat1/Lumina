@@ -17,7 +17,7 @@ interface SidebarProps {
 }
 
 const navigationItems = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/app' },
   { text: 'Clients', icon: <PeopleIcon />, path: '/clients' },
   { text: 'Calendar', icon: <CalendarMonthIcon />, path: '/calendar' },
   { text: 'Sessions', icon: <EventNoteIcon />, path: '/sessions' },

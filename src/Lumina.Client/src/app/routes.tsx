@@ -13,8 +13,24 @@ import { ProductRulesPage } from './pages/ProductRulesPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
+import { LandingLayout } from './components/landing/LandingLayout';
+import { LandingPage } from './pages/LandingPage';
+import { FeaturesPage } from './pages/FeaturesPage';
+import { PricingPage } from './pages/PricingPage';
+import { ContactPage } from './pages/ContactPage';
+import { SignupPage } from './pages/SignupPage';
 
 export const router = createBrowserRouter([
+  {
+    element: <LandingLayout />,
+    children: [
+      { index: true, Component: LandingPage },
+      { path: 'features', Component: FeaturesPage },
+      { path: 'pricing', Component: PricingPage },
+      { path: 'contact', Component: ContactPage },
+      { path: 'signup', Component: SignupPage },
+    ],
+  },
   {
     path: '/login',
     Component: LoginPage,
@@ -27,7 +43,7 @@ export const router = createBrowserRouter([
     path: '/',
     element: <ProtectedRoute><RootLayout /></ProtectedRoute>,
     children: [
-      { index: true, Component: DashboardPage },
+      { path: 'app', Component: DashboardPage },
       { path: 'product-rules', Component: ProductRulesPage },
       { path: 'clients', Component: ClientsPage },
       { path: 'clients/:id', Component: ClientDetailPage },
