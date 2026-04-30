@@ -47,6 +47,23 @@ const calculateProgress = (completed: number, total: number): number => {
   return Math.min(100, Math.max(0, Math.round((completed / total) * 100)));
 };
 
+const formatDisplayDateTime = (value?: string | null): string | undefined => {
+  if (!value) return undefined;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
@@ -218,6 +235,7 @@ const mapClientDto = (client: ClientApiDto): ClientDto => ({
   avatarColor: client.avatarColor ?? computeAvatarColor(client.id),
   initials: client.initials ?? computeInitials(client.name),
   progress: client.progress ?? calculateProgress(client.sessionsCompleted, client.totalSessions),
+  nextSession: formatDisplayDateTime(client.nextSession),
 });
 
 const mapSessionDto = (session: SessionApiDto): SessionDto => ({
