@@ -16,15 +16,46 @@ import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
 import { colors } from '../../theme';
 import { LuminaBrand } from '../brand/LuminaBrand';
+import { useAuth } from '../../contexts/AuthContext';
 
 const navItems = [
   { label: 'Pricing', to: '/pricing' },
   { label: 'Contact', to: '/contact' },
 ];
 
+const navLinkSx = {
+  position: 'relative',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  height: 40,
+  fontSize: '15px',
+  lineHeight: 1,
+  fontWeight: 700,
+  px: 0,
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 4,
+    height: 2,
+    borderRadius: 999,
+  },
+  '&:focus-visible': {
+    outline: `2px solid ${colors.brand.purple}`,
+    outlineOffset: '4px',
+    borderRadius: '6px',
+  },
+  '&:hover': { color: colors.text.primary },
+};
+
 export function LandingLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
+  const authLink = user ? { label: 'Dashboard', to: '/app' } : { label: 'Login', to: '/login' };
+  const isAuthLinkActive = location.pathname === authLink.to;
 
   const navLinks = (
     <>
@@ -40,28 +71,12 @@ export function LandingLayout() {
             aria-current={isActive ? 'page' : undefined}
             sx={{
               color: isActive ? colors.text.primary : colors.text.secondary,
-              position: 'relative',
-              display: 'inline-flex',
-              alignItems: 'center',
-              height: 40,
-              fontSize: '15px',
-              fontWeight: isActive ? 800 : 600,
+              ...navLinkSx,
+              fontWeight: isActive ? 800 : 700,
               '&::after': {
-                content: '""',
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                bottom: 4,
-                height: 2,
-                borderRadius: 999,
+                ...navLinkSx['&::after'],
                 bgcolor: isActive ? colors.brand.purple : 'transparent',
               },
-              '&:focus-visible': {
-                outline: `2px solid ${colors.brand.purple}`,
-                outlineOffset: '4px',
-                borderRadius: '6px',
-              },
-              '&:hover': { color: colors.text.primary },
             }}
           >
             {item.label}
@@ -87,35 +102,25 @@ export function LandingLayout() {
           <Toolbar component="nav" aria-label="Main navigation" disableGutters sx={{ minHeight: 72, gap: 3 }}>
             <LuminaBrand to="/" markSize={34} sx={{ mr: 'auto' }} />
 
-            <Stack direction="row" spacing={3.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', ml: 2 }}>
+            <Stack direction="row" spacing={3} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', ml: 2 }}>
               {navLinks}
-              <Button
+              <Link
                 component={RouterLink}
-                to="/login"
-                aria-current={location.pathname === '/login' ? 'page' : undefined}
+                to={authLink.to}
+                underline="none"
+                aria-current={isAuthLinkActive ? 'page' : undefined}
                 sx={{
-                  color: location.pathname === '/login' ? colors.text.primary : colors.text.secondary,
-                  position: 'relative',
-                  height: 40,
-                  minWidth: 'auto',
-                  textTransform: 'none',
-                  fontWeight: location.pathname === '/login' ? 800 : 700,
-                  borderRadius: 0,
-                  px: 1,
+                  color: isAuthLinkActive ? colors.text.primary : colors.text.secondary,
+                  ...navLinkSx,
+                  fontWeight: isAuthLinkActive ? 800 : 700,
                   '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    left: 8,
-                    right: 8,
-                    bottom: 4,
-                    height: 2,
-                    borderRadius: 999,
-                    bgcolor: location.pathname === '/login' ? colors.brand.purple : 'transparent',
+                    ...navLinkSx['&::after'],
+                    bgcolor: isAuthLinkActive ? colors.brand.purple : 'transparent',
                   },
                 }}
               >
-                Login
-              </Button>
+                {authLink.label}
+              </Link>
               <Button
                 component={RouterLink}
                 to="/signup"
@@ -125,8 +130,10 @@ export function LandingLayout() {
                   color: '#fff',
                   textTransform: 'none',
                   fontWeight: 700,
+                  fontSize: '15px',
+                  lineHeight: 1,
                   borderRadius: '10px',
-                  minHeight: 40,
+                  height: 40,
                   px: 2.5,
                   py: 0,
                   '&:hover': { bgcolor: colors.brand.purpleDark },
@@ -163,18 +170,18 @@ export function LandingLayout() {
           {navLinks}
           <Button
             component={RouterLink}
-            to="/login"
+            to={authLink.to}
             onClick={() => setMobileOpen(false)}
             variant="outlined"
-            aria-current={location.pathname === '/login' ? 'page' : undefined}
+            aria-current={isAuthLinkActive ? 'page' : undefined}
             sx={{
               textTransform: 'none',
-              borderColor: location.pathname === '/login' ? colors.brand.purple : undefined,
-              color: location.pathname === '/login' ? colors.text.primary : undefined,
-              fontWeight: location.pathname === '/login' ? 800 : 600,
+              borderColor: isAuthLinkActive ? colors.brand.purple : undefined,
+              color: isAuthLinkActive ? colors.text.primary : undefined,
+              fontWeight: isAuthLinkActive ? 800 : 600,
             }}
           >
-            Login
+            {authLink.label}
           </Button>
           <Button
             component={RouterLink}
