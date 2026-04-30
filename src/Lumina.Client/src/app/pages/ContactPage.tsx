@@ -21,7 +21,7 @@ export function ContactPage() {
     <>
       <Seo
         title="Contact | Lumina"
-        description="Contact Lumina with questions about practice management, client sessions, notes, scheduling, and billing."
+        description="Contact Lumina with questions about practice management software for session-based and client-based practices."
         path="/contact"
       />
       <Box component="section" sx={{ minHeight: 'calc(100vh - 220px)', display: 'flex', alignItems: 'center', py: { xs: 7, md: 10 } }}>

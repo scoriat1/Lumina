@@ -18,7 +18,7 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-      setError('');
+    setError('');
     try {
       await login(email, password);
       navigate('/app');
@@ -29,7 +29,7 @@ export function LoginPage() {
 
   return (
     <>
-      <Seo title="Login | Lumina" description="Login to Lumina to manage clients, sessions, notes, billing, and practice settings." path="/login" />
+      <Seo title="Login | Lumina" description="Login to Lumina to manage clients, sessions, notes, payments, and practice settings." path="/login" />
       <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', bgcolor: '#F7F5F3', px: 2, py: 6 }}>
         <Box sx={{ width: '100%', maxWidth: 440 }}>
           <Box sx={{ textAlign: 'center', mb: 4 }}>

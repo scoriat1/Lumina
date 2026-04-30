@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as RouterLink, Outlet } from 'react-router';
+import { Link as RouterLink, Outlet, useLocation } from 'react-router';
 import {
   AppBar,
   Box,
@@ -17,38 +17,56 @@ import CloseIcon from '@mui/icons-material/Close';
 import { colors } from '../../theme';
 
 const navItems = [
-  { label: 'Features', to: '/features' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Contact', to: '/contact' },
 ];
 
 export function LandingLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
 
   const navLinks = (
     <>
-      {navItems.map((item) => (
-        <Link
-          key={item.to}
-          component={RouterLink}
-          to={item.to}
-          onClick={() => setMobileOpen(false)}
-          underline="none"
-          sx={{
-            color: colors.text.secondary,
-            fontSize: '15px',
-            fontWeight: 600,
-            '&:focus-visible': {
-              outline: `2px solid ${colors.brand.purple}`,
-              outlineOffset: '4px',
-              borderRadius: '6px',
-            },
-            '&:hover': { color: colors.text.primary },
-          }}
-        >
-          {item.label}
-        </Link>
-      ))}
+      {navItems.map((item) => {
+        const isActive = location.pathname === item.to;
+        return (
+          <Link
+            key={item.to}
+            component={RouterLink}
+            to={item.to}
+            onClick={() => setMobileOpen(false)}
+            underline="none"
+            aria-current={isActive ? 'page' : undefined}
+            sx={{
+              color: isActive ? colors.text.primary : colors.text.secondary,
+              position: 'relative',
+              display: 'inline-flex',
+              alignItems: 'center',
+              height: 40,
+              fontSize: '15px',
+              fontWeight: isActive ? 800 : 600,
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 4,
+                height: 2,
+                borderRadius: 999,
+                bgcolor: isActive ? colors.brand.purple : 'transparent',
+              },
+              '&:focus-visible': {
+                outline: `2px solid ${colors.brand.purple}`,
+                outlineOffset: '4px',
+                borderRadius: '6px',
+              },
+              '&:hover': { color: colors.text.primary },
+            }}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
     </>
   );
 
@@ -81,12 +99,33 @@ export function LandingLayout() {
               Lumina
             </Link>
 
-            <Stack direction="row" spacing={4} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
+            <Stack direction="row" spacing={3.5} sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', ml: 2 }}>
               {navLinks}
-            </Stack>
-
-            <Stack direction="row" spacing={1.5} sx={{ display: { xs: 'none', md: 'flex' }, ml: 2 }}>
-              <Button component={RouterLink} to="/login" sx={{ color: colors.text.secondary, textTransform: 'none', fontWeight: 700 }}>
+              <Button
+                component={RouterLink}
+                to="/login"
+                aria-current={location.pathname === '/login' ? 'page' : undefined}
+                sx={{
+                  color: location.pathname === '/login' ? colors.text.primary : colors.text.secondary,
+                  position: 'relative',
+                  height: 40,
+                  minWidth: 'auto',
+                  textTransform: 'none',
+                  fontWeight: location.pathname === '/login' ? 800 : 700,
+                  borderRadius: 0,
+                  px: 1,
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    left: 8,
+                    right: 8,
+                    bottom: 4,
+                    height: 2,
+                    borderRadius: 999,
+                    bgcolor: location.pathname === '/login' ? colors.brand.purple : 'transparent',
+                  },
+                }}
+              >
                 Login
               </Button>
               <Button
@@ -99,7 +138,9 @@ export function LandingLayout() {
                   textTransform: 'none',
                   fontWeight: 700,
                   borderRadius: '10px',
+                  minHeight: 40,
                   px: 2.5,
+                  py: 0,
                   '&:hover': { bgcolor: colors.brand.purpleDark },
                 }}
               >
@@ -134,7 +175,19 @@ export function LandingLayout() {
         </Box>
         <Stack component="nav" aria-label="Mobile navigation" spacing={3}>
           {navLinks}
-          <Button component={RouterLink} to="/login" onClick={() => setMobileOpen(false)} variant="outlined" sx={{ textTransform: 'none' }}>
+          <Button
+            component={RouterLink}
+            to="/login"
+            onClick={() => setMobileOpen(false)}
+            variant="outlined"
+            aria-current={location.pathname === '/login' ? 'page' : undefined}
+            sx={{
+              textTransform: 'none',
+              borderColor: location.pathname === '/login' ? colors.brand.purple : undefined,
+              color: location.pathname === '/login' ? colors.text.primary : undefined,
+              fontWeight: location.pathname === '/login' ? 800 : 600,
+            }}
+          >
             Login
           </Button>
           <Button

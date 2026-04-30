@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 import { RootLayout } from './RootLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { ClientsPage } from './pages/ClientsPage';
@@ -15,7 +15,6 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import { LandingLayout } from './components/landing/LandingLayout';
 import { LandingPage } from './pages/LandingPage';
-import { FeaturesPage } from './pages/FeaturesPage';
 import { PricingPage } from './pages/PricingPage';
 import { ContactPage } from './pages/ContactPage';
 import { SignupPage } from './pages/SignupPage';
@@ -25,15 +24,12 @@ export const router = createBrowserRouter([
     element: <LandingLayout />,
     children: [
       { index: true, Component: LandingPage },
-      { path: 'features', Component: FeaturesPage },
+      { path: 'features', element: <Navigate to="/" replace /> },
       { path: 'pricing', Component: PricingPage },
       { path: 'contact', Component: ContactPage },
       { path: 'signup', Component: SignupPage },
+      { path: 'login', Component: LoginPage },
     ],
-  },
-  {
-    path: '/login',
-    Component: LoginPage,
   },
   {
     path: '/unauthorized',

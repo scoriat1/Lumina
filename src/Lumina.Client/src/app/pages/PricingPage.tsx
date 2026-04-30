@@ -9,7 +9,7 @@ export function PricingPage() {
     <>
       <Seo
         title="Pricing | Lumina"
-        description="Lumina pricing is simple: one plan for client profiles, sessions, notes, billing, packages, and scheduling."
+        description="Simple Lumina pricing for client-based practices that need client profiles, sessions, notes, packages, scheduling, and payments."
         path="/pricing"
       />
       <Box component="section" sx={{ py: { xs: 8, md: 12 }, textAlign: 'center' }}>
@@ -18,7 +18,7 @@ export function PricingPage() {
             What it costs
           </Typography>
           <Typography sx={{ color: colors.text.secondary, fontSize: { xs: '17px', md: '19px' }, lineHeight: 1.7 }}>
-            One price. No tiers, no per-client fees, no surprises.
+            Simple pricing for a complete practice workspace.
           </Typography>
         </Container>
       </Box>
@@ -34,7 +34,7 @@ export function PricingPage() {
           </Button>
         </Container>
       </Box>
-      <CTASection title="Start with a free trial" body="No credit card required. Cancel anytime." />
+      <CTASection title="Start with a free trial" body="Set up clients, sessions, notes, and payments in one calm workspace." />
     </>
   );
 }

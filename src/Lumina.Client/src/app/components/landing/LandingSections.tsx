@@ -3,6 +3,7 @@ import { Link as RouterLink } from 'react-router';
 import { Box, Button, Card, Container, Stack, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
 import NotesIcon from '@mui/icons-material/Notes';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import PeopleIcon from '@mui/icons-material/People';
@@ -52,7 +53,7 @@ export function Hero() {
                 mb: 3,
               }}
             >
-              Stop using five apps to run your practice
+              Run your client-based practice in one simple system
             </MotionTypography>
             <MotionTypography
               {...fadeIn}
@@ -66,14 +67,17 @@ export function Hero() {
                 mx: { xs: 'auto', lg: 0 },
               }}
             >
-              Client info, calendar, notes, and payments get scattered fast. Lumina brings them together in one calm system for client-based practices.
+              Keep clients, sessions, notes, scheduling, packages, and payments organized in one calm workspace.
             </MotionTypography>
             <MotionBox {...fadeIn} transition={{ ...fadeIn.transition, delay: 0.2 }}>
               <Button component={RouterLink} to="/signup" variant="contained" sx={landingButtonSx}>
                 Start Free Trial
               </Button>
-              <Typography sx={{ mt: 2.5, color: colors.text.tertiary, fontSize: '14px' }}>
-                14 day free trial · No credit card required
+              <Typography sx={{ mt: 2, color: colors.text.secondary, fontSize: '15px', fontWeight: 700 }}>
+                Set up your practice workspace in minutes.
+              </Typography>
+              <Typography sx={{ mt: 0.75, color: colors.text.tertiary, fontSize: '14px' }}>
+                14 day free trial - No credit card required
               </Typography>
             </MotionBox>
           </Box>
@@ -107,11 +111,11 @@ function ProductPreview() {
         </Typography>
         <Stack spacing={1.5}>
           {[
-            ['9:00 AM', 'Alex Thompson', 'Leadership session'],
-            ['11:30 AM', 'Taylor Chen', 'Career transition'],
-            ['2:00 PM', 'Jamie Patel', 'Progress review'],
+            ['9:00 AM', 'Initial consultation', 'Notes saved'],
+            ['11:30 AM', 'Intake session', 'Payment pending'],
+            ['2:00 PM', 'Follow-up (package)', 'Package: 2 of 6 used'],
           ].map(([time, name, detail]) => (
-            <Box key={name} sx={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: 2, p: 1.5, borderRadius: '10px', bgcolor: colors.neutral.gray50 }}>
+            <Box key={`${time}-${name}`} sx={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: 2, p: 1.5, borderRadius: '10px', bgcolor: colors.neutral.gray50 }}>
               <Typography sx={{ color: colors.brand.purple, fontWeight: 700, fontSize: '13px' }}>{time}</Typography>
               <Box>
                 <Typography sx={{ fontWeight: 700, fontSize: '15px' }}>{name}</Typography>
@@ -121,8 +125,8 @@ function ProductPreview() {
           ))}
         </Stack>
         <Box sx={{ mt: 3, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-          <Metric label="Paid this month" value="$3,240" />
-          <Metric label="Open notes" value="8" />
+          <Metric label="Payments tracked" value="$3,240" />
+          <Metric label="Notes organized" value="8" />
         </Box>
       </Box>
     </MotionBox>
@@ -138,19 +142,39 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+export function ProblemReliefSection() {
+  return (
+    <Box component="section" sx={{ py: { xs: 5, md: 7 } }}>
+      <Container maxWidth="md" sx={{ textAlign: 'center' }}>
+        <Typography component="h2" sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '30px', md: '38px' }, fontWeight: 700, mb: 1.5 }}>
+          Running your practice should not feel scattered.
+        </Typography>
+        <Typography sx={{ color: colors.text.secondary, fontSize: { xs: '16px', sm: '18px' }, lineHeight: 1.7 }}>
+          Lumina gives your client work one steady place to live.
+        </Typography>
+      </Container>
+    </Box>
+  );
+}
+
 export function FeatureSection() {
   const features = [
-    { title: 'Client profiles', icon: <PeopleIcon />, body: "See every client's contact info, session history, and notes in one place." },
-    { title: 'Calendar', icon: <CalendarMonthIcon />, body: 'Book sessions, check availability, and see your week without switching tools.' },
-    { title: 'Session notes', icon: <NotesIcon />, body: 'Write structured notes, use templates, add timestamps, and search across everything later.' },
-    { title: 'Billing', icon: <PaymentsIcon />, body: 'Track who paid, who owes what, and manage session packages without spreadsheets.' },
+    { title: 'Client profiles', icon: <PeopleIcon />, body: "Keep each client's contact details, session history, notes, and next steps easy to find." },
+    { title: 'Calendar', icon: <CalendarMonthIcon />, body: 'Schedule sessions, see your week clearly, and reduce back-and-forth around availability.' },
+    { title: 'Session notes', icon: <NotesIcon />, body: 'Capture session notes with templates so important details stay connected to the client.' },
+    { title: 'Billing', icon: <PaymentsIcon />, body: 'Track paid, pending, and unpaid sessions without maintaining a separate spreadsheet.' },
+    { title: 'Packages', icon: <Inventory2Icon />, body: 'Manage session packages and remaining sessions so client commitments stay clear.' },
   ];
 
   return (
     <Box component="section" sx={{ py: { xs: 8, md: 11 }, bgcolor: colors.neutral.gray50 }}>
       <Container maxWidth="lg">
-        <SectionHeading eyebrow="What Lumina does" title="One system for your client work" />
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2.5 }}>
+        <SectionHeading eyebrow="What Lumina does" title="Everything you need to stay organized">
+          <Typography sx={{ color: colors.text.secondary, fontSize: '17px', lineHeight: 1.7 }}>
+            Stay organized, save time, and keep client work moving without piecing together multiple tools.
+          </Typography>
+        </SectionHeading>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(5, 1fr)' }, gap: 2.5 }}>
           {features.map((feature) => (
             <Card key={feature.title} sx={{ p: 3, borderRadius: '12px', boxShadow: 'none', border: `1px solid ${colors.border.subtle}` }}>
               <Box sx={{ color: colors.brand.purple, mb: 2, '& svg': { fontSize: 28 } }}>{feature.icon}</Box>
@@ -164,15 +188,33 @@ export function FeatureSection() {
   );
 }
 
+export function TrustSection() {
+  return (
+    <Box component="section" sx={{ py: { xs: 6, md: 8 } }}>
+      <Container maxWidth="md" sx={{ textAlign: 'center' }}>
+        <Typography sx={{ color: colors.brand.purple, fontWeight: 800, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 1 }}>
+          Designed for growing client-based practices
+        </Typography>
+        <Typography component="h2" sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '30px', md: '38px' }, fontWeight: 700, lineHeight: 1.18 }}>
+          Built to help practices feel organized from day one.
+        </Typography>
+      </Container>
+    </Box>
+  );
+}
+
 export function AudienceSection() {
   return (
     <Box component="section" sx={{ py: { xs: 8, md: 11 } }}>
       <Container maxWidth="md" sx={{ textAlign: 'center' }}>
         <Typography component="h2" sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '32px', md: '42px' }, fontWeight: 700, mb: 2 }}>
-          Built for people who work one-on-one
+          Built for session-based practices
         </Typography>
         <Typography sx={{ color: colors.text.secondary, fontSize: { xs: '16px', sm: '18px' }, lineHeight: 1.75 }}>
-          Coaches, therapists, tutors, consultants, nutritionists, music teachers, speech therapists, and any practice that schedules sessions and keeps client notes.
+          For providers who schedule client sessions, keep notes, manage packages, and track payments - without piecing together multiple tools.
+        </Typography>
+        <Typography sx={{ color: colors.text.tertiary, fontSize: '15px', lineHeight: 1.7, mt: 2 }}>
+          Useful across wellness, education, consulting, therapy, coaching, and other client-based services.
         </Typography>
       </Container>
     </Box>
@@ -194,6 +236,9 @@ export function PricingSection({ compact = false }: { compact?: boolean }) {
               <Typography sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '56px', sm: '66px' }, fontWeight: 700, lineHeight: 1 }}>$30</Typography>
               <Typography sx={{ ml: 1, color: colors.text.tertiary, fontSize: '18px' }}>/month</Typography>
             </Box>
+            <Typography sx={{ color: colors.text.primary, fontWeight: 700, mb: 1 }}>
+              Simple pricing for a complete practice workspace.
+            </Typography>
             <Typography sx={{ color: colors.text.secondary, mb: 3 }}>14 day free trial. No credit card needed.</Typography>
             <Button component={RouterLink} to="/signup" variant="contained" fullWidth sx={landingButtonSx}>
               Start Free Trial
@@ -213,7 +258,7 @@ export function PricingSection({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function CTASection({ title = 'Try it free, then $30/month', body = 'Start with a clean practice workspace today. No credit card required.' }: { title?: string; body?: string }) {
+export function CTASection({ title = 'Ready to simplify your practice?', body = 'Start with a clean workspace for clients, sessions, notes, and payments.' }: { title?: string; body?: string }) {
   return (
     <Box component="section" sx={{ py: { xs: 8, md: 11 }, bgcolor: colors.neutral.gray50 }}>
       <Container maxWidth="md" sx={{ textAlign: 'center' }}>
