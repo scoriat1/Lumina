@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router';
 import { Box, Button, Card, Container, Stack, Typography } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
@@ -222,38 +223,44 @@ export function AudienceSection() {
   );
 }
 
-export function PricingSection({ compact = false }: { compact?: boolean }) {
+export function PricingCard({ headingComponent = 'p' }: { headingComponent?: 'h2' | 'p' }) {
   const features = ['Unlimited clients', 'Unlimited sessions', 'Session notes with templates', 'Calendar and scheduling', 'Billing and payment tracking', 'Package management', 'Mobile-friendly access'];
 
   return (
-    <Box component="section" sx={{ py: { xs: 8, md: compact ? 8 : 12 } }}>
-      <Container maxWidth="sm">
-        <Card sx={{ p: { xs: 3, sm: 5 }, borderRadius: '16px', border: `3px solid ${colors.brand.purple}`, boxShadow: `0 20px 60px ${colors.brand.purple}20` }}>
-          <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <Typography component={compact ? 'h2' : 'p'} sx={{ color: colors.text.tertiary, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 2 }}>
-              Lumina
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', mb: 2 }}>
-              <Typography sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '56px', sm: '66px' }, fontWeight: 700, lineHeight: 1 }}>$30</Typography>
-              <Typography sx={{ ml: 1, color: colors.text.tertiary, fontSize: '18px' }}>/month</Typography>
-            </Box>
-            <Typography sx={{ color: colors.text.primary, fontWeight: 700, mb: 1 }}>
-              Simple pricing for a complete practice workspace.
-            </Typography>
-            <Typography sx={{ color: colors.text.secondary, mb: 3 }}>14 day free trial. No credit card needed.</Typography>
-            <Button component={RouterLink} to="/signup" variant="contained" fullWidth sx={landingButtonSx}>
-              Start Free Trial
-            </Button>
+    <Card sx={{ p: { xs: 3, sm: 5 }, borderRadius: '16px', border: `3px solid ${colors.brand.purple}`, boxShadow: `0 20px 60px ${colors.brand.purple}20` }}>
+      <Box sx={{ textAlign: 'center', mb: 4 }}>
+        <Typography component={headingComponent} sx={{ color: colors.text.tertiary, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', mb: 2 }}>
+          Lumina
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', mb: 2 }}>
+          <Typography sx={{ fontFamily: '"Crimson Pro", Georgia, serif', fontSize: { xs: '56px', sm: '66px' }, fontWeight: 700, lineHeight: 1 }}>$30</Typography>
+          <Typography sx={{ ml: 1, color: colors.text.tertiary, fontSize: '18px' }}>/month</Typography>
+        </Box>
+        <Typography sx={{ color: colors.text.primary, fontWeight: 700, mb: 1 }}>
+          Simple pricing for a complete practice workspace.
+        </Typography>
+        <Typography sx={{ color: colors.text.secondary, mb: 3 }}>14 day free trial. No credit card needed.</Typography>
+        <Button component={RouterLink} to="/signup" variant="contained" fullWidth sx={landingButtonSx}>
+          Start Free Trial
+        </Button>
+      </Box>
+      <Stack spacing={1.8} sx={{ pt: 4, borderTop: `1px solid ${colors.border.subtle}` }}>
+        {features.map((feature) => (
+          <Box key={feature} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+            <CheckCircleIcon sx={{ color: colors.brand.purple, fontSize: 21 }} />
+            <Typography sx={{ color: colors.text.secondary, fontSize: '15px' }}>{feature}</Typography>
           </Box>
-          <Stack spacing={1.8} sx={{ pt: 4, borderTop: `1px solid ${colors.border.subtle}` }}>
-            {features.map((feature) => (
-              <Box key={feature} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                <CheckCircleIcon sx={{ color: colors.brand.purple, fontSize: 21 }} />
-                <Typography sx={{ color: colors.text.secondary, fontSize: '15px' }}>{feature}</Typography>
-              </Box>
-            ))}
-          </Stack>
-        </Card>
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
+export function PricingSection({ compact = false, sx }: { compact?: boolean; sx?: SxProps<Theme> }) {
+  return (
+    <Box component="section" sx={{ py: { xs: 8, md: compact ? 8 : 12 }, ...sx }}>
+      <Container maxWidth="sm">
+        <PricingCard headingComponent={compact ? 'h2' : 'p'} />
       </Container>
     </Box>
   );

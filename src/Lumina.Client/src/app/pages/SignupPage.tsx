@@ -39,13 +39,13 @@ export function SignupPage() {
               Start your free trial
             </Typography>
             <Typography sx={{ color: colors.text.secondary, fontSize: '16px' }}>
-              Create your Lumina workspace. No credit card required.
+              Create your workspace. No credit card required.
             </Typography>
           </Box>
           <Card sx={{ p: { xs: 3, sm: 4.5 }, borderRadius: '14px', boxShadow: '0 8px 32px rgba(31, 28, 26, 0.08)', border: `1px solid ${colors.border.medium}` }}>
             <Box component="form" onSubmit={handleSubmit}>
               <Stack spacing={2.5}>
-                <TextField label="Name" value={formData.name} onChange={handleChange('name')} required fullWidth />
+                <TextField label="Full name" value={formData.name} onChange={handleChange('name')} required fullWidth />
                 <TextField label="Email" type="email" value={formData.email} onChange={handleChange('email')} required fullWidth />
                 <TextField label="Password" type="password" value={formData.password} onChange={handleChange('password')} required fullWidth />
                 <TextField label="Practice name" value={formData.practiceName} onChange={handleChange('practiceName')} required fullWidth />

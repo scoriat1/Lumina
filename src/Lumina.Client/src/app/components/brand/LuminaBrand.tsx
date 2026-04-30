@@ -43,7 +43,7 @@ export function LuminaMark({ size = 36, sx }: LuminaMarkProps) {
           position: 'absolute',
           inset: 4,
           borderRadius: '9px',
-          border: '1px solid rgba(255, 255, 255, 0.34)',
+          border: '1px solid rgba(255, 255, 255, 0.48)',
         },
         '&::after': {
           content: '""',
@@ -53,12 +53,12 @@ export function LuminaMark({ size = 36, sx }: LuminaMarkProps) {
           width: Math.max(5, Math.round(size * 0.18)),
           height: Math.max(5, Math.round(size * 0.18)),
           borderRadius: '999px',
-          bgcolor: 'rgba(255, 255, 255, 0.52)',
+          bgcolor: 'rgba(255, 255, 255, 0.68)',
         },
         ...sx,
       }}
     >
-      <Box component="span" sx={{ position: 'relative', zIndex: 1 }}>
+      <Box component="span" sx={{ position: 'relative', zIndex: 1, textShadow: '0 1px 2px rgba(31, 28, 26, 0.18)' }}>
         L
       </Box>
     </Box>

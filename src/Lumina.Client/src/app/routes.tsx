@@ -18,6 +18,7 @@ import { LandingPage } from './pages/LandingPage';
 import { PricingPage } from './pages/PricingPage';
 import { ContactPage } from './pages/ContactPage';
 import { SignupPage } from './pages/SignupPage';
+import { LogoutPage } from './pages/LogoutPage';
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: 'contact', Component: ContactPage },
       { path: 'signup', Component: SignupPage },
       { path: 'login', Component: LoginPage },
+      { path: 'logout', Component: LogoutPage },
     ],
   },
   {

@@ -64,9 +64,9 @@ export function LoginPage() {
             </CardContent>
           </Card>
           <Typography sx={{ textAlign: 'center', mt: 3, color: colors.text.secondary }}>
-            Do not have an account?{' '}
+            Don't have an account?{' '}
             <Typography component={RouterLink} to="/signup" sx={{ color: colors.brand.purple, fontWeight: 700, textDecoration: 'none' }}>
-              Sign up
+              Start free trial
             </Typography>
           </Typography>
         </Box>
