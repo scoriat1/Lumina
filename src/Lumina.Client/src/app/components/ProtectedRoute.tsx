@@ -9,7 +9,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem(logoutRedirectFlagKey);
     return <Navigate to="/login?loggedOut=1" replace />;
   }
-  if (!user) return <Navigate to="/unauthorized" replace />;
+  if (!user) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 }

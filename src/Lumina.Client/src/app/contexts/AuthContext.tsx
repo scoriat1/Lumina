@@ -7,6 +7,7 @@ interface AuthContextType {
   loading: boolean;
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
+  signup: (payload: { fullName: string; email: string; password: string; practiceName: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -37,20 +38,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refresh();
   };
 
+  const signup = async (payload: { fullName: string; email: string; password: string; practiceName: string }) => {
+    await apiClient.signup(payload);
+    await refresh();
+  };
+
   const logout = async () => {
     try {
       await apiClient.logout();
     } finally {
       sessionStorage.setItem(logoutRedirectFlagKey, '1');
       setUser(null);
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('refreshToken');
-      sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('refreshToken');
     }
   };
 
-  return <AuthContext.Provider value={{ user, loading, refresh, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, refresh, login, signup, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

@@ -72,10 +72,22 @@ builder.Services.ConfigureApplicationCookie(options =>
         ctx.Response.Redirect(ctx.RedirectUri);
         return Task.CompletedTask;
     };
+    options.Events.OnRedirectToAccessDenied = ctx =>
+    {
+        if (ctx.Request.Path.StartsWithSegments("/api"))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        }
+
+        ctx.Response.Redirect(ctx.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
 
 var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
 var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+var clientAppUrl = builder.Configuration["Authentication:ClientAppUrl"];
 
 if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
 {
@@ -149,17 +161,95 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
+app.MapPost("/api/auth/signup", async (
+    SignupRequest request,
+    SignInManager<AppUser> signInManager,
+    UserManager<AppUser> userManager,
+    LuminaDbContext db) =>
+{
+    var fullName = request.FullName?.Trim() ?? string.Empty;
+    var email = request.Email?.Trim() ?? string.Empty;
+    var practiceName = request.PracticeName?.Trim() ?? string.Empty;
+
+    if (string.IsNullOrWhiteSpace(fullName)
+        || string.IsNullOrWhiteSpace(email)
+        || string.IsNullOrWhiteSpace(request.Password)
+        || string.IsNullOrWhiteSpace(practiceName))
+    {
+        return Results.BadRequest(new { message = "Please complete all required fields." });
+    }
+
+    var existingUser = await userManager.FindByEmailAsync(email);
+    if (existingUser is not null)
+    {
+        return Results.Conflict(new { message = "An account with this email already exists." });
+    }
+
+    await using var transaction = await db.Database.BeginTransactionAsync();
+
+    var user = new AppUser
+    {
+        UserName = email,
+        Email = email,
+        DisplayName = fullName,
+        EmailConfirmed = true
+    };
+
+    var createResult = await userManager.CreateAsync(user, request.Password);
+    if (!createResult.Succeeded)
+    {
+        return Results.BadRequest(new
+        {
+            message = "Please fix the signup details and try again.",
+            errors = createResult.Errors.Select(error => error.Description).ToArray()
+        });
+    }
+
+    var now = DateTimeOffset.UtcNow;
+    var practice = new Practice
+    {
+        Name = practiceName,
+        BillingDefaultDueDays = DefaultInvoiceDueDays,
+        BillingDefaultSessionAmount = DefaultSessionAmount,
+        CreatedAt = now
+    };
+
+    db.Practices.Add(practice);
+    await db.SaveChangesAsync();
+
+    db.Providers.Add(new Provider
+    {
+        PracticeId = practice.Id,
+        UserId = user.Id,
+        DisplayName = fullName,
+        Role = ProviderRole.Owner,
+        IsActive = true,
+        CreatedAt = now
+    });
+
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+
+    await signInManager.SignInAsync(user, isPersistent: true);
+    return Results.Ok(new { ok = true });
+});
+
 app.MapPost("/api/auth/login", async (LoginRequest request, SignInManager<AppUser> signInManager, UserManager<AppUser> userManager) =>
 {
     var user = await userManager.FindByEmailAsync(request.Email);
     if (user is null)
-        return Results.Json(new { reason = "user_not_found" }, statusCode: StatusCodes.Status401Unauthorized);
+    {
+        return Results.Json(
+            new { message = "Invalid email or password.", reason = "user_not_found" },
+            statusCode: StatusCodes.Status401Unauthorized);
+    }
 
     var check = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: false);
     if (!check.Succeeded)
     {
         return Results.Json(new
         {
+            message = "Invalid email or password.",
             reason = "password_failed",
             check.IsLockedOut,
             check.IsNotAllowed,
@@ -177,46 +267,85 @@ app.MapPost("/api/auth/logout", async (SignInManager<AppUser> signInManager) =>
     return Results.Ok();
 });
 
-app.MapGet("/api/auth/google/login", (HttpContext httpContext) =>
+app.MapGet("/api/auth/google/login", async (
+    HttpContext httpContext,
+    IAuthenticationSchemeProvider schemeProvider) =>
 {
+    var googleScheme = await schemeProvider.GetSchemeAsync("Google");
+    if (googleScheme is null)
+    {
+        return Results.Redirect(BuildClientRedirectUrl(httpContext, clientAppUrl, "/login", "google_not_configured"));
+    }
+
     var redirectUri = "/api/auth/google/callback";
     var properties = new AuthenticationProperties { RedirectUri = redirectUri };
     return Results.Challenge(properties, ["Google"]);
 });
 
-app.MapGet("/api/auth/google/callback", async (HttpContext httpContext, SignInManager<AppUser> signInManager, UserManager<AppUser> userManager, LuminaDbContext db) =>
+app.MapGet("/api/auth/google/callback", async (
+    HttpContext httpContext,
+    SignInManager<AppUser> signInManager,
+    UserManager<AppUser> userManager,
+    LuminaDbContext db) =>
 {
+    var loginErrorRedirect = BuildClientRedirectUrl(httpContext, clientAppUrl, "/login", "google_auth_failed");
     var externalLoginInfo = await signInManager.GetExternalLoginInfoAsync();
-    if (externalLoginInfo is null) return Results.Redirect("http://localhost:5175/login?error=google");
-
-    var signInResult = await signInManager.ExternalLoginSignInAsync(externalLoginInfo.LoginProvider, externalLoginInfo.ProviderKey, true);
-    if (!signInResult.Succeeded)
+    if (externalLoginInfo is null)
     {
-        var email = externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Email) ?? string.Empty;
-        var displayName = externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Name) ?? email;
-        var user = new AppUser { UserName = email, Email = email, DisplayName = displayName, EmailConfirmed = true };
-        var createResult = await userManager.CreateAsync(user);
-        if (!createResult.Succeeded) return Results.Redirect("http://localhost:5175/login?error=google");
-
-        await userManager.AddLoginAsync(user, externalLoginInfo);
-
-        var practice = new Practice { Name = $"{displayName} Practice", CreatedAt = DateTimeOffset.UtcNow };
-        db.Practices.Add(practice);
-        db.Providers.Add(new Provider
-        {
-            PracticeId = practice.Id,
-            UserId = user.Id,
-            DisplayName = displayName,
-            Role = ProviderRole.Owner,
-            IsActive = true,
-            CreatedAt = DateTimeOffset.UtcNow
-        });
-        await db.SaveChangesAsync();
-
-        await signInManager.SignInAsync(user, true);
+        return Results.Redirect(loginErrorRedirect);
     }
 
-    return Results.Redirect("http://localhost:5175/");
+    var signInResult = await signInManager.ExternalLoginSignInAsync(
+        externalLoginInfo.LoginProvider,
+        externalLoginInfo.ProviderKey,
+        isPersistent: true,
+        bypassTwoFactor: true);
+
+    if (!signInResult.Succeeded)
+    {
+        var email = externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Email)?.Trim();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return Results.Redirect(BuildClientRedirectUrl(httpContext, clientAppUrl, "/login", "google_email_missing"));
+        }
+
+        var displayName = externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Name)?.Trim();
+        var user = await userManager.FindByLoginAsync(externalLoginInfo.LoginProvider, externalLoginInfo.ProviderKey)
+            ?? await userManager.FindByEmailAsync(email);
+
+        if (user is null)
+        {
+            user = new AppUser
+            {
+                UserName = email,
+                Email = email,
+                DisplayName = string.IsNullOrWhiteSpace(displayName) ? email : displayName,
+                EmailConfirmed = true
+            };
+
+            var createResult = await userManager.CreateAsync(user);
+            if (!createResult.Succeeded)
+            {
+                return Results.Redirect(BuildClientRedirectUrl(httpContext, clientAppUrl, "/login", "google_account_create_failed"));
+            }
+        }
+
+        var addLoginResult = await userManager.AddLoginAsync(user, externalLoginInfo);
+        if (!addLoginResult.Succeeded && addLoginResult.Errors.All(error => error.Code != "LoginAlreadyAssociated"))
+        {
+            return Results.Redirect(BuildClientRedirectUrl(httpContext, clientAppUrl, "/login", "google_login_link_failed"));
+        }
+
+        await EnsurePracticeOwnerAsync(
+            db,
+            user,
+            user.DisplayName,
+            DefaultInvoiceDueDays,
+            DefaultSessionAmount);
+        await signInManager.SignInAsync(user, isPersistent: true);
+    }
+
+    return Results.Redirect(BuildClientRedirectUrl(httpContext, clientAppUrl, "/app"));
 });
 
 app.MapGet("/api/auth/me", async (HttpContext httpContext, LuminaDbContext db, UserManager<AppUser> userManager) =>
@@ -2615,6 +2744,93 @@ static string GetSessionPaymentStatus(Session session)
     return session.Invoice?.Status == InvoiceStatus.Paid ? "paid" : "unpaid";
 }
 
+static async Task EnsurePracticeOwnerAsync(
+    LuminaDbContext db,
+    AppUser user,
+    string? preferredDisplayName,
+    int defaultInvoiceDueDays,
+    decimal defaultSessionAmount)
+{
+    var existingProvider = await db.Providers
+        .AsNoTracking()
+        .FirstOrDefaultAsync(provider => provider.UserId == user.Id && provider.IsActive);
+
+    if (existingProvider is not null)
+    {
+        return;
+    }
+
+    var now = DateTimeOffset.UtcNow;
+    var displayName = string.IsNullOrWhiteSpace(preferredDisplayName)
+        ? user.Email ?? user.UserName ?? "Lumina Owner"
+        : preferredDisplayName.Trim();
+    var practiceName = BuildPracticeName(displayName, user.Email);
+
+    await using var transaction = await db.Database.BeginTransactionAsync();
+
+    var practice = new Practice
+    {
+        Name = practiceName,
+        BillingDefaultDueDays = defaultInvoiceDueDays,
+        BillingDefaultSessionAmount = defaultSessionAmount,
+        CreatedAt = now
+    };
+
+    db.Practices.Add(practice);
+    await db.SaveChangesAsync();
+
+    db.Providers.Add(new Provider
+    {
+        PracticeId = practice.Id,
+        UserId = user.Id,
+        DisplayName = displayName,
+        Role = ProviderRole.Owner,
+        IsActive = true,
+        CreatedAt = now
+    });
+
+    await db.SaveChangesAsync();
+    await transaction.CommitAsync();
+}
+
+static string BuildPracticeName(string displayName, string? email)
+{
+    var trimmedDisplayName = displayName.Trim();
+    if (!string.IsNullOrWhiteSpace(trimmedDisplayName))
+    {
+        return trimmedDisplayName.Contains("Practice", StringComparison.OrdinalIgnoreCase)
+            ? trimmedDisplayName
+            : $"{trimmedDisplayName} Practice";
+    }
+
+    var fallbackName = email?.Split('@', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+    return string.IsNullOrWhiteSpace(fallbackName) ? "Lumina Practice" : $"{fallbackName} Practice";
+}
+
+static string BuildClientRedirectUrl(
+    HttpContext httpContext,
+    string? configuredClientAppUrl,
+    string path,
+    string? error = null)
+{
+    var baseUrl = configuredClientAppUrl;
+    if (string.IsNullOrWhiteSpace(baseUrl))
+    {
+        baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    }
+
+    var normalizedBaseUrl = baseUrl.TrimEnd('/');
+    var normalizedPath = path.StartsWith('/') ? path : $"/{path}";
+    var url = $"{normalizedBaseUrl}{normalizedPath}";
+
+    if (!string.IsNullOrWhiteSpace(error))
+    {
+        url = $"{url}?error={Uri.EscapeDataString(error)}";
+    }
+
+    return url;
+}
+
 static BillingFilters GetBillingFilters(HttpContext context)
 {
     int? clientId = null;
@@ -2828,6 +3044,7 @@ static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpConte
 }
 
 public record LoginRequest(string Email, string Password);
+public record SignupRequest(string FullName, string Email, string Password, string PracticeName);
 public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, int? Duration, SessionLocation? Location, SessionStatus? Status, string? Focus, string? Notes);
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, SessionLocation Location, SessionStatus? Status, string SessionType, string Focus, SessionEntryMode Mode = SessionEntryMode.Schedule, SessionBillingMode BillingMode = SessionBillingMode.PayPerSession, int? PackageId = null, int? ClientPackageId = null, decimal? Amount = null, string? RecurrenceFrequency = null, int? RecurrenceCount = null);
 public record CreatePackageRequest(string Name, int SessionCount, decimal Price, bool Enabled = true);

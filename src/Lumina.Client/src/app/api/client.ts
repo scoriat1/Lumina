@@ -81,15 +81,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       const errorBody = await response.json() as {
         message?: string;
         title?: string;
-        errors?: Record<string, string[]>;
+        errors?: string[] | Record<string, string[]>;
       };
 
       if (errorBody.message) {
-        errorMessage = errorBody.message;
+        const errorDetails = Array.isArray(errorBody.errors)
+          ? errorBody.errors
+          : errorBody.errors
+            ? Object.values(errorBody.errors).flat()
+            : [];
+        const detailMessage = errorDetails.filter(Boolean).slice(0, 5).join('\n');
+        errorMessage = [errorBody.message, detailMessage].filter(Boolean).join('\n');
       } else if (errorBody.title) {
         errorMessage = errorBody.title;
       } else if (errorBody.errors) {
-        const firstError = Object.values(errorBody.errors).flat().find(Boolean);
+        const firstError = (Array.isArray(errorBody.errors) ? errorBody.errors : Object.values(errorBody.errors).flat()).find(Boolean);
         if (firstError) {
           errorMessage = firstError;
         }
@@ -336,6 +342,8 @@ const mapSavedReportDto = (report: SavedReportApiDto): SavedReportDto => ({
 export const apiClient = {
   getHealth: () => request<{ status: string }>('/health'),
   login: (email: string, password: string) => request<void>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  signup: (payload: { fullName: string; email: string; password: string; practiceName: string }) =>
+    request<void>('/api/auth/signup', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   getMe: () => request<AuthMeDto>('/api/auth/me'),
   getDashboard: async () => {

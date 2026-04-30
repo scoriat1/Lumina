@@ -15,18 +15,24 @@ export function LoginPage() {
   const [email, setEmail] = useState('dev@lumina.local');
   const [password, setPassword] = useState('Dev!23456');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const wasLoggedOut = searchParams.get('loggedOut') === '1';
+  const googleError = searchParams.get('error');
+  const googleErrorMessage = googleError ? getGoogleErrorMessage(googleError) : '';
 
   if (user) return <Navigate to="/app" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
     try {
       await login(email, password);
-      navigate('/app');
-    } catch {
-      setError('Invalid credentials');
+      navigate('/app', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid credentials');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -50,15 +56,24 @@ export function LoginPage() {
                     You've been logged out.
                   </Alert>
                 )}
-                <TextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                <TextField type="password" label="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                {error && <Typography color="error">{error}</Typography>}
-                <Button type="submit" variant="contained" sx={{ bgcolor: colors.brand.purple, py: 1.5, textTransform: 'none', fontWeight: 700, '&:hover': { bgcolor: colors.brand.purpleDark } }}>
-                  Log in
+                {googleErrorMessage && (
+                  <Alert severity="error" sx={{ borderRadius: '10px' }}>
+                    {googleErrorMessage}
+                  </Alert>
+                )}
+                <TextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={isSubmitting} />
+                <TextField type="password" label="Password" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={isSubmitting} />
+                {error && (
+                  <Alert severity="error" sx={{ borderRadius: '10px', whiteSpace: 'pre-line' }}>
+                    {error}
+                  </Alert>
+                )}
+                <Button type="submit" variant="contained" disabled={isSubmitting} sx={{ bgcolor: colors.brand.purple, py: 1.5, textTransform: 'none', fontWeight: 700, '&:hover': { bgcolor: colors.brand.purpleDark } }}>
+                  {isSubmitting ? 'Logging in...' : 'Log in'}
                 </Button>
                 <Divider>or continue with</Divider>
                 <Button type="button" variant="outlined" startIcon={<GoogleIcon />} onClick={() => { window.location.href = apiClient.googleLoginUrl; }} sx={{ py: 1.4, textTransform: 'none', fontWeight: 700 }}>
-                  Google
+                  Continue with Google
                 </Button>
               </Stack>
             </CardContent>
@@ -74,4 +89,20 @@ export function LoginPage() {
       </Box>
     </>
   );
+}
+
+function getGoogleErrorMessage(error: string): string {
+  switch (error) {
+    case 'google_not_configured':
+      return 'Google login is not configured for this environment.';
+    case 'google_email_missing':
+      return 'Google did not return an email address for this account.';
+    case 'google_account_create_failed':
+      return 'Lumina could not create your account from Google login.';
+    case 'google_login_link_failed':
+      return 'Lumina could not connect this Google account to your login.';
+    case 'google_auth_failed':
+    default:
+      return 'Google login did not complete. Please try again.';
+  }
 }

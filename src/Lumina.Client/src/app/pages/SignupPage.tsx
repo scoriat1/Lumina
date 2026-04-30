@@ -1,28 +1,50 @@
 import { useState } from 'react';
-import { Box, Button, Card, Container, Divider, Stack, TextField, Typography } from '@mui/material';
-import { Link as RouterLink } from 'react-router';
+import { Alert, Box, Button, Card, Container, Divider, Stack, TextField, Typography } from '@mui/material';
+import { Link as RouterLink, Navigate, useNavigate } from 'react-router';
 import GoogleIcon from '@mui/icons-material/Google';
+import { apiClient } from '../api/client';
 import { Seo } from '../components/landing/Seo';
 import { publicCenteredSectionSx } from '../components/landing/publicPageStyles';
+import { useAuth } from '../contexts/AuthContext';
 import { colors } from '../theme';
 
 export function SignupPage() {
+  const navigate = useNavigate();
+  const { user, signup } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     practiceName: '',
   });
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (user) return <Navigate to="/app" replace />;
 
   const handleChange = (field: keyof typeof formData) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((current) => ({ ...current, [field]: event.target.value }));
-    if (message) setMessage('');
+    if (error) setError('');
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setMessage('Signup wiring is coming soon. Your workspace form is ready for backend connection.');
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      await signup({
+        fullName: formData.name,
+        email: formData.email,
+        password: formData.password,
+        practiceName: formData.practiceName,
+      });
+      navigate('/app', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create your account. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -49,12 +71,22 @@ export function SignupPage() {
                 <TextField label="Email" type="email" value={formData.email} onChange={handleChange('email')} required fullWidth />
                 <TextField label="Password" type="password" value={formData.password} onChange={handleChange('password')} required fullWidth />
                 <TextField label="Practice name" value={formData.practiceName} onChange={handleChange('practiceName')} required fullWidth />
-                {message ? <Typography sx={{ color: colors.text.secondary, fontSize: '14px' }}>{message}</Typography> : null}
-                <Button type="submit" variant="contained" sx={{ bgcolor: colors.brand.purple, py: 1.5, textTransform: 'none', fontWeight: 700, '&:hover': { bgcolor: colors.brand.purpleDark } }}>
-                  Start Free Trial
+                {error ? (
+                  <Alert severity="error" sx={{ borderRadius: '10px', whiteSpace: 'pre-line' }}>
+                    {error}
+                  </Alert>
+                ) : null}
+                <Button type="submit" variant="contained" disabled={isSubmitting} sx={{ bgcolor: colors.brand.purple, py: 1.5, textTransform: 'none', fontWeight: 700, '&:hover': { bgcolor: colors.brand.purpleDark } }}>
+                  {isSubmitting ? 'Creating account...' : 'Start Free Trial'}
                 </Button>
                 <Divider>or continue with</Divider>
-                <Button type="button" variant="outlined" startIcon={<GoogleIcon />} sx={{ py: 1.4, textTransform: 'none', fontWeight: 700 }}>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  startIcon={<GoogleIcon />}
+                  onClick={() => { window.location.href = apiClient.googleLoginUrl; }}
+                  sx={{ py: 1.4, textTransform: 'none', fontWeight: 700 }}
+                >
                   Continue with Google
                 </Button>
                 <Button component={RouterLink} to="/login" variant="text" sx={{ color: colors.brand.purple, textTransform: 'none', fontWeight: 700 }}>
