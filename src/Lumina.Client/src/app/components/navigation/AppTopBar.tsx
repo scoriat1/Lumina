@@ -2,6 +2,7 @@ import { AppBar, Toolbar, IconButton, Box, Avatar, Badge, Menu, MenuItem } from 
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MenuIcon from '@mui/icons-material/Menu';
+import FeedbackIcon from '@mui/icons-material/Feedback';
 import { colors, themeLayout, borderRadius, transitions } from '../../theme';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -25,6 +26,11 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
     } finally {
       navigate('/login?loggedOut=1', { replace: true });
     }
+  };
+
+  const handleSupport = () => {
+    setAnchorEl(null);
+    navigate('/app/support');
   };
 
   return (
@@ -54,6 +60,10 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             <KeyboardArrowDownIcon sx={{ display: { xs: 'none', sm: 'block' }, fontSize: 20, color: colors.text.muted }} />
           </Box>
           <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+            <MenuItem onClick={handleSupport}>
+              <FeedbackIcon sx={{ mr: 1.5, fontSize: 20, color: colors.text.secondary }} />
+              Contact Support
+            </MenuItem>
             <MenuItem onClick={handleLogout}>Logout</MenuItem>
           </Menu>
         </Box>

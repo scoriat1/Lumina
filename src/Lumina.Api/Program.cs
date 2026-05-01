@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Data.Common;
 using System.Data;
+using System.Net.Mail;
 using Lumina.Api.Repositories;
 using Lumina.Api.Services;
 using Lumina.Domain.Entities;
@@ -114,6 +115,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IPracticeDataExportRepository, PracticeDataExportRepository>();
 builder.Services.AddScoped<IDataExportService, DataExportService>();
 builder.Services.AddScoped<IDataImportService, DataImportService>();
+builder.Services.Configure<SupportEmailOptions>(builder.Configuration.GetSection("SupportEmail"));
+builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
+builder.Services.AddScoped<ISupportEmailService, SupportEmailService>();
 
 builder.Services.AddCors(options =>
 {
@@ -396,7 +400,62 @@ app.MapGet("/api/auth/me", async (HttpContext httpContext, LuminaDbContext db, U
     });
 });
 
+app.MapPost("/api/contact", async (
+    SupportRequest request,
+    ISupportEmailService supportEmailService,
+    ILoggerFactory loggerFactory,
+    CancellationToken cancellationToken) =>
+{
+    var message = NormalizeSupportRequest(request, defaultSubject: "Website contact");
+    var validationErrors = ValidateSupportMessage(message);
+    if (validationErrors.Count > 0)
+    {
+        return Results.BadRequest(new
+        {
+            message = "Please complete all required contact fields.",
+            errors = validationErrors
+        });
+    }
+
+    return await SendSupportEmailAsync(
+        message,
+        authenticatedUserId: null,
+        authenticatedUserEmail: null,
+        supportEmailService,
+        loggerFactory,
+        cancellationToken);
+});
+
 var api = app.MapGroup("/api").RequireAuthorization();
+
+api.MapPost("/support", async (
+    SupportRequest request,
+    HttpContext context,
+    UserManager<AppUser> userManager,
+    ISupportEmailService supportEmailService,
+    ILoggerFactory loggerFactory,
+    CancellationToken cancellationToken) =>
+{
+    var message = NormalizeSupportRequest(request);
+    var validationErrors = ValidateSupportMessage(message);
+    if (validationErrors.Count > 0)
+    {
+        return Results.BadRequest(new
+        {
+            message = "Please complete all required support fields.",
+            errors = validationErrors
+        });
+    }
+
+    var user = await userManager.GetUserAsync(context.User);
+    return await SendSupportEmailAsync(
+        message,
+        user?.Id ?? context.User.FindFirstValue(ClaimTypes.NameIdentifier),
+        user?.Email ?? context.User.FindFirstValue(ClaimTypes.Email),
+        supportEmailService,
+        loggerFactory,
+        cancellationToken);
+});
 
 api.MapGet("/clients", async (LuminaDbContext db, HttpContext context) =>
 {
@@ -3068,8 +3127,82 @@ static async Task<(int practiceId, int providerId)?> ResolveScopeAsync(HttpConte
     return provider is null ? null : (provider.PracticeId, provider.Id);
 }
 
+static SupportRequest NormalizeSupportRequest(SupportRequest request, string? defaultSubject = null)
+{
+    return new SupportRequest(
+        request.Name?.Trim(),
+        request.Email?.Trim(),
+        string.IsNullOrWhiteSpace(request.Subject) ? defaultSubject : request.Subject.Trim(),
+        request.Message?.Trim());
+}
+
+static List<string> ValidateSupportMessage(SupportRequest request)
+{
+    var validationErrors = new List<string>();
+    if (string.IsNullOrWhiteSpace(request.Name)) validationErrors.Add("Name is required.");
+    if (string.IsNullOrWhiteSpace(request.Email))
+    {
+        validationErrors.Add("Email is required.");
+    }
+    else if (!IsValidEmailAddress(request.Email))
+    {
+        validationErrors.Add("Email must be a valid email address.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Subject)) validationErrors.Add("Subject is required.");
+    if (string.IsNullOrWhiteSpace(request.Message)) validationErrors.Add("Message is required.");
+
+    return validationErrors;
+}
+
+static bool IsValidEmailAddress(string email)
+{
+    try
+    {
+        var address = new MailAddress(email);
+        return string.Equals(address.Address, email, StringComparison.OrdinalIgnoreCase);
+    }
+    catch (FormatException)
+    {
+        return false;
+    }
+}
+
+static async Task<IResult> SendSupportEmailAsync(
+    SupportRequest request,
+    string? authenticatedUserId,
+    string? authenticatedUserEmail,
+    ISupportEmailService supportEmailService,
+    ILoggerFactory loggerFactory,
+    CancellationToken cancellationToken)
+{
+    try
+    {
+        await supportEmailService.SendSupportMessageAsync(
+            new SupportEmailMessage(
+                request.Name!,
+                request.Email!,
+                request.Subject!,
+                request.Message!,
+                authenticatedUserId,
+                authenticatedUserEmail,
+                DateTimeOffset.UtcNow),
+            cancellationToken);
+    }
+    catch (Exception ex) when (ex is InvalidOperationException or SmtpException or FormatException)
+    {
+        loggerFactory.CreateLogger("SupportEmail").LogError(ex, "Unable to send support email.");
+        return Results.Json(
+            new { message = "We could not send your message right now. Please try again later." },
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+
+    return Results.Ok(new { ok = true });
+}
+
 public record LoginRequest(string Email, string Password);
 public record SignupRequest(string FullName, string Email, string Password, string PracticeName);
+public record SupportRequest(string? Name, string? Email, string? Subject, string? Message);
 public record SessionUpdateRequest(DateTimeOffset? Date, string? SessionType, int? Duration, SessionLocation? Location, SessionStatus? Status, string? Focus, string? Notes);
 public record SessionCreateRequest(int ClientId, DateTimeOffset Date, int Duration, SessionLocation Location, SessionStatus? Status, string SessionType, string Focus, SessionEntryMode Mode = SessionEntryMode.Schedule, SessionBillingMode BillingMode = SessionBillingMode.PayPerSession, int? PackageId = null, int? ClientPackageId = null, decimal? Amount = null, string? RecurrenceFrequency = null, int? RecurrenceCount = null);
 public record CreatePackageRequest(string Name, int SessionCount, decimal Price, bool Enabled = true);

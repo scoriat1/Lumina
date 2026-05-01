@@ -346,6 +346,13 @@ export const apiClient = {
     request<void>('/api/auth/signup', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   getMe: () => request<AuthMeDto>('/api/auth/me'),
+  sendSupportMessage: (payload: { name: string; email: string; subject: string; message: string }) =>
+    request<void>('/api/support', { method: 'POST', body: JSON.stringify(payload) }),
+  sendContactMessage: (payload: { name: string; email: string; message: string }) =>
+    request<void>('/api/contact', {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, subject: 'Website contact' }),
+    }),
   getDashboard: async () => {
     const response = await request<DashboardApiDto>('/api/dashboard');
     return {

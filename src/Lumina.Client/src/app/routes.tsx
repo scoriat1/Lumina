@@ -9,6 +9,7 @@ import { BillingPage } from './pages/BillingPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SupportPage } from './pages/SupportPage';
 import { ProductRulesPage } from './pages/ProductRulesPage';
 import { LoginPage } from './pages/LoginPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
       { path: 'sessions', Component: SessionsPage },
       { path: 'reports', Component: ReportsPage },
       { path: 'notifications', Component: NotificationsPage },
+      { path: 'app/support', Component: SupportPage },
       { path: 'settings', Component: SettingsPage },
     ],
   },

@@ -8,6 +8,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import type { ReactNode } from 'react';
 import { colors, themeLayout, borderRadius, transitions } from '../../theme';
 import { useNotificationCount } from '../../notifications/useNotificationCount';
@@ -24,6 +25,7 @@ const navigationItems = [
 
 const bottomNavItems = [
   { text: 'Notifications', icon: <NotificationsIcon />, path: '/notifications' },
+  { text: 'Help & Support', icon: <SupportAgentIcon />, path: '/app/support' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
 
