@@ -100,7 +100,7 @@ interface SessionDetailsDrawerProps {
     onUpdateSession?: (
         sessionId: string,
         updates: Partial<SessionLike>,
-    ) => void;
+    ) => Promise<void> | void;
     onSaved?: () => Promise<void> | void;
     surfaceVariant?: "default" | "client-detail";
 }
@@ -630,7 +630,7 @@ export function SessionDetailsDrawer({
         updates: Partial<SessionLike>,
     ) => {
         if (onUpdateSession) {
-            onUpdateSession(session.id, updates);
+            await onUpdateSession(session.id, updates);
             setSessionDetail((current) =>
                 current ? { ...current, ...updates } : current,
             );

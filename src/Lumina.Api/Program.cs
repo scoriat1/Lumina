@@ -1716,7 +1716,13 @@ api.MapGet("/billing/invoices", async (LuminaDbContext db, HttpContext context) 
     if (scope is null) return Results.Unauthorized();
     await MarkOverdueInvoicesAsync(db, scope.Value.practiceId);
 
-    var invoices = await db.Invoices.Where(i => i.PracticeId == scope.Value.practiceId).Include(i => i.Client).OrderByDescending(i => i.CreatedAt).Select(i => new
+    var invoices = (await db.Invoices
+        .Where(i => i.PracticeId == scope.Value.practiceId)
+        .Include(i => i.Client)
+        .Include(i => i.Sessions)
+        .ToListAsync())
+        .OrderByDescending(i => i.CreatedAt)
+        .Select(i => new
     {
         id = i.Id,
         invoiceNumber = i.InvoiceNumber,
@@ -1728,7 +1734,8 @@ api.MapGet("/billing/invoices", async (LuminaDbContext db, HttpContext context) 
         status = i.Status.ToString().ToLowerInvariant(),
         sessionCount = i.Sessions.Count,
         description = i.Description
-    }).ToListAsync();
+    })
+        .ToList();
 
     return Results.Ok(invoices);
 });
@@ -1759,19 +1766,39 @@ api.MapPost("/billing/monthly-invoices", async (MonthlyInvoiceRequest request, L
         dueDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(practice.BillingDefaultDueDays));
     }
 
-    var eligibleSessions = await db.Sessions
+    var monthlyClientIds = (await db.Clients
+        .AsNoTracking()
+        .Where(client => client.PracticeId == scope.Value.practiceId)
+        .Select(client => new { client.Id, client.BillingModel })
+        .ToListAsync())
+        .Where(client => client.BillingModel == BillingModel.Monthly)
+        .Select(client => client.Id)
+        .ToList();
+
+    if (request.ClientId.HasValue)
+    {
+        var requestedClientId = request.ClientId.Value;
+        monthlyClientIds = monthlyClientIds
+            .Where(clientId => clientId == requestedClientId)
+            .ToList();
+    }
+
+    var eligibleSessions = monthlyClientIds.Count == 0
+        ? []
+        : (await db.Sessions
         .Include(s => s.Client)
         .Where(s =>
             s.PracticeId == scope.Value.practiceId &&
-            s.Client.BillingModel == BillingModel.Monthly &&
-            (!request.ClientId.HasValue || s.ClientId == request.ClientId.Value) &&
             s.ClientPackageId == null &&
-            s.InvoiceId == null &&
+            s.InvoiceId == null)
+        .ToListAsync())
+        .Where(s =>
+            monthlyClientIds.Contains(s.ClientId) &&
             s.Date >= periodStart &&
             s.Date < periodEnd &&
             s.Status != SessionStatus.Cancelled &&
             s.PaymentStatus != PaymentStatus.Paid)
-        .ToListAsync();
+        .ToList();
 
     var sessionsByClient = eligibleSessions
         .GroupBy(s => s.ClientId)
@@ -2749,12 +2776,13 @@ static int GetAvailablePackageSessions(ClientPackage clientPackage)
 static async Task AutoCompletePastScheduledSessionsAsync(LuminaDbContext db, int practiceId)
 {
     var now = DateTimeOffset.UtcNow;
-    var overdueSessions = await db.Sessions
+    var overdueSessions = (await db.Sessions
+        .Where(session => session.PracticeId == practiceId)
+        .ToListAsync())
         .Where(session =>
-            session.PracticeId == practiceId &&
             session.Status == SessionStatus.Upcoming &&
             session.Date <= now)
-        .ToListAsync();
+        .ToList();
 
     if (overdueSessions.Count == 0)
     {

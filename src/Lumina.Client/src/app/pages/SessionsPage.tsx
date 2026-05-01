@@ -187,19 +187,24 @@ export function SessionsPage() {
     setIsNewSessionModalOpen(true);
   };
 
-  const handleUpdateSession = (sessionId: string, updates: Partial<Session>) => {
+  const handleUpdateSession = async (sessionId: string, updates: Partial<Session>) => {
+    const previousSessions = sessionsData;
+
     setSessionsData(prevSessions =>
       prevSessions.map(session =>
         session.id === sessionId ? { ...session, ...updates } : session
       )
     );
 
-    apiClient.updateSession(sessionId, {
-      ...updates,
-      date: updates.date ? updates.date.toISOString() : undefined,
-    }).catch(() => {
-      // TODO: add user-facing error handling for failed session updates.
-    });
+    try {
+      await apiClient.updateSession(sessionId, {
+        ...updates,
+        date: updates.date ? updates.date.toISOString() : undefined,
+      });
+    } catch (error) {
+      setSessionsData(previousSessions);
+      throw error;
+    }
   };
 
   const handleClearFilters = () => {
