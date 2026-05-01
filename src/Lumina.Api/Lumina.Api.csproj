@@ -3,6 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>b6f36471-207b-4bdf-82d5-6eebd4d380ee</UserSecretsId>
   </PropertyGroup>
   <Target
     Name="StopStaleLuminaApiBeforeDebugBuild"

@@ -7,6 +7,7 @@ dist/
 # .NET
 .vs/
 .dotnet/
+.dotnet-cli-home/
 **/bin/
 **/obj/
 **/artifacts/

@@ -97,6 +97,16 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
             options.ClientId = googleClientId;
             options.ClientSecret = googleClientSecret;
             options.SignInScheme = IdentityConstants.ExternalScheme;
+            options.Events.OnRemoteFailure = context =>
+            {
+                context.HandleResponse();
+                context.Response.Redirect(BuildClientRedirectUrl(
+                    context.HttpContext,
+                    clientAppUrl,
+                    "/login",
+                    "google_auth_failed"));
+                return Task.CompletedTask;
+            };
         });
 }
 
@@ -343,6 +353,21 @@ app.MapGet("/api/auth/google/callback", async (
             DefaultInvoiceDueDays,
             DefaultSessionAmount);
         await signInManager.SignInAsync(user, isPersistent: true);
+    }
+    else
+    {
+        var user = await userManager.FindByLoginAsync(
+            externalLoginInfo.LoginProvider,
+            externalLoginInfo.ProviderKey);
+        if (user is not null)
+        {
+            await EnsurePracticeOwnerAsync(
+                db,
+                user,
+                user.DisplayName,
+                DefaultInvoiceDueDays,
+                DefaultSessionAmount);
+        }
     }
 
     return Results.Redirect(BuildClientRedirectUrl(httpContext, clientAppUrl, "/app"));
